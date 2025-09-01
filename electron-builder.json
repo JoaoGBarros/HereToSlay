@@ -1,0 +1,11 @@
+{
+    "appId": "com.jgbarros.heretoslay",
+    "productName": "HereToSlay",
+    "extraResources": ["dist-electron/preload.cjs", "src/assets/**"],
+    "mac": {
+        "target": ["dmg"]
+    },
+    "win": {
+        "target": ["portable", "msi"]
+    }
+}
