@@ -1,15 +1,62 @@
+import WebSocketContext from "@/utils/WebSocketContext";
 import { Card, CardHeader, CardBody } from "@heroui/card";
 import { Button } from "@heroui/react";
+import { useContext, useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 
 function Lobby() {
 
-    const usernames = [
-        "User1",
-        "User2",
-        "User3"
-    ]
+    const [usernames, setUsernames] = useState<string[]>([]);
+    const [lobbyName, setLobbyName] = useState<string>("");
+    const navigate = useNavigate();
+    const { id } = useParams();
+    const socket = useContext(WebSocketContext);
 
-    const lobbyName = "Lobby 1";
+    if(socket && socket.current) {
+        socket.current.onmessage = (event: MessageEvent) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'lobby' && data.subtype === 'lobby_update') {
+                    setUsernames(data.payload.username);
+                    setLobbyName(data.payload.name);
+                }
+
+                if (data.type === 'lobby' && data.subtype === 'leave_response') {
+                    navigate('/games');
+                }
+            } catch (e) {
+                console.error('Erro ao processar mensagem:', e);
+            }
+        };
+    }
+
+    useEffect(() => {
+        if (socket && socket.current) {
+            socket.current.send(JSON.stringify({
+                type: 'lobby',
+                subtype: 'join',
+                payload: {
+                    lobbyId: id
+                }
+            }));
+
+        }
+
+    }, [id, socket]);
+
+
+    function handleLeaveLobby(){
+        if (socket && socket.current) {
+            socket.current.send(JSON.stringify({
+                type: 'lobby',
+                subtype: 'leave',
+                payload: {
+                    lobbyId: id
+                }
+            }));
+        }
+    }
+
 
     return (
         <div className="games-container">
@@ -29,7 +76,7 @@ function Lobby() {
                         ))}
                     </div>
 
-                    <Button>Sair do lobby</Button>
+                    <Button onPress={() => handleLeaveLobby()}>Sair do lobby</Button>
                 </Card>
             </div>
     );

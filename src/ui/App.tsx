@@ -7,6 +7,7 @@ import Login from './login/Login';
 import Games from './games/Games';
 import Lobby from './games/lobby-page/Lobby';
 import InGame from './in-game/InGame';
+import { HeroUIProvider, ToastProvider } from '@heroui/react';
 
 function App() {
 
@@ -21,16 +22,18 @@ function App() {
 
 
   return (
-    <BrowserRouter>
-      <div className='application'>
-        <Routes>
-          <Route path="/" element={<InGame />} />
-          <Route path="/games" element={<Games />} />
-          <Route path="/lobby" element={<Lobby />} />
-          <Route path="/in-game" element={<InGame />} />
-        </Routes>
-      </div>
-    </BrowserRouter>
+    <>
+      <BrowserRouter>
+        <div className='application'>
+          <Routes>
+            <Route path="/" element={<Login />} />
+            <Route path="/games" element={<Games />} />
+            <Route path="/lobby/:id" element={<Lobby/>} />
+            <Route path="/in-game" element={<InGame />} />
+          </Routes>
+        </div>
+      </BrowserRouter>
+    </>
   )
 }
 
