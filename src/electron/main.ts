@@ -14,6 +14,7 @@ app.on("ready", () => {
       preload: getPreloadPath(),
     },
     frame: false,
+    fullscreen: true
   });
 
   if (isDev()) {

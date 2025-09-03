@@ -24,7 +24,7 @@ function App() {
     <BrowserRouter>
       <div className='application'>
         <Routes>
-          <Route path="/" element={<Login />} />
+          <Route path="/" element={<InGame />} />
           <Route path="/games" element={<Games />} />
           <Route path="/lobby" element={<Lobby />} />
           <Route path="/in-game" element={<InGame />} />

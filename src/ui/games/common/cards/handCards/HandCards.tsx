@@ -3,7 +3,7 @@ import heroCard from "../../../../assets/hero.png";
 import ReactDOM from "react-dom";
 import { useEffect, useState } from "react";
 
-function HandCards() {
+function HandCards({ onDrag, card }: { onDrag: (e: React.DragEvent) => void; card: { id: number } })  {
 
     const [expanded, setExpanded] = useState(false);
 
@@ -25,12 +25,12 @@ function HandCards() {
 
     return (
         <>
-            <div onClick={handleClick} style={{ display: "inline-block", cursor: "pointer" }}>
+            <div onClick={handleClick} style={{ display: "inline-block", cursor: "pointer" }} draggable onDragStart={(e) => onDrag(e)} id={card.id.toString()}>
                 <TiltedCard
                     imageSrc={heroCard}
-                    containerHeight="200px"
+                    containerHeight="280px"
                     containerWidth="280px"
-                    imageHeight="220px"
+                    imageHeight="280px"
                     imageWidth="280px"
                     rotateAmplitude={12}
                     scaleOnHover={1.1}
