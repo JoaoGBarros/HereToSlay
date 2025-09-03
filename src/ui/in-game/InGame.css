@@ -1,0 +1,58 @@
+.ingame-background {
+    background-image: url('../assets/ingame.png');
+    background-size: cover;
+    background-repeat: no-repeat;
+    width: 100vw;
+    height: 100vh;
+    align-items: flex-start;
+    display: flex;
+    justify-content: center;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    overflow: hidden;
+    position: relative;
+}
+
+.enemy-area {
+    background: rgba(165, 42, 42, 0.432);
+    width: 100%;
+    height: 50%;
+}
+
+.hand-area {
+    background: rgba(0, 0, 0, 0.349);
+    width: 100%;
+    height: 20%;
+}
+
+.stats-area {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
+    justify-content: space-around;
+
+}
+
+.player-area {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+}
+
+.party-area {
+    background: rgba(0, 0, 0, 0.329);
+    width: 100%;
+    height: 50%;
+}
+
+.action-area {
+    display: flex;
+    justify-content: space-between;
+    height: 20%;
+}
+
+.party-leader {
+    width: 20%;
+    object-fit: contain;
+}
