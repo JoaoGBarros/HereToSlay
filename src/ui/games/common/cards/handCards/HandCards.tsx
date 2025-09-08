@@ -1,9 +1,10 @@
 import TiltedCard from "@/components/TiltedCard";
 import heroCard from "../../../../assets/hero.png";
+import deckCard from "../../../../assets/deck.png";
 import ReactDOM from "react-dom";
 import { useEffect, useState } from "react";
 
-function HandCards({ onDrag, card }: { onDrag: (e: React.DragEvent) => void; card: { id: number } })  {
+function HandCards({ onDrag, card, isUserCard }: { onDrag: (e: React.DragEvent) => void; card: { id: number }; isUserCard: boolean })  {
 
     const [expanded, setExpanded] = useState(false);
 
@@ -27,7 +28,7 @@ function HandCards({ onDrag, card }: { onDrag: (e: React.DragEvent) => void; car
         <>
             <div onClick={handleClick} style={{ display: "inline-block", cursor: "pointer" }} draggable onDragStart={(e) => onDrag(e)} id={card.id.toString()}>
                 <TiltedCard
-                    imageSrc={heroCard}
+                    imageSrc={isUserCard ? heroCard : deckCard}
                     containerHeight="280px"
                     containerWidth="280px"
                     imageHeight="280px"
@@ -39,7 +40,7 @@ function HandCards({ onDrag, card }: { onDrag: (e: React.DragEvent) => void; car
                 />
             </div>
 
-            {expanded &&
+            {expanded && isUserCard &&
                 ReactDOM.createPortal(
                     <div
                         onClick={handleClose}

@@ -29,7 +29,7 @@ function App() {
             <Route path="/" element={<Login />} />
             <Route path="/games" element={<Games />} />
             <Route path="/lobby/:id" element={<Lobby/>} />
-            <Route path="/in-game" element={<InGame />} />
+            <Route path="/match/:id" element={<InGame />} />
           </Routes>
         </div>
       </BrowserRouter>

@@ -1,23 +1,74 @@
-package org.br.heretoslay.entity;
+package org.br.heretoslay.match;
 
 import org.br.heretoslay.auth.AuthService;
+import org.br.heretoslay.entity.GameState;
+import org.br.heretoslay.entity.Match;
+import org.br.heretoslay.entity.PartyLeader;
 import org.java_websocket.WebSocket;
+import org.json.JSONObject;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class Match {
+public class MatchService {
 
-    private final Map<WebSocket, GameState> players = new ConcurrentHashMap<>();
-    
+    private static final MatchService instance = new MatchService();
+    private final Map<Long, Match> matches = new ConcurrentHashMap<>();
 
-    public void startMatch(List<WebSocket> connections) {
-        for (WebSocket conn : connections) {
-            GameState gameState = new GameState(PartyLeader.BARD, List.of("Carta 1", "Carta 2"), List.of("Carta A", "Carta B"), AuthService.getInstance().getPlayerByConnection(conn).getUsername());
-            players.put(conn, gameState);
+    public static MatchService getInstance() {
+        if(instance == null) {
+            return new MatchService();
         }
+        return instance;
+    }
+
+
+    public void startMatch(Long id, List<WebSocket> connections) {
+        Match match = new Match(connections);
+        matches.put(id, match);
+    }
+
+    private MatchService() {}
+
+
+    public void handleMessage(WebSocket conn, JSONObject json) {
+        String type = json.getString("subtype");
+        Long id = json.getLong("id");
+
+        switch (type) {
+            case "get_match_state":
+                JSONObject matchResponse = new JSONObject();
+                matchResponse.put("type", "match");
+                matchResponse.put("subtype", "match_state");
+                matchResponse.put("payload", this.matches.get(id).getMatchState());
+                conn.send(matchResponse.toString());
+                break;
+            case "order_selection":
+                int roll = json.getJSONObject("payload").getInt("roll");
+                Match match = matches.get(id);
+                match.processOrderSelectionRoll(conn, roll);
+                break;
+            case "choose_party_leader":
+                String chosenLeader = json.getJSONObject("payload").getString("party_leader");
+                Match matchChoose = matches.get(id);
+                boolean success = matchChoose.choosePartyLeader(conn, chosenLeader);
+                JSONObject response = new JSONObject();
+                response.put("type", "match");
+                response.put("subtype", "party_leader_chosen");
+                response.put("payload", new JSONObject().put("success", success));
+                conn.send(response.toString());
+                break;
+            case "draw_card":
+                Match matchDraw = matches.get(id);
+                matchDraw.drawCard(conn);
+                break;
+
+            default:
+                System.out.println("Unknown match subtype: " + type);
+                break;
+        }
+
     }
 
 

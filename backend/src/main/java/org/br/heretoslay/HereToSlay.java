@@ -2,6 +2,7 @@ package org.br.heretoslay;
 
 import org.br.heretoslay.auth.AuthService;
 import org.br.heretoslay.lobby.LobbyService;
+import org.br.heretoslay.match.MatchService;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
@@ -13,6 +14,7 @@ public class HereToSlay extends WebSocketServer {
 
     private final AuthService authService = AuthService.getInstance();
     private final LobbyService lobbyService = LobbyService.getInstance();
+    private final MatchService matchService = MatchService.getInstance();
 
     public HereToSlay(int port) {
         super(new InetSocketAddress(port));
@@ -47,6 +49,8 @@ public class HereToSlay extends WebSocketServer {
             case "lobby":
                 lobbyService.handleMessage(conn, obj);
                 break;
+                case "match":
+                    matchService.handleMessage(conn, obj);
 
         }
     }

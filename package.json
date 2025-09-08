@@ -33,6 +33,7 @@
     "motion": "^12.23.12",
     "os-utils": "^0.0.14",
     "react": "^19.1.1",
+    "react-dice-roll": "^1.2.2",
     "react-dom": "^19.1.1",
     "react-router-dom": "^7.8.2",
     "reconnecting-websocket": "^4.4.0",

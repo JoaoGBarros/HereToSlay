@@ -1,4 +1,187 @@
 package org.br.heretoslay.entity;
 
+import org.br.heretoslay.auth.AuthService;
+import org.java_websocket.WebSocket;
+import org.json.JSONObject;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
+
 public class Match {
+
+    private final Map<WebSocket, GameState> players = new ConcurrentHashMap<>();
+    private List<WebSocket> turnOrder = new ArrayList<>();
+    private List<String> availablePartyLeaders = new ArrayList<>(
+            Arrays.stream(PartyLeader.values())
+                    .map(Enum::name)
+                    .collect(Collectors.toList())
+    );
+    private int currentLeaderPickerIndex = 0;
+    private MatchState matchState;
+    private int currentPlayerTurnIndex = 0;
+    private Stack<Card> drawPile = new Stack<>();
+    private Stack<Card> discardPile = new Stack<>();
+
+    public Match(List<WebSocket> connections) {
+        for (WebSocket conn : connections) {
+            GameState gameState = new GameState(AuthService.getInstance().getPlayerByConnection(conn).getUsername());
+            players.put(conn, gameState);
+        }
+        matchState = MatchState.ORDER_SELECTION;
+        drawPile = CardDeck.createDeck();
+
+        Collections.shuffle(drawPile);
+    }
+
+    public Map<WebSocket, GameState> getPlayers() {
+        return players;
+    }
+
+    public synchronized void processOrderSelectionRoll(WebSocket conn, int roll) {
+        GameState playerState = players.get(conn);
+        if (playerState != null && playerState.getOrderRoll() == null) {
+            playerState.setOrderRoll(roll);
+            System.out.println("Player " + playerState.getUsername() + " rolled: " + roll);
+            checkAndFinalizeOrder();
+        }
+    }
+
+    private void checkAndFinalizeOrder() {
+        boolean allPlayersRolled = players.values().stream().allMatch(p -> p.getOrderRoll() != null);
+        if (!allPlayersRolled) {
+            return;
+        }
+        Set<Integer> uniqueRolls = players.values().stream()
+                .map(GameState::getOrderRoll)
+                .collect(Collectors.toSet());
+
+        if (uniqueRolls.size() < players.size()) {
+            System.out.println("Tie detected! Requesting a re-roll.");
+            JSONObject tieResponse = new JSONObject();
+            players.values().forEach(GameState::resetOrderRoll);
+            tieResponse.put("type", "match");
+            tieResponse.put("subtype", "order_selection_tie");
+            tieResponse.put("payload", getMatchState());
+            broadcast(tieResponse.toString());
+            return;
+
+        }
+
+        System.out.println("All players rolled without ties. Finalizing turn order.");
+        this.turnOrder = players.entrySet().stream()
+                .sorted(Map.Entry.comparingByValue(Comparator.comparingInt(GameState::getOrderRoll).reversed()))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+
+
+        System.out.println("Final turn order determined:");
+        int i = 1;
+        for (WebSocket conn : turnOrder) {
+            System.out.println(i++ + ". " + players.get(conn).getUsername());
+        }
+
+        JSONObject orderFinalizedResponse = new JSONObject();
+        matchState = MatchState.PARTY_LEADER_SELECTION;
+        orderFinalizedResponse.put("type", "match");
+        orderFinalizedResponse.put("subtype", "order_finalized");
+        orderFinalizedResponse.put("payload", getMatchState());
+        broadcast(orderFinalizedResponse.toString());
+    }
+
+    public void broadcast(String message) {
+        for (WebSocket conn : players.keySet()) {
+            conn.send(message);
+        }
+    }
+
+
+
+    public JSONObject getMatchState() {
+        JSONObject playersJson = new JSONObject();
+        for (Map.Entry<WebSocket, GameState> entry : players.entrySet()) {
+            WebSocket conn = entry.getKey();
+            GameState player = entry.getValue();
+            JSONObject playerJson = new JSONObject()
+                    .put("leader", player.getLeader() == null ? "" : player.getLeader().toString())
+                    .put("party", player.getParty())
+                    .put("hand", player.getHand())
+                    .put("maxAP", player.getMaxAP())
+                    .put("currentAP", player.getCurrentAP())
+                    .put("username", player.getUsername())
+                    .put("orderRoll", player.getOrderRoll() == null ? JSONObject.NULL : player.getOrderRoll());
+            playersJson.put(AuthService.getInstance().getPlayerByConnection(conn).getId().toString(), playerJson);
+        }
+
+
+        return new JSONObject()
+                .put("availablePartyLeaders", availablePartyLeaders)
+                .put("currentPlayerTurn", turnOrder.isEmpty() ? "" : AuthService.getInstance().getPlayerByConnection(turnOrder.get(currentPlayerTurnIndex)).getId().toString())
+                .put("matchState", matchState.toString())
+                .put("players", playersJson);
+    }
+
+    public synchronized boolean choosePartyLeader(WebSocket conn, String leaderName) {
+
+        System.out.println(turnOrder.get(currentPlayerTurnIndex) == conn);
+        if (turnOrder.get(currentPlayerTurnIndex) != conn) return false;
+        if (!availablePartyLeaders.contains(leaderName)) return false;
+        GameState playerState = players.get(conn);
+        playerState.setLeader(PartyLeader.valueOf(leaderName));
+        availablePartyLeaders.remove(leaderName);
+
+        currentPlayerTurnIndex++;
+
+        if (currentPlayerTurnIndex >= turnOrder.size()) {
+            currentPlayerTurnIndex = 0;
+            matchState = MatchState.GAMEPLAY;
+            for (WebSocket playerConn : turnOrder) {
+                GameState gs = players.get(playerConn);
+                for (int i = 0; i < 5; i++) {
+                    if (!drawPile.isEmpty()) {
+                        gs.getHand().add(drawPile.pop());
+                    }
+                }
+            }
+        }
+        JSONObject matchUpdate = new JSONObject();
+        matchUpdate.put("type", "match");
+        matchUpdate.put("subtype", "match_state");
+        matchUpdate.put("payload", getMatchState());
+        broadcast(matchUpdate.toString());
+        return true;
+    }
+
+    public List<String> getAvailablePartyLeaders() {
+        return Collections.unmodifiableList(availablePartyLeaders);
+    }
+
+    public void drawCard(WebSocket conn) {
+        if (drawPile.isEmpty()) {
+            reshuffleDiscardIntoDraw();
+        }
+
+        if (!drawPile.isEmpty()) {
+            Card drawnCard = drawPile.pop();
+            GameState playerState = players.get(conn);
+            playerState.getHand().add(drawnCard);
+            playerState.setCurrentAP(playerState.getCurrentAP() - 1);
+        }
+
+        JSONObject drawResponse = new JSONObject();
+        drawResponse.put("type", "match");
+        drawResponse.put("subtype", "match_state");
+        drawResponse.put("payload", getMatchState());
+        broadcast(drawResponse.toString());
+
+    }
+
+    private void reshuffleDiscardIntoDraw() {
+        Collections.shuffle(discardPile);
+        drawPile.addAll(discardPile);
+        discardPile.clear();
+    }
+
+
+
 }

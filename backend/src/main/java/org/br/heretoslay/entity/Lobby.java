@@ -4,6 +4,8 @@ import org.java_websocket.WebSocket;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class Lobby {
 
@@ -13,7 +15,10 @@ public class Lobby {
     private int minPlayers;
     private LobbyStatus status;
     private Set<WebSocket> players;
+    private transient Timer countdownTimer;
+    private transient int countdownTimeLeft = -1;
 
+    public static final int COUNTDOWN_SECONDS = 5;
 
     public Lobby (Long id, String name, int maxPlayers, int minPlayers) {
         this.id = id;
@@ -21,7 +26,7 @@ public class Lobby {
         this.maxPlayers = maxPlayers;
         this.minPlayers = minPlayers;
         this.status = LobbyStatus.CREATED;
-        this.players = new HashSet<WebSocket>();
+        this.players = new HashSet<>();
     }
 
     public Long getId() {
@@ -61,7 +66,36 @@ public class Lobby {
         return players;
     }
 
+    public int getCountdownTimeLeft() {
+        return countdownTimeLeft;
+    }
 
+    public void startCountdown(Runnable onFinish, Runnable onTick) {
+        if (countdownTimer != null) {
+            countdownTimer.cancel();
+        }
+        countdownTimeLeft = COUNTDOWN_SECONDS;
+        countdownTimer = new Timer();
+        countdownTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                countdownTimeLeft--;
+                if (onTick != null) onTick.run();
+                if (countdownTimeLeft <= 0) {
+                    countdownTimer.cancel();
+                    countdownTimer = null;
+                    countdownTimeLeft = -1;
+                    if (onFinish != null) onFinish.run();
+                }
+            }
+        }, 1000, 1000);
+    }
 
-
+    public void resetCountdown() {
+        if (countdownTimer != null) {
+            countdownTimer.cancel();
+            countdownTimer = null;
+        }
+        countdownTimeLeft = -1;
+    }
 }

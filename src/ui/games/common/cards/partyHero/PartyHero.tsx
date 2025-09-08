@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Divider } from "@heroui/divider";
 
-export function PartyHero({ }) {
+export function PartyHero({ id } : {id: string}) {
 
     const [expanded, setExpanded] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);

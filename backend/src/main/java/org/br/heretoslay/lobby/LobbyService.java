@@ -3,6 +3,7 @@ package org.br.heretoslay.lobby;
 import org.br.heretoslay.auth.AuthService;
 import org.br.heretoslay.entity.Lobby;
 import org.br.heretoslay.entity.LobbyStatus;
+import org.br.heretoslay.match.MatchService;
 import org.java_websocket.WebSocket;
 import org.json.JSONObject;
 
@@ -56,6 +57,43 @@ public class LobbyService {
             String messageStr = message.toString();
             lobby.getPlayers().forEach(playerConn -> playerConn.send(messageStr));
         }
+    }
+
+    private void checkAndHandleCountdown(Lobby lobby) {
+        if (lobby.getPlayers().size() >= lobby.getMinPlayers()) {
+            if (lobby.getCountdownTimeLeft() == -1) {
+                lobby.startCountdown(
+                    () -> {
+                        lobby.setStatus(LobbyStatus.IN_PROGRESS);
+                        MatchService.getInstance().startMatch(lobby.getId(), lobby.getPlayers().stream().toList());
+                        JSONObject startMsg = new JSONObject();
+                        startMsg.put("type", "lobby");
+                        startMsg.put("subtype", "countdown_finished");
+                        broadcastToLobby(lobby.getId(), startMsg);
+                        lobbies.remove(lobby.getId());
+                    },
+                    () -> sendCountdownUpdate(lobby)
+                );
+                sendCountdownUpdate(lobby);
+            }
+        } else {
+            if (lobby.getCountdownTimeLeft() != -1) {
+                lobby.resetCountdown();
+                sendCountdownUpdate(lobby);
+            }
+        }
+    }
+
+    private void sendCountdownUpdate(Lobby lobby) {
+        JSONObject countdownMsg = new JSONObject();
+        countdownMsg.put("type", "lobby");
+        countdownMsg.put("subtype", "countdown_update");
+        countdownMsg.put("payload", new JSONObject()
+                .put("timeLeft", lobby.getCountdownTimeLeft())
+                .put("playerAmount", lobby.getPlayers().size())
+                .put("minPlayers", lobby.getMinPlayers())
+        );
+        broadcastToLobby(lobby.getId(), countdownMsg);
     }
 
     public void handleMessage(WebSocket conn, JSONObject json) {
@@ -115,6 +153,9 @@ public class LobbyService {
                     joinResponse.put("payload", lobbyInfo);
 
                     broadcastToLobby(joinLobbyId, joinResponse);
+
+                    // Lógica do countdown
+                    checkAndHandleCountdown(lobbyToJoin);
                 }
                 break;
 
@@ -145,6 +186,9 @@ public class LobbyService {
                     leaveResponse.put("subtype", "leave_response");
                     leaveResponse.remove("payload");
                     conn.send(leaveResponse.toString());
+
+                    // Resetar countdown se necessário
+                    checkAndHandleCountdown(lobbyToLeave);
                 }
                 break;
 
