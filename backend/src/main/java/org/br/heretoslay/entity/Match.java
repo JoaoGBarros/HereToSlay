@@ -26,6 +26,7 @@ public class Match {
     private int currentPlayerTurnIndex = 0;
     private Stack<Card> drawPile = new Stack<>();
     private Stack<Card> discardPile = new Stack<>();
+    private int lastRoll = 0;
 
 
     public Match(List<WebSocket> connections) {
@@ -81,6 +82,7 @@ public class Match {
         drawResponse.put("type", "match");
         drawResponse.put("subtype", "match_state");
         drawResponse.put("payload", getMatchState());
+        gameState.setLastRoll(0);
         broadcast(drawResponse.toString());
 
 
@@ -95,6 +97,12 @@ public class Match {
             System.out.println("Player " + playerState.getUsername() + " rolled: " + roll);
             checkAndFinalizeOrder();
         }
+
+        JSONObject rollResponse = new JSONObject();
+        rollResponse.put("type", "match");
+        rollResponse.put("subtype", "match_state");
+        rollResponse.put("payload", getMatchState());
+        broadcast(rollResponse.toString());
     }
 
     private void checkAndFinalizeOrder() {
@@ -156,6 +164,7 @@ public class Match {
                     .put("leader", player.getLeader() == null ? "" : player.getLeader().toString())
                     .put("party", player.getParty())
                     .put("hand", player.getHand())
+                    .put("lastRoll", player.getLastRoll())
                     .put("maxAP", player.getMaxAP())
                     .put("currentAP", player.getCurrentAP())
                     .put("username", player.getUsername())
@@ -245,6 +254,7 @@ public class Match {
 
     public void processHeroDiceRoll(GameState gameState, int diceValue) {
         Card pendingHero = gameState.getPendingHeroCard();
+        gameState.setLastRoll(diceValue);
         if (pendingHero != null && pendingHero.getType() == CardType.HERO) {
             int minValue = ((HeroCard) pendingHero).getDiceValue();
             gameState.getParty().add(pendingHero);

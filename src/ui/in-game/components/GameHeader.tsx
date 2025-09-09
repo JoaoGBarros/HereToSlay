@@ -16,18 +16,18 @@ interface GameHeaderProps {
     isPlayerTurn: boolean;
     diceRolled: boolean;
     socket: any;
-    id : string | undefined;
-    handleDeckClick: () => void;
-    handlePlayerChange: (player: any, id: string) => void;
+    id: string | undefined;
+    setCurrentPlayerIdx: (id: string) => void;
+    setCurrentPlayerData: (data: any) => void;
     deckImg: string;
 
 }
 
 
 
-function GameHeader({playersData, partyLeaderSelection, isPlayerTurn, diceRolled, socket, id, turn, handleDeckClick, handlePlayerChange, currentPlayerIdx, deckImg, loggedUserId}: GameHeaderProps) {
+function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolled, socket, id, turn, currentPlayerIdx, deckImg, loggedUserId, setCurrentPlayerIdx, setCurrentPlayerData }: GameHeaderProps) {
 
-      const classAvatars: Record<string, string> = {
+    const classAvatars: Record<string, string> = {
         "BARD": bardAvatar,
         "WARRIOR": warriorAvatar,
         "WIZARD": wizardAvatar,
@@ -49,6 +49,26 @@ function GameHeader({playersData, partyLeaderSelection, isPlayerTurn, diceRolled
         { id: 6, name: "Carta 6" },
         { id: 7, name: "Carta 7" },
     ];
+
+    function handleDeckClick() {
+        if (isPlayerTurn && diceRolled && !partyLeaderSelection) {
+            if (socket && socket.current) {
+                socket.current.send(JSON.stringify({
+                    type: 'match',
+                    subtype: 'action',
+                    action: 'draw_card',
+                    id: id
+                }));
+            }
+        }
+
+    }
+
+    function handlePlayerChange(player: any, id: string) {
+        setCurrentPlayerIdx(id);
+        setCurrentPlayerData(playersData[id]);
+
+    }
 
     return (
         <>

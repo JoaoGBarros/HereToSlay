@@ -14,6 +14,8 @@ import DiceComponent from './components/DiceComponent';
 import PartyComponent from './components/PartyComponent';
 import HandComponent from './components/HandComponent';
 import PlayerInfoComponent from './components/PlayerInfoComponent';
+import DiceBoardOrderComponent from './components/DiceBoardOrderComponent';
+import DiceBoardHeroComponent from './components/DiceBoardHeroComponent';
 
 
 function InGame() {
@@ -29,7 +31,7 @@ function InGame() {
     const [partyLeaderSelection, setPartyLeaderSelection] = useState(false);
     const [isPlayerTurn, setIsPlayerTurn] = useState(false);
     const [availablePartyLeaders, setAvailablePartyLeaders] = useState<string[]>([]);
-
+    const [showHeroBoard, setShowHeroBoard] = useState(false);
     const [pendingHeroCard, setPendingHeroCard] = useState<boolean>(false);
 
 
@@ -44,33 +46,12 @@ function InGame() {
 
     const { id } = useParams();
 
-
-
-    function handlePlayerChange(player: any, id: string) {
-        setCurrentPlayerIdx(id);
-        setCurrentPlayerData(playersData[id]);
-
-    }
-
     const monsterCard = [
         // { id: 1, name: "Goblin" },
         // { id: 2, name: "Orc" },
         // { id: 3, name: "Dragon" },
     ]
 
-    function handleDeckClick() {
-        if (isPlayerTurn && diceRolled && !partyLeaderSelection) {
-            if (socket && socket.current) {
-                socket.current.send(JSON.stringify({
-                    type: 'match',
-                    subtype: 'action',
-                    action: 'draw_card',
-                    id: id
-                }));
-            }
-        }
-
-    }
 
     useEffect(() => {
         if (socket && socket.current) {
@@ -105,10 +86,6 @@ function InGame() {
         if (player && (player.orderRoll === null || pendingHeroCard === true)) {
             setDiceRolled(false);
         }
-
-        if (player && player.orderRoll !== null && pendingHeroCard === false) {
-            setDiceRolled(true);
-        }
     }, [currentPlayerIdx, playersData]);
 
 
@@ -121,9 +98,12 @@ function InGame() {
     }, [turn]);
 
     useEffect(() => {
+
         if (matchState === "PARTY_LEADER_SELECTION") {
-            setDiceRolled(true);
-            setPartyLeaderSelection(true);
+            setTimeout(() => {
+                setDiceRolled(true);
+                setPartyLeaderSelection(true);
+            }, 2000);
         }
     }, [matchState]);
 
@@ -146,6 +126,25 @@ function InGame() {
         }
     }, [socket, id]);
 
+    useEffect(() => {
+        if (pendingHeroCard === false && matchState !== "ORDER_SELECTION") {
+            const timeout = setTimeout(() => {
+                setDiceRolled(true);
+            }, 2000);
+
+            return () => clearTimeout(timeout);
+        }
+    }, [pendingHeroCard, matchState]);
+
+    useEffect(() => {
+    if (pendingHeroCard) {
+        setShowHeroBoard(true);
+    } else {
+        const timeout = setTimeout(() => setShowHeroBoard(false), 2000);
+        return () => clearTimeout(timeout);
+    }
+}, [pendingHeroCard]);
+    
     return (
         <div className='ingame-background'>
             <div className='player-area'>
@@ -158,8 +157,8 @@ function InGame() {
                     socket={socket}
                     id={id}
                     turn={turn}
-                    handleDeckClick={handleDeckClick}
-                    handlePlayerChange={handlePlayerChange}
+                    setCurrentPlayerData={setCurrentPlayerData}
+                    setCurrentPlayerIdx={setCurrentPlayerIdx}
                     currentPlayerIdx={currentPlayerIdx}
                     deckImg={deckImg}
                     loggedUserId={loggedUserId}
@@ -167,15 +166,26 @@ function InGame() {
 
                 <div className='party-area flex'>
                     {!diceRolled ? (
-                        <DiceComponent
-                            currentPlayerIdx={currentPlayerIdx}
-                            loggedUserId={loggedUserId}
-                            setDiceRolled={setDiceRolled}
-                            socket={socket}
-                            id={id}
-                            currentPlayerData={currentPlayerData}
-                            pendingHeroCard={pendingHeroCard}
-                        />
+                        <>
+                            <DiceComponent
+                                currentPlayerIdx={currentPlayerIdx}
+                                loggedUserId={loggedUserId}
+                                socket={socket}
+                                id={id}
+                                currentPlayerData={currentPlayerData}
+                                pendingHeroCard={showHeroBoard}
+                            />
+
+                            {showHeroBoard ? (
+                                <DiceBoardHeroComponent currentPlayerData={currentPlayerData} />
+                            ) : (
+                                matchState === "ORDER_SELECTION" && (
+                                    <DiceBoardOrderComponent playersData={playersData} />
+                                )
+                            )}
+
+                        </>
+
                     ) : (
                         <PartyComponent
                             isPlayerTurn={isPlayerTurn}

@@ -15,6 +15,7 @@ public class GameState {
     private String username;
     private Integer orderRoll = null;
     private Card pendingHeroCard;
+    private int lastRoll = 0;
 
     public GameState(String username) {
         this.maxAP = 3;
@@ -83,6 +84,14 @@ public class GameState {
 
     public void setPendingHeroCard(Card card) {
         this.pendingHeroCard = card;
+    }
+
+    public int getLastRoll() {
+        return lastRoll;
+    }
+
+    public void setLastRoll(int lastRoll) {
+        this.lastRoll = lastRoll;
     }
 
 }

@@ -1,10 +1,11 @@
+import { PartyHero } from "@/ui/games/common/cards/partyHero/PartyHero";
+import { Card } from "@heroui/card";
 import { useEffect, useState } from "react";
 import Dice from "react-dice-roll";
 
 interface DiceComponentProps {
     currentPlayerIdx: string;
     loggedUserId: string;
-    setDiceRolled: (value: boolean) => void;
     socket: React.MutableRefObject<WebSocket | null> | null;
     id: string | undefined;
     currentPlayerData: any;
@@ -12,13 +13,13 @@ interface DiceComponentProps {
 }
 
 
-function DiceComponent({ currentPlayerIdx, loggedUserId, setDiceRolled, socket, currentPlayerData, pendingHeroCard, id}: DiceComponentProps) {
+function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerData, pendingHeroCard, id }: DiceComponentProps) {
     const [dice1Result, setDice1ResultState] = useState<number | null>(null);
     const [dice2Result, setDice2ResultState] = useState<number | null>(null);
+    const [isDiceDisabled, setIsDiceDisabled] = useState(false);
 
     useEffect(() => {
         if (dice1Result !== null && dice2Result !== null) {
-            setDiceRolled(true);
             if (socket && socket.current) {
                 if (currentPlayerData?.orderRoll === null) {
                     socket.current.send(JSON.stringify({
@@ -29,8 +30,7 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, setDiceRolled, socket, 
                             roll: dice1Result + dice2Result,
                         }
                     }));
-                    setDice1ResultState(null);
-                    setDice2ResultState(null);
+                    setIsDiceDisabled(true);
                     return;
                 }
 
@@ -44,8 +44,7 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, setDiceRolled, socket, 
                             roll: dice1Result + dice2Result,
                         }
                     }));
-                    setDice1ResultState(null);
-                    setDice2ResultState(null);
+                    setIsDiceDisabled(true);
                     return;
                 }
             }
@@ -55,10 +54,15 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, setDiceRolled, socket, 
 
 
     return (
-        <div className="dice-selection-container justify-center items-center">
-            <h2>Role o dado para começar!</h2>
-            <div className='dices flex gap-8'>
+        <div className="dice-selection-container justify-center items-center flex w-full">
+            {pendingHeroCard && (
+                <div className="hero-card-container mr-[300px]">
+                    <PartyHero id={currentPlayerData?.pendingHeroCard} />
+                </div>
+            )}
+            <div className='dices flex gap-16 w-[50%]'>
                 <Dice
+                    size={200}
                     disabled={currentPlayerIdx != loggedUserId}
                     onRoll={(value) => {
                         setDice1ResultState(value);
@@ -66,6 +70,7 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, setDiceRolled, socket, 
                     }}
                 />
                 <Dice
+                    size={200}
                     disabled={currentPlayerIdx != loggedUserId}
                     onRoll={(value) => {
                         setDice2ResultState(value);
@@ -73,12 +78,6 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, setDiceRolled, socket, 
                     }}
                 />
             </div>
-            {(dice1Result !== null || dice2Result !== null) && (
-                <p>
-                    {dice1Result !== null && `Dado 1: ${dice1Result} `}
-                    {dice2Result !== null && `Dado 2: ${dice2Result}`}
-                </p>
-            )}
         </div>
     );
 }
