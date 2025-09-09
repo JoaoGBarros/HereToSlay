@@ -3,8 +3,6 @@ import { PartyLeader } from "@/ui/games/common/cards/partyLeader/PartyLeader";
 import { useEffect, useState } from "react";
 
 interface PartyComponentProps {
-    currentPlayerIdx: string;
-    loggedUserId: string;
     isPlayerTurn: boolean;
     currentPlayerData: any;
     partyLeaderSelection: boolean;
@@ -14,7 +12,7 @@ interface PartyComponentProps {
     id: string | undefined;
 }
 
-function PartyComponent({ currentPlayerIdx, loggedUserId, isPlayerTurn, currentPlayerData, partyLeaderSelection, monsterCard, availablePartyLeaders, socket, id }: PartyComponentProps) {
+function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection, monsterCard, availablePartyLeaders, socket, id }: PartyComponentProps) {
 
     const [heroPage, setHeroPage] = useState(0);
     const [currentHeroCards, setCurrentHeroCards] = useState<Array<any>>([]);

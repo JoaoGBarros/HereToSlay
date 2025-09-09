@@ -178,8 +178,6 @@ function InGame() {
                         />
                     ) : (
                         <PartyComponent
-                            currentPlayerIdx={currentPlayerIdx}
-                            loggedUserId={loggedUserId}
                             isPlayerTurn={isPlayerTurn}
                             currentPlayerData={currentPlayerData}
                             partyLeaderSelection={partyLeaderSelection}
