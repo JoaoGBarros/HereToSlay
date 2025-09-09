@@ -32,6 +32,8 @@ public class MatchService {
     private MatchService() {}
 
 
+
+
     public void handleMessage(WebSocket conn, JSONObject json) {
         String type = json.getString("subtype");
         Long id = json.getLong("id");
@@ -59,10 +61,21 @@ public class MatchService {
                 response.put("payload", new JSONObject().put("success", success));
                 conn.send(response.toString());
                 break;
-            case "draw_card":
-                Match matchDraw = matches.get(id);
-                matchDraw.drawCard(conn);
+            case "action":
+                String action = json.getString("action");
+                Match matchAction = matches.get(id);
+                matchAction.performAction(conn, action, json);
                 break;
+//            case "play_card":
+//                Long cardId = json.getJSONObject("payload").getLong("card_id");
+//                Match matchPlay = matches.get(id);
+//                boolean playSuccess = matchPlay.playHeroCard(conn, cardId);
+//                JSONObject playResponse = new JSONObject();
+//                playResponse.put("type", "match");
+//                playResponse.put("subtype", "card_played");
+//                playResponse.put("payload", new JSONObject().put("success", playSuccess));
+//                conn.send(playResponse.toString());
+//                break;
 
             default:
                 System.out.println("Unknown match subtype: " + type);

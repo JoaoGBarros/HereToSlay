@@ -1,5 +1,7 @@
 package org.br.heretoslay.entity;
 
+import org.br.heretoslay.entity.Card.Card;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -12,12 +14,17 @@ public class GameState {
     private int currentAP;
     private String username;
     private Integer orderRoll = null;
+    private Card pendingHeroCard;
 
     public GameState(String username) {
         this.maxAP = 3;
         this.hand = new ArrayList<>();
         this.party = new ArrayList<>();
         this.currentAP = this.maxAP;
+        this.username = username;
+    }
+
+    public void setUsername(String username) {
         this.username = username;
     }
 
@@ -69,4 +76,13 @@ public class GameState {
     public void resetOrderRoll() {
         this.orderRoll = null;
     }
+
+    public Card getPendingHeroCard() {
+        return pendingHeroCard;
+    }
+
+    public void setPendingHeroCard(Card card) {
+        this.pendingHeroCard = card;
+    }
+
 }

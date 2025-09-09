@@ -1,6 +1,10 @@
 package org.br.heretoslay.entity;
 
 import org.br.heretoslay.auth.AuthService;
+import org.br.heretoslay.entity.Card.Card;
+import org.br.heretoslay.entity.Card.CardDeck;
+import org.br.heretoslay.entity.Card.CardType;
+import org.br.heretoslay.entity.Card.HeroCard;
 import org.java_websocket.WebSocket;
 import org.json.JSONObject;
 
@@ -23,6 +27,7 @@ public class Match {
     private Stack<Card> drawPile = new Stack<>();
     private Stack<Card> discardPile = new Stack<>();
 
+
     public Match(List<WebSocket> connections) {
         for (WebSocket conn : connections) {
             GameState gameState = new GameState(AuthService.getInstance().getPlayerByConnection(conn).getUsername());
@@ -36,6 +41,51 @@ public class Match {
 
     public Map<WebSocket, GameState> getPlayers() {
         return players;
+    }
+
+    public void performAction(WebSocket conn, String action, JSONObject json) {
+
+        if (turnOrder.get(currentPlayerTurnIndex) != conn) return;
+        GameState gameState = players.get(conn);
+
+        switch (action) {
+            case "draw_card":
+                drawCard(gameState);
+                gameState.setCurrentAP(gameState.getCurrentAP() - 1);
+                break;
+
+            case "play_card":
+                playCard(gameState, json.getJSONObject("payload").getLong("card_id"));
+                break;
+                case "process_hero_roll":
+                    int roll = json.getJSONObject("payload").getInt("roll");
+                    if(gameState.getPendingHeroCard() != null) {
+                        processHeroDiceRoll(gameState, roll);
+                        gameState.setCurrentAP(gameState.getCurrentAP() - 1);
+                    }else{
+                        processHeroDiceRoll(gameState, roll);
+                    }
+
+                    break;
+            default:
+                System.out.println("Unknown action: " + action);
+                break;
+        }
+
+        if(gameState.getCurrentAP() == 0) {
+            currentPlayerTurnIndex = (currentPlayerTurnIndex + 1) % turnOrder.size();
+            gameState.setCurrentAP(gameState.getMaxAP());
+        }
+
+        JSONObject drawResponse = new JSONObject();
+        drawResponse.put("type", "match");
+        drawResponse.put("subtype", "match_state");
+        drawResponse.put("payload", getMatchState());
+        broadcast(drawResponse.toString());
+
+
+
+
     }
 
     public synchronized void processOrderSelectionRoll(WebSocket conn, int roll) {
@@ -109,6 +159,7 @@ public class Match {
                     .put("maxAP", player.getMaxAP())
                     .put("currentAP", player.getCurrentAP())
                     .put("username", player.getUsername())
+                    .put("pendingHeroCard", player.getPendingHeroCard() == null ? JSONObject.NULL : player.getPendingHeroCard())
                     .put("orderRoll", player.getOrderRoll() == null ? JSONObject.NULL : player.getOrderRoll());
             playersJson.put(AuthService.getInstance().getPlayerByConnection(conn).getId().toString(), playerJson);
         }
@@ -156,23 +207,15 @@ public class Match {
         return Collections.unmodifiableList(availablePartyLeaders);
     }
 
-    public void drawCard(WebSocket conn) {
+    public void drawCard(GameState gameState) {
         if (drawPile.isEmpty()) {
             reshuffleDiscardIntoDraw();
         }
 
         if (!drawPile.isEmpty()) {
             Card drawnCard = drawPile.pop();
-            GameState playerState = players.get(conn);
-            playerState.getHand().add(drawnCard);
-            playerState.setCurrentAP(playerState.getCurrentAP() - 1);
+            gameState.getHand().add(drawnCard);
         }
-
-        JSONObject drawResponse = new JSONObject();
-        drawResponse.put("type", "match");
-        drawResponse.put("subtype", "match_state");
-        drawResponse.put("payload", getMatchState());
-        broadcast(drawResponse.toString());
 
     }
 
@@ -180,6 +223,37 @@ public class Match {
         Collections.shuffle(discardPile);
         drawPile.addAll(discardPile);
         discardPile.clear();
+    }
+
+    public boolean playCard(GameState gameState, Long cardId) {
+
+        if (gameState.getCurrentAP() == 0) return false;
+        Optional<Card> cardOpt = gameState.getHand().stream().filter(c -> c.getCardId().equals(cardId)).findFirst();
+        if (cardOpt.isEmpty()) return false;
+        Card card = cardOpt.get();
+
+        if(card.getType() == CardType.HERO){
+            gameState.setPendingHeroCard(card);
+            return true;
+        }
+
+        card.applyEffect(this, gameState);
+        gameState.getHand().remove(card);
+        gameState.getParty().add(card);
+        return true;
+    }
+
+    public void processHeroDiceRoll(GameState gameState, int diceValue) {
+        Card pendingHero = gameState.getPendingHeroCard();
+        if (pendingHero != null && pendingHero.getType() == CardType.HERO) {
+            int minValue = ((HeroCard) pendingHero).getDiceValue();
+            gameState.getParty().add(pendingHero);
+            if (diceValue >= minValue) {
+                pendingHero.applyEffect(this, gameState);
+            }
+            gameState.getHand().remove(pendingHero);
+            gameState.setPendingHeroCard(null);
+        }
     }
 
 
