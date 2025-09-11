@@ -307,7 +307,7 @@ public class Match {
                     broadcast(timeUpdateMsg.toString());
                 }
             }
-        }, 0, 500);
+        }, 0, 100);
     }
 
     private long getRemainingTime() {

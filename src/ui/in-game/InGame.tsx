@@ -16,6 +16,7 @@ import HandComponent from './components/HandComponent';
 import PlayerInfoComponent from './components/PlayerInfoComponent';
 import DiceBoardOrderComponent from './components/DiceBoardOrderComponent';
 import DiceBoardHeroComponent from './components/DiceBoardHeroComponent';
+import ChallengeButton from './components/ChallengeButton';
 
 
 function InGame() {
@@ -24,7 +25,7 @@ function InGame() {
     const [playersData, setPlayersData] = useState<any>({});
     const loggedUserId = JSON.parse(localStorage.getItem('currentPlayer')!)?.id || 0;
     const [currentPlayerIdx, setCurrentPlayerIdx] = useState(loggedUserId);
-    const [diceRolled, setDiceRolled] = useState(false);
+    const [diceRolled, setDiceRolled] = useState<{ [playerId: string]: boolean }>({});
     const [currentPlayerData, setCurrentPlayerData] = useState<any>(playersData[currentPlayerIdx]);
     const [matchState, setMatchState] = useState<string>("");
     const [turn, setTurn] = useState("");
@@ -61,18 +62,6 @@ function InGame() {
         // { id: 2, name: "Orc" },
         // { id: 3, name: "Dragon" },
     ]
-
-    function handleChallengeClick() {
-        console.log("Challenge button clicked");
-        if (socket && socket.current) {
-            socket.current.send(JSON.stringify({
-                type: 'match',
-                subtype: 'challenge',
-                id: id
-            }));
-        }
-    }
-
 
     useEffect(() => {
         if (!socket || !socket.current) {
@@ -126,9 +115,11 @@ function InGame() {
     useEffect(() => {
         const player = playersData[currentPlayerIdx];
         if (player && (player.orderRoll === null || pendingHeroCard === true)) {
-            setDiceRolled(false);
+            setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: false }));
+        } else {
+            setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
         }
-    }, [currentPlayerIdx, playersData]);
+    }, [currentPlayerIdx, playersData, pendingHeroCard]);
 
 
     useEffect(() => {
@@ -142,7 +133,7 @@ function InGame() {
     useEffect(() => {
 
         if (matchState === "PARTY_LEADER_SELECTION") {
-            setDiceRolled(true);
+             setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
             setPartyLeaderSelection(true);
         }
     }, [matchState]);
@@ -151,7 +142,7 @@ function InGame() {
         if (matchState == "GAMEPLAY") {
             setPartyLeaderSelection(false);
             setAvailablePartyLeaders([]);
-            setDiceRolled(true)
+             setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
         }
     }, [matchState]);
 
@@ -159,7 +150,7 @@ function InGame() {
         if (matchState === "CHALLENGE_ROLL") {
             setShowChallengeButton(false);
             if (currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent) {
-                setDiceRolled(false);
+                 setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: false }));
                 setIsPlayerChallenger(currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent);
                 setShowChallengeButton(true);
             }
@@ -179,8 +170,15 @@ function InGame() {
     }, [socket, id]);
 
     useEffect(() => {
+        if (playersData && playersData[currentPlayerIdx]) {
+            setCurrentPlayerData(playersData[currentPlayerIdx]);
+            setPendingHeroCard(playersData[currentPlayerIdx]?.pendingHeroCard != null);
+        }
+    }, [currentPlayerIdx, playersData]);
+
+    useEffect(() => {
         if (pendingHeroCard === false && matchState !== "ORDER_SELECTION") {
-           setDiceRolled(true);
+            setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
         }
     }, [pendingHeroCard, matchState]);
 
@@ -188,24 +186,20 @@ function InGame() {
         if (pendingHeroCard) {
             setShowHeroBoard(true);
         } else {
-           setShowHeroBoard(false);
+            setShowHeroBoard(false);
         }
     }, [pendingHeroCard]);
 
     return (
         <div className='ingame-background'>
-            {showChallengeButton && (
-                <div className="challenge-button-container">
-                    <button onClick={handleChallengeClick}>Challenge</button>
-                </div>
-            )}
+
             <div className='player-area'>
 
                 <GameHeader
                     playersData={playersData}
                     partyLeaderSelection={partyLeaderSelection}
                     isPlayerTurn={isPlayerTurn}
-                    diceRolled={diceRolled}
+                    diceRolled={diceRolled[currentPlayerIdx]}
                     socket={socket}
                     id={id}
                     turn={turn}
@@ -216,10 +210,9 @@ function InGame() {
                     loggedUserId={loggedUserId}
                 />
 
-                { }
 
                 <div className='party-area flex'>
-                    {!diceRolled ? (
+                    {!diceRolled[currentPlayerIdx] ? (
                         <>
                             <DiceComponent
                                 currentPlayerIdx={currentPlayerIdx}

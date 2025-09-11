@@ -5,7 +5,7 @@ import wizardAvatar from '../../assets/class-avatars/wizard.png';
 import thiefAvatar from '../../assets/class-avatars/thief.png';
 import guardianAvatar from '../../assets/class-avatars/guardian.png';
 import rangerAvatar from '../../assets/class-avatars/ranger.png';
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface GameHeaderProps {
     playersData: { [id: string]: any };
@@ -66,8 +66,6 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
 
     function handlePlayerChange(player: any, id: string) {
         setCurrentPlayerIdx(id);
-        setCurrentPlayerData(playersData[id]);
-
     }
 
     return (
@@ -112,7 +110,7 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                         return (
                             <button
                                 key={id}
-                                disabled={partyLeaderSelection || !diceRolled}
+                                disabled={partyLeaderSelection || (!diceRolled && isPlayerTurn)}
                                 onMouseEnter={() => setHoveredPlayerId(id)}
                                 onMouseLeave={() => setHoveredPlayerId(null)}
                                 onClick={() => handlePlayerChange(player, id)}

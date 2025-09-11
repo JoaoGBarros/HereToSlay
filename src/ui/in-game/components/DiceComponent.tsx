@@ -3,6 +3,7 @@ import { Card } from "@heroui/card";
 import { useEffect, useState } from "react";
 import Dice from "react-dice-roll";
 import { playSound } from '@/utils/SoundManager/SoundManager';
+import ChallengeButton from "./ChallengeButton";
 
 interface DiceComponentProps {
     currentPlayerIdx: string;
@@ -21,6 +22,31 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
     const [dice2Result, setDice2ResultState] = useState<number | null>(null);
     const [isDiceDisabled, setIsDiceDisabled] = useState(false);
     const [challengeWindowTimeRemaining, setChallengeWindowTimeRemaining] = useState<number | undefined>(0);
+    const [progress, setProgress] = useState(100);
+
+    useEffect(() => {
+        if (socket && socket.current) {
+            socket.current.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'match' && data.subtype === 'timer_update') {
+                    setChallengeWindowTimeRemaining(data.payload.remainingTime);
+                }
+            };
+        }
+    }, [socket]);
+
+
+    useEffect(() => {
+        if (challengeWindowDuration && challengeWindowTimeRemaining) {
+            const totalDuration = challengeWindowDuration * 1000;
+            const percentage = (challengeWindowTimeRemaining / challengeWindowDuration) * 100;
+            setProgress(percentage);
+        } else {
+            setProgress(0);
+        }
+    }, [challengeWindowTimeRemaining, challengeWindowDuration]);
+
+
 
     useEffect(() => {
         if (dice1Result !== null && dice2Result !== null) {
@@ -71,32 +97,30 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
         }
     }, [dice1Result, dice2Result, socket]);
 
-    useEffect(() => {
-        if (socket && socket.current) {
-            socket.current.onmessage = (event) => {
-                const data = JSON.parse(event.data);
-                if (data.type === 'match' && data.subtype === 'timer_update') {
-                    setChallengeWindowTimeRemaining(data.payload.remainingTime);
-                }
-            };
-        }
-    }, [socket]);
+
+    const timeRemaining = (challengeWindowTimeRemaining ?? 0) / 1000;
+    const isChallengeWindowActive = timeRemaining > 0.1;
 
 
 
     return (
         <div className="dice-selection-container justify-center items-center flex w-full">
             {pendingHeroCard && (
-                <div className="hero-card-container mr-[300px]">
+                <div className="hero-card-container mr-[200px]">
                     <PartyHero id={currentPlayerData?.pendingHeroCard} />
                 </div>
             )}
-            <div className='dices flex flex-col justify-center gap-16 w-[50%]'>
+            <div className='dices flex flex-col justify-center gap-16 w-[50%] relative'>
+                {isChallengeWindowActive && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
+                        <ChallengeButton progress={progress} timeRemaining={timeRemaining} socket={socket} id={id} />
+                    </div>
+                )}
                 <div className='flex flex-row justify-center gap-16'>
-                    <div onClick={() => { playSound('diceRoll') }}>
+                    <div onClick={() => { if (!isChallengeWindowActive) playSound('diceRoll') }}>
                         <Dice
                             size={200}
-                            disabled={(currentPlayerIdx != loggedUserId && !isPlayerChallenger)}
+                            disabled={(currentPlayerIdx != loggedUserId && !isPlayerChallenger) || isChallengeWindowActive}
                             onRoll={(value) => {
                                 setDice1ResultState(value);
                             }}
@@ -104,25 +128,16 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
 
                     </div>
 
-                    <div onClick={() => { playSound('diceRoll') }}>
+                    <div onClick={() => { if (!isChallengeWindowActive) playSound('diceRoll') }}>
                         <Dice
                             size={200}
-                            disabled={(currentPlayerIdx != loggedUserId && !isPlayerChallenger)}
+                            disabled={(currentPlayerIdx != loggedUserId && !isPlayerChallenger) || isChallengeWindowActive}
                             onRoll={(value) => {
                                 setDice2ResultState(value);
                             }}
                         />
                     </div>
                 </div>
-
-                {challengeWindowDuration! > 0 && pendingHeroCard && challengeWindowTimeRemaining! > 0 && (
-                    <div className="w-1/2 mb-4">
-                        <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                            <div className="bg-blue-600 h-2.5 rounded-full" style={{ width: `${Math.floor((challengeWindowTimeRemaining! / 1000) / challengeWindowDuration! * 100).toFixed(1)}%`, transition: 'width 1s linear' }}></div>
-                        </div>
-                        <p className="text-center mt-2">{`Tempo restante: ${Math.floor(challengeWindowTimeRemaining! / 1000).toFixed(1)}s`}</p>
-                    </div>
-                )}
             </div>
         </div>
     );
