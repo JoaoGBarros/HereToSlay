@@ -66,16 +66,17 @@ public class MatchService {
                 Match matchAction = matches.get(id);
                 matchAction.performAction(conn, action, json);
                 break;
-//            case "play_card":
-//                Long cardId = json.getJSONObject("payload").getLong("card_id");
-//                Match matchPlay = matches.get(id);
-//                boolean playSuccess = matchPlay.playHeroCard(conn, cardId);
-//                JSONObject playResponse = new JSONObject();
-//                playResponse.put("type", "match");
-//                playResponse.put("subtype", "card_played");
-//                playResponse.put("payload", new JSONObject().put("success", playSuccess));
-//                conn.send(playResponse.toString());
-//                break;
+            case "challenge":
+                Match matchChallenge = matches.get(id);
+                matchChallenge.challengeHero(conn);
+                break;
+
+
+            case "process_challenge_roll":
+                roll = json.getJSONObject("payload").getInt("roll");
+                Match matchRoll = matches.get(id);
+                matchRoll.processDuelRoll(conn, roll);
+                break;
 
             default:
                 System.out.println("Unknown match subtype: " + type);

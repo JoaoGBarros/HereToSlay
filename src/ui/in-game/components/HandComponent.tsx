@@ -10,7 +10,6 @@ function HandComponent({ currentPlayerData, currentPlayerIdx, loggedUserId }: Ha
 
     function handleOnDrag(e: React.DragEvent) {
         e.dataTransfer.effectAllowed = "move";
-        console.log("drag");
         e.dataTransfer.setData("cardId", e.currentTarget.id);
     }
 
@@ -25,7 +24,6 @@ function HandComponent({ currentPlayerData, currentPlayerIdx, loggedUserId }: Ha
                     const scale = total > 13 ? Math.max(0.4, 1 - 0.05 * (total - 13)) : 1;
                     const baseSpacing = 120;
                     const spacing = total > 7 ? baseSpacing * Math.max(0.4, 1 - 0.04 * (total - 7)) : baseSpacing;
-                    console.log({ card, idx });
                     return (
                         <div
                             draggable

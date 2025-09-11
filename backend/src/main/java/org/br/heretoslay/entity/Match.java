@@ -26,7 +26,16 @@ public class Match {
     private int currentPlayerTurnIndex = 0;
     private Stack<Card> drawPile = new Stack<>();
     private Stack<Card> discardPile = new Stack<>();
-    private int lastRoll = 0;
+    private boolean challengeWindowOpen = false;
+    private Card currentHeroCard = null;
+    private WebSocket currentHeroPlayer = null;
+    private Set<WebSocket> challengers = new HashSet<>();
+    private Timer challengeTimer = new Timer();
+    private Map<WebSocket, Integer> duelRolls = new HashMap<>();
+    private WebSocket duelChallenger = null;
+    private long challengeWindowRemainingTime;
+    private long challengeWindowStartTime;
+    private long challengeWindowDuration = 10000;
 
 
     public Match(List<WebSocket> connections) {
@@ -178,6 +187,7 @@ public class Match {
                 .put("availablePartyLeaders", availablePartyLeaders)
                 .put("currentPlayerTurn", turnOrder.isEmpty() ? "" : AuthService.getInstance().getPlayerByConnection(turnOrder.get(currentPlayerTurnIndex)).getId().toString())
                 .put("matchState", matchState.toString())
+                .put ("challengeWindowTime", challengeWindowDuration)
                 .put("players", playersJson);
     }
 
@@ -240,9 +250,15 @@ public class Match {
         Optional<Card> cardOpt = gameState.getHand().stream().filter(c -> c.getCardId().equals(cardId)).findFirst();
         if (cardOpt.isEmpty()) return false;
         Card card = cardOpt.get();
+        challengeWindowRemainingTime = challengeWindowDuration;
 
         if(card.getType() == CardType.HERO){
             gameState.setPendingHeroCard(card);
+            openChallengeWindow(players.entrySet().stream()
+                    .filter(entry -> entry.getValue().equals(gameState))
+                    .map(Map.Entry::getKey)
+                    .findFirst()
+                    .orElse(null) , card);
             return true;
         }
 
@@ -250,6 +266,91 @@ public class Match {
         gameState.getHand().remove(card);
         gameState.getParty().add(card);
         return true;
+    }
+
+    private void openChallengeWindow(WebSocket heroPlayer, Card heroCard) {
+        challengeWindowOpen = true;
+        currentHeroCard = heroCard;
+        currentHeroPlayer = heroPlayer;
+        this.matchState = MatchState.CHALLENGE_WINDOW;
+        challengers.clear();
+
+
+
+        // Notifica o front-end para mostrar o botão de desafio
+        JSONObject challengeMsg = new JSONObject();
+        challengeMsg.put("type", "match");
+        challengeMsg.put("subtype", "challenge_window_open");
+        broadcast(challengeMsg.toString());
+
+        // Timer de 5 segundos
+        challengeTimer = new Timer();
+        challengeWindowStartTime = System.currentTimeMillis();
+        challengeTimer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                closeChallengeWindow();
+            }
+        }, challengeWindowRemainingTime);
+
+        challengeTimer.scheduleAtFixedRate(new TimerTask() {
+            @Override
+            public void run() {
+                long remainingTime = getRemainingTime();
+                if (remainingTime <= 0) {
+                    cancel();
+                } else {
+                    JSONObject timeUpdateMsg = new JSONObject();
+                    timeUpdateMsg.put("type", "match");
+                    timeUpdateMsg.put("subtype", "timer_update");
+                    timeUpdateMsg.put("payload", new JSONObject().put("remainingTime", remainingTime));
+                    broadcast(timeUpdateMsg.toString());
+                }
+            }
+        }, 0, 500);
+    }
+
+    private long getRemainingTime() {
+        return challengeWindowRemainingTime - (System.currentTimeMillis() - challengeWindowStartTime);
+    }
+
+    public synchronized void challengeHero(WebSocket challenger) {
+        if (!challengeWindowOpen || challenger == currentHeroPlayer || challengers.contains(challenger)) return;
+        challengers.add(challenger);
+        duelChallenger = challenger;
+        duelRolls.clear();
+        challengeWindowRemainingTime -= (System.currentTimeMillis() - challengeWindowStartTime);
+        challengeTimer.cancel();
+
+        matchState = MatchState.CHALLENGE_ROLL;
+        JSONObject duelMsg = new JSONObject();
+        duelMsg.put("type", "match");
+        duelMsg.put("subtype", "duel_start");
+        duelMsg.put("payload", new JSONObject()
+                .put("challenger", AuthService.getInstance().getPlayerByConnection(challenger).getId())
+                .put("heroPlayer", AuthService.getInstance().getPlayerByConnection(currentHeroPlayer).getId())
+                .put("matchState", matchState.toString()));
+        broadcast(duelMsg.toString());
+    }
+
+
+    private void closeChallengeWindow() {
+        challengeWindowOpen = false;
+        GameState heroState = players.get(currentHeroPlayer);
+        if (currentHeroCard != null) {
+            heroState.setPendingHeroCard(currentHeroCard);
+        }
+        currentHeroCard = null;
+        currentHeroPlayer = null;
+        matchState = MatchState.WAITING_HERO_ROLL;
+        challengers.clear();
+
+        JSONObject challengeMsg = new JSONObject();
+        challengeMsg.put("type", "match");
+        challengeMsg.put("subtype", "match_state");
+        challengeMsg.put("payload", getMatchState());
+        broadcast(challengeMsg.toString());
+        System.out.println("Mensagem enviada");
     }
 
     public void processHeroDiceRoll(GameState gameState, int diceValue) {
@@ -266,6 +367,44 @@ public class Match {
         }
     }
 
+    public synchronized void processDuelRoll(WebSocket player, int roll) {
+        duelRolls.put(player, roll);
+        if (duelRolls.size() == 2) {
+            int heroRoll = duelRolls.get(turnOrder.get(currentPlayerTurnIndex));
+            int challengerRoll = duelRolls.get(duelChallenger);
+
+            JSONObject resultMsg = new JSONObject();
+            resultMsg.put("type", "match");
+            resultMsg.put("subtype", "duel_result");
+
+            if (heroRoll >= challengerRoll) {
+                resultMsg.put("winner", AuthService.getInstance().getPlayerByConnection(turnOrder.get(currentPlayerTurnIndex)).getId());
+            } else {
+                discardPile.push(currentHeroCard);
+                GameState heroState = players.get(turnOrder.get(currentPlayerTurnIndex));
+                heroState.getHand().remove(currentHeroCard);
+                heroState.setPendingHeroCard(null);
+                currentHeroCard = null;
+                resultMsg.put("winner", AuthService.getInstance().getPlayerByConnection(duelChallenger).getId());
+            }
+            broadcast(resultMsg.toString());
+
+            duelRolls.clear();
+            duelChallenger = null;
+
+            challengeTimer = new Timer();
+            challengeWindowStartTime = System.currentTimeMillis();
+            challengeTimer.schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    closeChallengeWindow();
+                }
+            }, challengeWindowRemainingTime);
+        }
+
+        }
+    }
 
 
-}
+
+

@@ -31,8 +31,18 @@ function InGame() {
     const [partyLeaderSelection, setPartyLeaderSelection] = useState(false);
     const [isPlayerTurn, setIsPlayerTurn] = useState(false);
     const [availablePartyLeaders, setAvailablePartyLeaders] = useState<string[]>([]);
-    const [showHeroBoard, setShowHeroBoard] = useState(false);
     const [pendingHeroCard, setPendingHeroCard] = useState<boolean>(false);
+    const [challengeHero, setChallengeHero] = useState<string>("");
+    const [challengeOpponent, setChallengeOpponent] = useState<string>("");
+    const [isPlayerChallenger, setIsPlayerChallenger] = useState(false);
+    const [challengeWindowTime, setChallengeWindowTime] = useState(0);
+
+
+    const [showChallengeButton, setShowChallengeButton] = useState(false);
+    const [showHeroBoard, setShowHeroBoard] = useState(false);
+    const [showHeroRollWaiting, setShowHeroRollWaiting] = useState(false);
+    const [showChallenge, setShowChallenge] = useState(false);
+
 
 
     const classIcons: Record<string, string> = {
@@ -52,33 +62,65 @@ function InGame() {
         // { id: 3, name: "Dragon" },
     ]
 
+    function handleChallengeClick() {
+        console.log("Challenge button clicked");
+        if (socket && socket.current) {
+            socket.current.send(JSON.stringify({
+                type: 'match',
+                subtype: 'challenge',
+                id: id
+            }));
+        }
+    }
+
 
     useEffect(() => {
-        if (socket && socket.current) {
-            socket.current.onmessage = (event: MessageEvent) => {
-                try {
-                    const data = JSON.parse(event.data);
-
-                    if (data.type === 'match') {
-                        if (data.subtype === 'match_state' || data.subtype === 'order_finalized') {
-                            console.log("Match state received:", data.payload);
-                            setPlayersData(data.payload.players);
-                            setMatchState(data.payload.matchState);
-                            setTurn(data.payload.currentPlayerTurn);
-                            setCurrentPlayerData(data.payload.players[currentPlayerIdx]);
-                            setPendingHeroCard(data.payload.players[currentPlayerIdx]?.pendingHeroCard != null);
-                            setAvailablePartyLeaders(data.payload.availablePartyLeaders || []);
-                        } if (data.subtype === 'order_selection_tie') {
-                            setPlayersData(data.payload.players);
-                            setCurrentPlayerData(data.payload.players[currentPlayerIdx]);
-                        }
-                    }
-
-                } catch (error) {
-                    console.error("Error parsing WebSocket message:", error);
-                }
-            };
+        if (!socket || !socket.current) {
+            return;
         }
+
+        const handleMessage = (event: MessageEvent) => {
+            try {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'match') {
+                    if (data.subtype === 'match_state' || data.subtype === 'order_finalized') {
+                        console.log("Match state received:", data.payload);
+                        setPlayersData(data.payload.players);
+                        setMatchState(data.payload.matchState);
+                        setTurn(data.payload.currentPlayerTurn);
+                        setCurrentPlayerData(data.payload.players[currentPlayerIdx]);
+                        setPendingHeroCard(data.payload.players[currentPlayerIdx]?.pendingHeroCard != null);
+                        setAvailablePartyLeaders(data.payload.availablePartyLeaders || []);
+                        setChallengeWindowTime(data.payload.challengeWindowTime || 0);
+                    } else if (data.subtype === 'order_selection_tie') {
+                        setPlayersData(data.payload.players);
+                        setCurrentPlayerData(data.payload.players[currentPlayerIdx]);
+                    } else if (data.subtype === 'challenge_window_open') {
+                        console.log("Duel: " + data);
+                        setShowChallengeButton(true);
+                    } else if (data.subtype === 'duel_start') {
+                        console.log("Duel Start: ", data.payload);
+                        setChallengeHero(data.payload.heroPlayer);
+                        setChallengeOpponent(data.payload.challenger);
+                        setMatchState(data.payload.matchState);
+                    } else if (data.subtype === 'duel_result') {
+                        console.log("Duel Result: ", data.winner);
+                        setMatchState("GAMEPLAY");
+                    }
+                }
+
+            } catch (error) {
+                console.error("Error parsing WebSocket message:", error);
+            }
+        };
+
+        const ws = socket.current;
+        ws.addEventListener('message', handleMessage);
+
+        return () => {
+            ws.removeEventListener('message', handleMessage);
+        };
     }, [socket, currentPlayerIdx]);
 
     useEffect(() => {
@@ -100,10 +142,8 @@ function InGame() {
     useEffect(() => {
 
         if (matchState === "PARTY_LEADER_SELECTION") {
-            setTimeout(() => {
-                setDiceRolled(true);
-                setPartyLeaderSelection(true);
-            }, 2000);
+            setDiceRolled(true);
+            setPartyLeaderSelection(true);
         }
     }, [matchState]);
 
@@ -111,9 +151,21 @@ function InGame() {
         if (matchState == "GAMEPLAY") {
             setPartyLeaderSelection(false);
             setAvailablePartyLeaders([]);
-            setDiceRolled(true);
+            setDiceRolled(true)
         }
     }, [matchState]);
+
+    useEffect(() => {
+        if (matchState === "CHALLENGE_ROLL") {
+            setShowChallengeButton(false);
+            if (currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent) {
+                setDiceRolled(false);
+                setIsPlayerChallenger(currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent);
+                setShowChallengeButton(true);
+            }
+            setPendingHeroCard(false);
+        }
+    }, [currentPlayerIdx, challengeHero, challengeOpponent, matchState, pendingHeroCard, diceRolled]);
 
 
     useEffect(() => {
@@ -128,25 +180,25 @@ function InGame() {
 
     useEffect(() => {
         if (pendingHeroCard === false && matchState !== "ORDER_SELECTION") {
-            const timeout = setTimeout(() => {
-                setDiceRolled(true);
-            }, 2000);
-
-            return () => clearTimeout(timeout);
+           setDiceRolled(true);
         }
     }, [pendingHeroCard, matchState]);
 
     useEffect(() => {
-    if (pendingHeroCard) {
-        setShowHeroBoard(true);
-    } else {
-        const timeout = setTimeout(() => setShowHeroBoard(false), 2000);
-        return () => clearTimeout(timeout);
-    }
-}, [pendingHeroCard]);
-    
+        if (pendingHeroCard) {
+            setShowHeroBoard(true);
+        } else {
+           setShowHeroBoard(false);
+        }
+    }, [pendingHeroCard]);
+
     return (
         <div className='ingame-background'>
+            {showChallengeButton && (
+                <div className="challenge-button-container">
+                    <button onClick={handleChallengeClick}>Challenge</button>
+                </div>
+            )}
             <div className='player-area'>
 
                 <GameHeader
@@ -164,6 +216,8 @@ function InGame() {
                     loggedUserId={loggedUserId}
                 />
 
+                { }
+
                 <div className='party-area flex'>
                     {!diceRolled ? (
                         <>
@@ -174,13 +228,15 @@ function InGame() {
                                 id={id}
                                 currentPlayerData={currentPlayerData}
                                 pendingHeroCard={showHeroBoard}
+                                isPlayerChallenger={isPlayerChallenger}
+                                challengeWindowDuration={challengeWindowTime}
                             />
 
                             {showHeroBoard ? (
                                 <DiceBoardHeroComponent currentPlayerData={currentPlayerData} />
                             ) : (
-                                matchState === "ORDER_SELECTION" && (
-                                    <DiceBoardOrderComponent playersData={playersData} />
+                                (matchState === "ORDER_SELECTION" || matchState === "CHALLENGE_ROLL") && (
+                                    <DiceBoardOrderComponent playersData={playersData} isChallenger={matchState === "CHALLENGE_ROLL"} challengerHero={playersData[challengeHero]} challengerOpponent={playersData[challengeOpponent]} />
                                 )
                             )}
 

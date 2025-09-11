@@ -15,7 +15,7 @@ public class HeroCard extends Card {
 
     @Override
     public void applyEffect(Match match, GameState gameState) {
-        gameState.setUsername("PINTO GROSSO GOSTOSO VEIUDO PULSANDO");
+        //gameState.setUsername("PINTO GROSSO GOSTOSO VEIUDO PULSANDO");
     }
 
     public int getDiceValue() {
