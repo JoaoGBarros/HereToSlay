@@ -95,3 +95,19 @@
         opacity: 0;
     }
 }
+
+.card-appear {
+    animation: card-appear 0.5s ease-out forwards;
+    opacity: 0;
+}
+
+@keyframes card-appear {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}

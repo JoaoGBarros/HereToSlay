@@ -11,7 +11,7 @@ import wizImg from "../../../../assets/party-leader/wizard.png";
 import TiltedCard from "@/components/TiltedCard";
 import { useEffect, useRef, useState } from "react";
 
-export function PartyLeader({ leader, isSelectionStage, isPlayerTurn, chooseLeader }: { leader: string, isSelectionStage: boolean, isPlayerTurn: boolean, chooseLeader: (leader: string) => void }) {
+export function PartyLeader({ leader, isSelectionStage, isPlayerTurn, chooseLeader, className }: { leader: string, isSelectionStage: boolean, isPlayerTurn: boolean, chooseLeader: (leader: string) => void, className?: string }) {
     const [expanded, setExpanded] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
@@ -68,7 +68,7 @@ export function PartyLeader({ leader, isSelectionStage, isPlayerTurn, chooseLead
 
     return (
         <>
-            <div onClick={handleCardClick} style={{ display: "inline-block", cursor: "pointer", position: "relative" }}>
+            <div onClick={handleCardClick} style={{ display: "inline-block", cursor: "pointer", position: "relative" }} className={className}>
                 <TiltedCard
                     imageSrc={heroCards[leader]}
                     containerHeight="380px"

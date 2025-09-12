@@ -19,6 +19,8 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
     const [heroPages, setHeroPages] = useState(0);
     const heroesPerPage = 6;
 
+    const classes = ["BARD", "FIGHTER", "GUARDIAN", "RANGER", "THIEF", "WIZARD"];
+
     useEffect(() => {
         setHeroPage(0);
     }, [currentPlayerData]);
@@ -88,15 +90,23 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
 
                 {partyLeaderSelection ? (
                     <>
-                        {availablePartyLeaders.map((leader) => (
-                            <PartyLeader
-                                key={leader}
-                                leader={leader}
-                                isSelectionStage={partyLeaderSelection}
-                                isPlayerTurn={isPlayerTurn}
-                                chooseLeader={handleChoosePartyLeader}
-                            />
-                        ))}
+                        {classes.map((leaderClass, index) => {
+                            const isSelectable = availablePartyLeaders.includes(leaderClass);
+                            return (
+                                <div
+                                    key={leaderClass}
+                                    style={{ animationDelay: `${index * 150}ms` }}
+                                    className={`card-appear ${!isSelectable ? 'grayscale' : ''}`}
+                                >
+                                    <PartyLeader
+                                        leader={leaderClass}
+                                        isSelectionStage={partyLeaderSelection}
+                                        isPlayerTurn={isPlayerTurn}
+                                        chooseLeader={isSelectable ? handleChoosePartyLeader : () => { }}
+                                    />
+                                </div>
+                            );
+                        })}
                     </>
 
                 ) : (
