@@ -1,7 +1,7 @@
 import { PartyHero } from "@/ui/games/common/cards/partyHero/PartyHero";
 import { Card } from "@heroui/card";
-import { useEffect, useState } from "react";
-import Dice from "react-dice-roll";
+import { use, useEffect, useState } from "react";
+import { Die, useDie } from "react-dice-3d";
 import { playSound } from '@/utils/SoundManager/SoundManager';
 import ChallengeButton from "./ChallengeButton";
 
@@ -18,7 +18,7 @@ interface DiceComponentProps {
 }
 
 
-function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerData, pendingHeroCard, id, isPlayerChallenger, challengeWindowDuration, isDuel}: DiceComponentProps) {
+function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerData, pendingHeroCard, id, isPlayerChallenger, challengeWindowDuration, isDuel }: DiceComponentProps) {
     const [dice1Result, setDice1ResultState] = useState<number | null>(null);
     const [dice2Result, setDice2ResultState] = useState<number | null>(null);
     const [isDiceDisabled, setIsDiceDisabled] = useState(false);
@@ -101,7 +101,10 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
 
     const timeRemaining = (challengeWindowTimeRemaining ?? 0) / 1000;
     const isChallengeWindowActive = isDuel ? false : timeRemaining > 0.1;
-    
+
+    const areDiceDisabled = (currentPlayerIdx != loggedUserId && !isPlayerChallenger) || isChallengeWindowActive;
+    const dice1 = useDie("dice-1");
+    const dice2 = useDie("dice-2");
 
 
     return (
@@ -118,23 +121,37 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
                     </div>
                 )}
                 <div className='flex flex-row justify-center gap-16'>
-                    <div onClick={() => { if (!isChallengeWindowActive) playSound('diceRoll') }}>
-                        <Dice
+                    <div style={{ pointerEvents: areDiceDisabled ? 'none' : 'auto', opacity: areDiceDisabled ? 0.5 : 1 }}>
+                        <Die
+                            id="dice-1"
                             size={200}
-                            disabled={(currentPlayerIdx != loggedUserId && !isPlayerChallenger) || isChallengeWindowActive}
                             onRoll={(value) => {
                                 setDice1ResultState(value);
                             }}
+                            
+                            onClick={(roll) => {
+                                if (!areDiceDisabled) {
+                                    playSound('diceRoll')
+                                    roll()
+                                }
+                            }}
                         />
-
                     </div>
 
-                    <div onClick={() => { if (!isChallengeWindowActive) playSound('diceRoll') }}>
-                        <Dice
+                    <div style={{ pointerEvents: areDiceDisabled ? 'none' : 'auto', opacity: areDiceDisabled ? 0.5 : 1 }}>
+                        <Die
+                            id="dice-2"
                             size={200}
-                            disabled={(currentPlayerIdx != loggedUserId && !isPlayerChallenger) || isChallengeWindowActive}
                             onRoll={(value) => {
+
                                 setDice2ResultState(value);
+
+                            }}
+                            onClick={(roll) => {
+                                if (!areDiceDisabled) {
+                                    playSound('diceRoll')
+                                    roll()
+                                }
                             }}
                         />
                     </div>
