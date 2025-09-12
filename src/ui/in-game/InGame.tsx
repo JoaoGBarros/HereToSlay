@@ -95,7 +95,6 @@ function InGame() {
                         setMatchState(data.payload.matchState);
                     } else if (data.subtype === 'duel_result') {
                         console.log("Duel Result: ", data.winner);
-                        setMatchState("GAMEPLAY");
                     }
                 }
 
@@ -114,12 +113,18 @@ function InGame() {
 
     useEffect(() => {
         const player = playersData[currentPlayerIdx];
-        if (player && (player.orderRoll === null || pendingHeroCard === true)) {
+        if (!player) return;
+
+        const needsToRollForOrder = matchState === "ORDER_SELECTION" && player.orderRoll === null;
+        const needsToRollForHero = player.pendingHeroCard != null;
+        const needsToRollForChallenge = matchState === "CHALLENGE_ROLL" && (currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent);
+
+        if (needsToRollForOrder || needsToRollForHero || needsToRollForChallenge) {
             setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: false }));
         } else {
             setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
         }
-    }, [currentPlayerIdx, playersData, pendingHeroCard]);
+    }, [currentPlayerIdx, playersData, matchState, challengeHero, challengeOpponent]);
 
 
     useEffect(() => {
@@ -133,7 +138,7 @@ function InGame() {
     useEffect(() => {
 
         if (matchState === "PARTY_LEADER_SELECTION") {
-             setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
+            setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
             setPartyLeaderSelection(true);
         }
     }, [matchState]);
@@ -142,21 +147,31 @@ function InGame() {
         if (matchState == "GAMEPLAY") {
             setPartyLeaderSelection(false);
             setAvailablePartyLeaders([]);
-             setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
+            setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
         }
     }, [matchState]);
 
     useEffect(() => {
         if (matchState === "CHALLENGE_ROLL") {
-            setShowChallengeButton(false);
-            if (currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent) {
-                 setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: false }));
-                setIsPlayerChallenger(currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent);
-                setShowChallengeButton(true);
-            }
+            setIsPlayerChallenger(loggedUserId === challengeHero || loggedUserId === challengeOpponent);
+            setDiceRolled((prev) => ({
+                ...prev,
+                [challengeHero]: false,
+                [challengeOpponent]: false,
+            }));
             setPendingHeroCard(false);
         }
-    }, [currentPlayerIdx, challengeHero, challengeOpponent, matchState, pendingHeroCard, diceRolled]);
+    }, [currentPlayerIdx, challengeHero, challengeOpponent, matchState, loggedUserId]);
+
+    useEffect(() => {
+        if (matchState === "WAITING_HERO_ROLL") {
+            setIsPlayerChallenger(false);
+            setChallengeHero("");
+            setChallengeOpponent("");
+        }
+    }, [matchState, challengeHero, challengeOpponent]);
+
+
 
 
     useEffect(() => {
@@ -176,11 +191,11 @@ function InGame() {
         }
     }, [currentPlayerIdx, playersData]);
 
-    useEffect(() => {
-        if (pendingHeroCard === false && matchState !== "ORDER_SELECTION") {
-            setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
-        }
-    }, [pendingHeroCard, matchState]);
+    // useEffect(() => {
+    //     if (pendingHeroCard === false && matchState !== "ORDER_SELECTION") {
+    //         setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
+    //     }
+    // }, [pendingHeroCard, matchState]);
 
     useEffect(() => {
         if (pendingHeroCard) {
@@ -219,14 +234,15 @@ function InGame() {
                                 loggedUserId={loggedUserId}
                                 socket={socket}
                                 id={id}
-                                currentPlayerData={currentPlayerData}
+                                currentPlayerData={playersData[currentPlayerIdx]}
                                 pendingHeroCard={showHeroBoard}
                                 isPlayerChallenger={isPlayerChallenger}
                                 challengeWindowDuration={challengeWindowTime}
+                                isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
                             />
 
                             {showHeroBoard ? (
-                                <DiceBoardHeroComponent currentPlayerData={currentPlayerData} />
+                                <DiceBoardHeroComponent currentPlayerData={playersData[currentPlayerIdx]} />
                             ) : (
                                 (matchState === "ORDER_SELECTION" || matchState === "CHALLENGE_ROLL") && (
                                     <DiceBoardOrderComponent playersData={playersData} isChallenger={matchState === "CHALLENGE_ROLL"} challengerHero={playersData[challengeHero]} challengerOpponent={playersData[challengeOpponent]} />
@@ -238,7 +254,7 @@ function InGame() {
                     ) : (
                         <PartyComponent
                             isPlayerTurn={isPlayerTurn}
-                            currentPlayerData={currentPlayerData}
+                            currentPlayerData={playersData[currentPlayerIdx]}
                             partyLeaderSelection={partyLeaderSelection}
                             monsterCard={monsterCard}
                             availablePartyLeaders={availablePartyLeaders}
@@ -250,9 +266,9 @@ function InGame() {
 
 
                 <div className='hand-area flex relative row mt-10'>
-                    <PlayerInfoComponent currentPlayerData={currentPlayerData} />
+                    <PlayerInfoComponent currentPlayerData={playersData[currentPlayerIdx]} />
                     <HandComponent
-                        currentPlayerData={currentPlayerData}
+                        currentPlayerData={playersData[currentPlayerIdx]}
                         currentPlayerIdx={currentPlayerIdx}
                         loggedUserId={loggedUserId}
                     />

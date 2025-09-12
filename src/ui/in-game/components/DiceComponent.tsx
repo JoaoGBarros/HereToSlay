@@ -14,10 +14,11 @@ interface DiceComponentProps {
     pendingHeroCard: boolean;
     isPlayerChallenger: boolean;
     challengeWindowDuration?: number;
+    isDuel: boolean;
 }
 
 
-function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerData, pendingHeroCard, id, isPlayerChallenger, challengeWindowDuration }: DiceComponentProps) {
+function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerData, pendingHeroCard, id, isPlayerChallenger, challengeWindowDuration, isDuel}: DiceComponentProps) {
     const [dice1Result, setDice1ResultState] = useState<number | null>(null);
     const [dice2Result, setDice2ResultState] = useState<number | null>(null);
     const [isDiceDisabled, setIsDiceDisabled] = useState(false);
@@ -99,8 +100,8 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
 
 
     const timeRemaining = (challengeWindowTimeRemaining ?? 0) / 1000;
-    const isChallengeWindowActive = timeRemaining > 0.1;
-
+    const isChallengeWindowActive = isDuel ? false : timeRemaining > 0.1;
+    
 
 
     return (

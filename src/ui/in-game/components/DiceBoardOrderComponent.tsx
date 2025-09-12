@@ -12,8 +12,6 @@ type DiceBoardComponentProps = {
 
 function DiceBoardOrderComponent({ playersData, isChallenger, challengerHero, challengerOpponent }: DiceBoardComponentProps) {
     const playersArray = Object.values(playersData);
-    console.log("Challenger Hero:", challengerHero);
-    console.log("Challenger Opponent:", challengerOpponent);
     return (
         <div className="dice-board">
             <Card>

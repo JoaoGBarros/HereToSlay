@@ -339,10 +339,12 @@ public class Match {
         GameState heroState = players.get(currentHeroPlayer);
         if (currentHeroCard != null) {
             heroState.setPendingHeroCard(currentHeroCard);
+            matchState = MatchState.WAITING_HERO_ROLL;
+        }else{
+            matchState = MatchState.GAMEPLAY;
         }
         currentHeroCard = null;
         currentHeroPlayer = null;
-        matchState = MatchState.WAITING_HERO_ROLL;
         challengers.clear();
 
         JSONObject challengeMsg = new JSONObject();
@@ -379,27 +381,48 @@ public class Match {
 
             if (heroRoll >= challengerRoll) {
                 resultMsg.put("winner", AuthService.getInstance().getPlayerByConnection(turnOrder.get(currentPlayerTurnIndex)).getId());
+                matchState = MatchState.CHALLENGE_WINDOW;
+                challengeTimer = new Timer();
+                challengeWindowStartTime = System.currentTimeMillis();
+                challengeTimer.schedule(new TimerTask() {
+                    @Override
+                    public void run() {
+                        closeChallengeWindow();
+                    }
+                }, challengeWindowRemainingTime);
+                challengeTimer.scheduleAtFixedRate(new TimerTask() {
+                    @Override
+                    public void run() {
+                        long remainingTime = getRemainingTime();
+                        if (remainingTime <= 0) {
+                            cancel();
+                        } else {
+                            JSONObject timeUpdateMsg = new JSONObject();
+                            timeUpdateMsg.put("type", "match");
+                            timeUpdateMsg.put("subtype", "timer_update");
+                            timeUpdateMsg.put("payload", new JSONObject().put("remainingTime", remainingTime));
+                            broadcast(timeUpdateMsg.toString());
+                        }
+                    }
+                }, 0, 100);
+                JSONObject matchUpdate = new JSONObject();
+                matchUpdate.put("type", "match");
+                matchUpdate.put("subtype", "match_state");
+                matchUpdate.put("payload", getMatchState());
+                broadcast(matchUpdate.toString());
             } else {
                 discardPile.push(currentHeroCard);
                 GameState heroState = players.get(turnOrder.get(currentPlayerTurnIndex));
                 heroState.getHand().remove(currentHeroCard);
                 heroState.setPendingHeroCard(null);
                 currentHeroCard = null;
+                closeChallengeWindow();
                 resultMsg.put("winner", AuthService.getInstance().getPlayerByConnection(duelChallenger).getId());
             }
             broadcast(resultMsg.toString());
 
             duelRolls.clear();
             duelChallenger = null;
-
-            challengeTimer = new Timer();
-            challengeWindowStartTime = System.currentTimeMillis();
-            challengeTimer.schedule(new TimerTask() {
-                @Override
-                public void run() {
-                    closeChallengeWindow();
-                }
-            }, challengeWindowRemainingTime);
         }
 
         }
