@@ -37,6 +37,7 @@ function InGame() {
     const [challengeOpponent, setChallengeOpponent] = useState<string>("");
     const [isPlayerChallenger, setIsPlayerChallenger] = useState(false);
     const [challengeWindowTime, setChallengeWindowTime] = useState(0);
+    const [isTransitioning, setIsTransitioning] = useState(false);
 
 
     const [showChallengeButton, setShowChallengeButton] = useState(false);
@@ -219,14 +220,22 @@ function InGame() {
                     id={id}
                     turn={turn}
                     setCurrentPlayerData={setCurrentPlayerData}
-                    setCurrentPlayerIdx={setCurrentPlayerIdx}
+                    setCurrentPlayerIdx={(newIdx: string) => {
+                        if (newIdx !== currentPlayerIdx) {
+                            setIsTransitioning(true);
+                            setTimeout(() => {
+                                setCurrentPlayerIdx(newIdx);
+                                setIsTransitioning(false);
+                            }, 300);
+                        }
+                    }}
                     currentPlayerIdx={currentPlayerIdx}
                     deckImg={deckImg}
                     loggedUserId={loggedUserId}
                 />
 
 
-                <div className='party-area flex'>
+                <div className={`party-area flex ${isTransitioning ? 'slide-out' : 'slide-in'}`}>
                     {!diceRolled[currentPlayerIdx] ? (
                         <>
                             <DiceComponent
