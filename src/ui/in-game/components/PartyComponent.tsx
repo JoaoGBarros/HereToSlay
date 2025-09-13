@@ -10,9 +10,10 @@ interface PartyComponentProps {
     availablePartyLeaders: Array<string>;
     socket: React.MutableRefObject<WebSocket | null> | null;
     id: string | undefined;
+    currentPlayerIdx?: string;
 }
 
-function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection, monsterCard, availablePartyLeaders, socket, id }: PartyComponentProps) {
+function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection, monsterCard, availablePartyLeaders, socket, id, currentPlayerIdx }: PartyComponentProps) {
 
     const [heroPage, setHeroPage] = useState(0);
     const [currentHeroCards, setCurrentHeroCards] = useState<Array<any>>([]);
@@ -112,7 +113,9 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                 ) : (
                     <>
                         {currentPlayerData?.leader && (
-                            <PartyLeader leader={currentPlayerData.leader} isSelectionStage={partyLeaderSelection} isPlayerTurn={isPlayerTurn} chooseLeader={handleChoosePartyLeader} />
+                            <div className={parseInt(currentPlayerIdx!) % 2 === 0 ? "leader-appear-animation-A" : "leader-appear-animation-B"}>
+                                <PartyLeader leader={currentPlayerData.leader} isSelectionStage={partyLeaderSelection} isPlayerTurn={isPlayerTurn} chooseLeader={handleChoosePartyLeader} />
+                            </div>
                         )}
                         {monsterCard.map((card) => (
                             <PartyLeader key={card.id} leader='BARD' isSelectionStage={partyLeaderSelection} isPlayerTurn={isPlayerTurn} chooseLeader={handleChoosePartyLeader} />

@@ -51,6 +51,7 @@
     height: 50%;
     position: relative;
     overflow: hidden;
+    perspective: 800px;
 }
 
 .action-area {
@@ -62,8 +63,14 @@
 .party-leader {
     width: 20%;
     object-fit: contain;
+    transform-style: preserve-3d;
 }
 
+
+/* Animações */
+
+
+/* Slide Party Area */
 .party-area.slide-in {
     animation: slideIn 0.3s forwards;
 }
@@ -96,6 +103,8 @@
     }
 }
 
+
+/* Party Leader Selection Animation */
 .card-appear {
     animation: card-appear 0.5s ease-out forwards;
     opacity: 0;
@@ -109,5 +118,65 @@
     to {
         opacity: 1;
         transform: translateY(0);
+    }
+}
+
+
+@keyframes card-appear {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Party Leader Appear Animation */
+
+.leader-appear-animation-A, .leader-appear-animation-B {
+    animation-duration: 0.4s;
+    animation-timing-function: ease-out;
+    animation-fill-mode: forwards;
+    animation-delay: 0.2s;
+    transform-style: preserve-3d;
+}
+
+.leader-appear-animation-A {
+    animation-name: leader-appear-A;
+}
+
+.leader-appear-animation-B {
+    animation-name: leader-appear-B;
+}
+
+@keyframes leader-appear-A {
+    0% {
+        transform: translateY(-150px) translateZ(-300px);
+        opacity: 0;
+    }
+    80% {
+        transform: translateY(10px) translateZ(20px);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(0) translateZ(0);
+        opacity: 1;
+    }
+}
+
+@keyframes leader-appear-B {
+    0% {
+        transform: translateY(-150px) translateZ(-300px);
+        opacity: 0;
+    }
+    80% {
+        transform: translateY(10px) translateZ(20px);
+        opacity: 1;
+    }
+    100% {
+        transform: translateY(0) translateZ(0);
+        opacity: 1;
     }
 }

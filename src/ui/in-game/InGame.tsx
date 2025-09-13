@@ -269,6 +269,7 @@ function InGame() {
                             availablePartyLeaders={availablePartyLeaders}
                             socket={socket}
                             id={id}
+                            currentPlayerIdx={currentPlayerIdx}
                         />
                     )}
                 </div>
