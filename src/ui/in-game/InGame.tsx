@@ -17,7 +17,7 @@ import PlayerInfoComponent from './components/PlayerInfoComponent';
 import DiceBoardOrderComponent from './components/DiceBoardOrderComponent';
 import DiceBoardHeroComponent from './components/DiceBoardHeroComponent';
 import ChallengeButton from './components/ChallengeButton';
-import { playSound } from '@/utils/SoundManager/SoundManager';
+import { playBackgroundMusic, playClassSound, playSound, type ClassSoundType } from '@/utils/SoundManager/SoundManager';
 
 
 function InGame() {
@@ -64,6 +64,9 @@ function InGame() {
         // { id: 2, name: "Orc" },
         // { id: 3, name: "Dragon" },
     ]
+    useEffect(() => {
+        playBackgroundMusic();
+    }, []);
 
     useEffect(() => {
         if (!socket || !socket.current) {
@@ -97,6 +100,14 @@ function InGame() {
                         setMatchState(data.payload.matchState);
                     } else if (data.subtype === 'duel_result') {
                         console.log("Duel Result: ", data.winner);
+                    }
+                }
+
+                if (data.type === 'sound' && data.subtype === 'play_class_sound') {
+                    console.log("Play class sound:", data.payload);
+                    const className = data.payload as ClassSoundType;
+                    if (className) {
+                        playClassSound(className);
                     }
                 }
 

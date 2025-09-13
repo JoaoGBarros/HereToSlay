@@ -136,7 +136,7 @@
 /* Party Leader Appear Animation */
 
 .leader-appear-animation-A, .leader-appear-animation-B {
-    animation-duration: 0.4s;
+    animation-duration: 0.3s;
     animation-timing-function: ease-out;
     animation-fill-mode: forwards;
     animation-delay: 0.2s;

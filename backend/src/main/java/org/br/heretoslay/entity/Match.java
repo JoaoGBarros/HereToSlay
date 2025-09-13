@@ -198,6 +198,11 @@ public class Match {
         if (!availablePartyLeaders.contains(leaderName)) return false;
         GameState playerState = players.get(conn);
         playerState.setLeader(PartyLeader.valueOf(leaderName));
+        JSONObject playSound = new JSONObject();
+        playSound.put("type", "sound");
+        playSound.put("subtype", "play_class_sound");
+        playSound.put("payload", leaderName);
+        broadcast(playSound.toString());
         availablePartyLeaders.remove(leaderName);
 
         currentPlayerTurnIndex++;
