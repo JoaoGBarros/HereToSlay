@@ -154,11 +154,13 @@ function InGame() {
                         setCurrentPlayerIdx(turn);
                         setCurrentPlayerData(playersData[turn]);
                     }
+
+                    setIsTransitioning(false);
                     if (matchState !== "PARTY_LEADER_SELECTION") {
                         setShowTurnIndicator(true);
                         setTimeout(() => setShowTurnIndicator(false), 1500);
                     }
-                }, 500);
+                }, 1500);
             } else {
                 setCurrentPlayerIdx(turn);
                 setCurrentPlayerData(playersData[turn]);
