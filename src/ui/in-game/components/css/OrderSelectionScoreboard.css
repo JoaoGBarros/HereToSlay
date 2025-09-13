@@ -1,0 +1,17 @@
+.order-selection-scoreboard {
+    background: rgba(0,0,0,0.8);
+    color: #fff;
+    padding: 16px;
+    border-radius: 8px;
+    margin: 0 auto 16px auto;
+    width: fit-content;
+    box-shadow: 0 2px 8px #0005;
+}
+.order-selection-scoreboard table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.order-selection-scoreboard th, .order-selection-scoreboard td {
+    padding: 6px 12px;
+    border-bottom: 1px solid #444;
+}

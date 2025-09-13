@@ -19,6 +19,7 @@ import DiceBoardHeroComponent from './components/DiceBoardHeroComponent';
 import ChallengeButton from './components/ChallengeButton';
 import { playBackgroundMusic, playClassSound, playSound, type ClassSoundType } from '@/utils/SoundManager/SoundManager';
 import TurnIndicator from './components/TurnIndicator';
+import OrderSelectionScoreboard from './components/OrderSelectionScoreboard';
 
 function InGame() {
 
@@ -43,6 +44,8 @@ function InGame() {
     const [showTurnIndicator, setShowTurnIndicator] = useState(false);
     const [pendingTurn, setPendingTurn] = useState<string | null>(null)
     const [autoSwitchView, setAutoSwitchView] = useState(true);
+    const [playersRolls, setPlayersRolls] = useState<{ [playerId: string]: number | null }>({});
+    const [isDiceRollVisible, setIsDiceRollVisible] = useState(true);
 
     const [showChallengeButton, setShowChallengeButton] = useState(false);
     const [showHeroBoard, setShowHeroBoard] = useState(false);
@@ -150,7 +153,7 @@ function InGame() {
                 setShowTurnIndicator(false);
                 setPendingTurn(turn);
                 setTimeout(() => {
-                    if(autoSwitchView){
+                    if (autoSwitchView) {
                         setCurrentPlayerIdx(turn);
                         setCurrentPlayerData(playersData[turn]);
                     }
@@ -173,8 +176,14 @@ function InGame() {
 
         if (matchState === "PARTY_LEADER_SELECTION") {
             setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
-            setPartyLeaderSelection(true);
+
+            setTimeout(() => {
+                setPartyLeaderSelection(true);
+                setIsDiceRollVisible(false);
+            }, 1000);
         }
+
+
     }, [matchState]);
 
     useEffect(() => {
@@ -189,6 +198,7 @@ function InGame() {
         if (matchState === "CHALLENGE_ROLL") {
             playSound('challenge');
             setIsPlayerChallenger(loggedUserId === challengeHero || loggedUserId === challengeOpponent);
+            setIsDiceRollVisible(currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent);
             setDiceRolled((prev) => ({
                 ...prev,
                 [challengeHero]: false,
@@ -272,7 +282,7 @@ function InGame() {
 
                     <div className={`party-area flex ${isTransitioning ? 'slide-out' : 'slide-in'}`}>
                         {!showTurnIndicator ? (
-                            !diceRolled[currentPlayerIdx] ? (
+                            !diceRolled[currentPlayerIdx] || isDiceRollVisible ? (
                                 <>
                                     <DiceComponent
                                         currentPlayerIdx={currentPlayerIdx}
@@ -287,15 +297,13 @@ function InGame() {
                                         isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
                                     />
 
-                                    {showHeroBoard ? (
-                                        <DiceBoardHeroComponent currentPlayerData={playersData[currentPlayerIdx]} />
-                                    ) : (
-                                        (matchState === "ORDER_SELECTION" || matchState === "CHALLENGE_ROLL") && (
-                                            <DiceBoardOrderComponent playersData={playersData} isChallenger={matchState === "CHALLENGE_ROLL"} challengerHero={playersData[challengeHero]} challengerOpponent={playersData[challengeOpponent]} />
-                                        )
+                                    {isDiceRollVisible && (
+                                        <OrderSelectionScoreboard playersData={playersData} />
                                     )}
 
                                 </>
+
+
 
                             ) : (
                                 <PartyComponent
