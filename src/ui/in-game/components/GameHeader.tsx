@@ -5,6 +5,7 @@ import wizardAvatar from '../../assets/class-avatars/wizard.png';
 import thiefAvatar from '../../assets/class-avatars/thief.png';
 import guardianAvatar from '../../assets/class-avatars/guardian.png';
 import rangerAvatar from '../../assets/class-avatars/ranger.png';
+import './css/GameHeader.css';
 import { useEffect, useState } from "react";
 
 interface GameHeaderProps {
@@ -36,6 +37,7 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
         "GUARDIAN": guardianAvatar,
     };
     const [hoveredPlayerId, setHoveredPlayerId] = useState<string | null>(null);
+    const [isDrawing, setIsDrawing] = useState(false);
 
     const deck = [
         { id: 1, name: "Carta 1" },
@@ -52,6 +54,7 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
 
     function handleDeckClick() {
         if (isPlayerTurn && diceRolled && !partyLeaderSelection) {
+            setIsDrawing(true);
             if (socket && socket.current) {
                 socket.current.send(JSON.stringify({
                     type: 'match',
@@ -70,6 +73,16 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
 
     return (
         <>
+            {isDrawing && (
+                <div className="draw-card-animation" onAnimationEnd={() => setIsDrawing(false)}>
+                    <div
+                        className="animated-card"
+                        style={{
+                            backgroundImage: `url(${deckImg})`,
+                        }}
+                    />
+                </div>
+            )}
             <div className="deck-discard-row flex flex-row gap-8 mb-5 justify-around items-center">
                 <div className="deck-area deck-stack relative w-32 h-44" onClick={handleDeckClick}>
                     {deck.map((card, idx) => (
