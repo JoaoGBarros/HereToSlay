@@ -17,6 +17,7 @@ import PlayerInfoComponent from './components/PlayerInfoComponent';
 import DiceBoardOrderComponent from './components/DiceBoardOrderComponent';
 import DiceBoardHeroComponent from './components/DiceBoardHeroComponent';
 import ChallengeButton from './components/ChallengeButton';
+import { playSound } from '@/utils/SoundManager/SoundManager';
 
 
 function InGame() {
@@ -154,6 +155,7 @@ function InGame() {
 
     useEffect(() => {
         if (matchState === "CHALLENGE_ROLL") {
+            playSound('challenge');
             setIsPlayerChallenger(loggedUserId === challengeHero || loggedUserId === challengeOpponent);
             setDiceRolled((prev) => ({
                 ...prev,

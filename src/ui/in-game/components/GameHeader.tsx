@@ -84,7 +84,7 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                 </div>
             )}
             <div className="deck-discard-row flex flex-row gap-8 mb-5 justify-around items-center">
-                <div className="deck-area deck-stack relative w-32 h-44" onClick={handleDeckClick}>
+                <div className="deck-area deck-stack relative w-32 h-44" onClick={handleDeckClick} aria-disabled={!isPlayerTurn}>
                     {deck.map((card, idx) => (
                         <Card
                             key={card.id}
