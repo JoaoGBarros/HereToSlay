@@ -17,12 +17,14 @@ interface GameHeaderProps {
     setCurrentPlayerIdx: (id: string) => void;
     setCurrentPlayerData: (data: any) => void;
     deckImg: string;
+    autoSwitchView: boolean;
+    setAutoSwitchView: (v: boolean) => void;
 
 }
 
 
 
-function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolled, socket, id, turn, currentPlayerIdx, deckImg, loggedUserId, setCurrentPlayerIdx, setCurrentPlayerData }: GameHeaderProps) {
+function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolled, socket, id, turn, currentPlayerIdx, deckImg, loggedUserId, setCurrentPlayerIdx, setCurrentPlayerData, autoSwitchView, setAutoSwitchView }: GameHeaderProps) {
 
     const [hoveredPlayerId, setHoveredPlayerId] = useState<string | null>(null);
     const [isDrawing, setIsDrawing] = useState(false);
@@ -182,6 +184,21 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                             </button>
                         );
                     })}
+                    <button
+                        onClick={() => setAutoSwitchView(!autoSwitchView)}
+                        style={{
+                            marginLeft: 12,
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            fontSize: 28,
+                            color: autoSwitchView ? '#4fc3f7' : '#b48a5a'
+                        }}
+                        title={autoSwitchView ? "Troca automática ativada" : "Troca automática desativada"}
+                    >
+                        {autoSwitchView ? '▶️' : '⏸️'}
+                    </button>
+
                 </div>
                 <div className="discard-area deck-stack relative w-32 h-44">
                     {discard.map((card, idx) => (

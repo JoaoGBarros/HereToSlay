@@ -72,11 +72,11 @@
 
 /* Slide Party Area */
 .party-area.slide-in {
-    animation: slideIn 0.3s forwards;
+    animation: slideIn 1s forwards;
 }
 
 .party-area.slide-out {
-    animation: slideOut 0.3s forwards;
+    animation: slideOut 0.5s forwards;
 }
 
 @keyframes slideIn {

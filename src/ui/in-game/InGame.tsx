@@ -41,7 +41,8 @@ function InGame() {
     const [isTransitioning, setIsTransitioning] = useState(false);
     const [hasPlayerChallenged, setHasPlayerChallenged] = useState(false);
     const [showTurnIndicator, setShowTurnIndicator] = useState(false);
-    const [pendingTurn, setPendingTurn] = useState<string | null>(null);
+    const [pendingTurn, setPendingTurn] = useState<string | null>(null)
+    const [autoSwitchView, setAutoSwitchView] = useState(true);
 
     const [showChallengeButton, setShowChallengeButton] = useState(false);
     const [showHeroBoard, setShowHeroBoard] = useState(false);
@@ -146,18 +147,18 @@ function InGame() {
     useEffect(() => {
         if (turn && turn.length > 0) {
             if (turn !== currentPlayerIdx) {
-                setIsTransitioning(true);
                 setShowTurnIndicator(false);
                 setPendingTurn(turn);
                 setTimeout(() => {
-                    setCurrentPlayerIdx(turn);
-                    setCurrentPlayerData(playersData[turn]);
-                    setIsTransitioning(false);
+                    if(autoSwitchView){
+                        setCurrentPlayerIdx(turn);
+                        setCurrentPlayerData(playersData[turn]);
+                    }
                     if (matchState !== "PARTY_LEADER_SELECTION") {
                         setShowTurnIndicator(true);
                         setTimeout(() => setShowTurnIndicator(false), 1500);
                     }
-                }, 300);
+                }, 500);
             } else {
                 setCurrentPlayerIdx(turn);
                 setCurrentPlayerData(playersData[turn]);
@@ -263,6 +264,8 @@ function InGame() {
                         currentPlayerIdx={currentPlayerIdx}
                         deckImg={deckImg}
                         loggedUserId={loggedUserId}
+                        autoSwitchView={autoSwitchView}
+                        setAutoSwitchView={setAutoSwitchView}
                     />
 
                     <div className={`party-area flex ${isTransitioning ? 'slide-out' : 'slide-in'}`}>
