@@ -112,14 +112,14 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
 
                 ) : (
                     <>
-                        {currentPlayerData?.leader && (
-                            <div className={parseInt(currentPlayerIdx!) % 2 === 0 ? "leader-appear-animation-A" : "leader-appear-animation-B"}>
+                        <div className={parseInt(currentPlayerIdx!) % 2 === 0 ? "leader-appear-animation-A" : "leader-appear-animation-B"}>
+                            {currentPlayerData?.leader && (
                                 <PartyLeader leader={currentPlayerData.leader} isSelectionStage={partyLeaderSelection} isPlayerTurn={isPlayerTurn} chooseLeader={handleChoosePartyLeader} />
-                            </div>
-                        )}
-                        {monsterCard.map((card) => (
-                            <PartyLeader key={card.id} leader='BARD' isSelectionStage={partyLeaderSelection} isPlayerTurn={isPlayerTurn} chooseLeader={handleChoosePartyLeader} />
-                        ))}
+                            )}
+                            {monsterCard.map((card) => (
+                                <PartyLeader key={card.id} leader='BARD' isSelectionStage={partyLeaderSelection} isPlayerTurn={isPlayerTurn} chooseLeader={handleChoosePartyLeader} />
+                            ))}
+                        </div>
                     </>
 
                 )}
@@ -143,8 +143,14 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                 onDrop={handleOnDrop}
                 onDragOver={handleDragOver}
             >
-                {currentHeroCards?.length > 0 && currentHeroCards?.map((card) => (
-                    <PartyHero id={card.cardId.toString()} />
+                {currentHeroCards?.length > 0 && currentHeroCards?.map((card, index) => (
+                    <div
+                        key={card.cardId}
+                        className="card-appear"
+                        style={{ animationDelay: `${index * 100}ms` }}
+                    >
+                        <PartyHero id={card.cardId.toString()} />
+                    </div>
                 ))}
             </div>
 
