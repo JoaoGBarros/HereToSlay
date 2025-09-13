@@ -39,7 +39,7 @@ function InGame() {
     const [isPlayerChallenger, setIsPlayerChallenger] = useState(false);
     const [challengeWindowTime, setChallengeWindowTime] = useState(0);
     const [isTransitioning, setIsTransitioning] = useState(false);
-
+    const [hasPlayerChallenged, setHasPlayerChallenged] = useState(false);
 
     const [showChallengeButton, setShowChallengeButton] = useState(false);
     const [showHeroBoard, setShowHeroBoard] = useState(false);
@@ -87,6 +87,7 @@ function InGame() {
                         setPendingHeroCard(data.payload.players[currentPlayerIdx]?.pendingHeroCard != null);
                         setAvailablePartyLeaders(data.payload.availablePartyLeaders || []);
                         setChallengeWindowTime(data.payload.challengeWindowTime || 0);
+                        setHasPlayerChallenged((data.payload.challengerSet || []).includes(loggedUserId));
                     } else if (data.subtype === 'order_selection_tie') {
                         setPlayersData(data.payload.players);
                         setCurrentPlayerData(data.payload.players[currentPlayerIdx]);
@@ -256,6 +257,7 @@ function InGame() {
                                 loggedUserId={loggedUserId}
                                 socket={socket}
                                 id={id}
+                                canUse={!hasPlayerChallenged}
                                 currentPlayerData={playersData[currentPlayerIdx]}
                                 pendingHeroCard={showHeroBoard}
                                 isPlayerChallenger={isPlayerChallenger}

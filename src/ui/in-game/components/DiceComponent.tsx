@@ -15,10 +15,11 @@ interface DiceComponentProps {
     isPlayerChallenger: boolean;
     challengeWindowDuration?: number;
     isDuel: boolean;
+    canUse: boolean;
 }
 
 
-function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerData, pendingHeroCard, id, isPlayerChallenger, challengeWindowDuration, isDuel }: DiceComponentProps) {
+function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerData, pendingHeroCard, id, isPlayerChallenger, challengeWindowDuration, isDuel, canUse}: DiceComponentProps) {
     const [dice1Result, setDice1ResultState] = useState<number | null>(null);
     const [dice2Result, setDice2ResultState] = useState<number | null>(null);
     const [isDiceDisabled, setIsDiceDisabled] = useState(false);
@@ -116,8 +117,8 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
             )}
             <div className='dices flex flex-col justify-center gap-16 w-[50%] relative'>
                 {isChallengeWindowActive && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-                        <ChallengeButton progress={progress} timeRemaining={timeRemaining} socket={socket} id={id} />
+                    <div className={`absolute inset-0 flex flex-col items-center justify-center z-20`}>
+                        <ChallengeButton progress={progress} timeRemaining={timeRemaining} socket={socket} id={id} canUse={canUse} />
                     </div>
                 )}
                 <div className='flex flex-row justify-center gap-16'>

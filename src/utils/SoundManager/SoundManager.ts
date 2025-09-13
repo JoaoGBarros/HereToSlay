@@ -8,6 +8,7 @@ import rangerSound from '../../ui/assets/sounds/class-sounds/ranger.mp3';
 import fighterSound from '../../ui/assets/sounds/class-sounds/fighter.mp3';
 import guardianSound from '../../ui/assets/sounds/class-sounds/guardian.mp3';
 import thiefSound from '../../ui/assets/sounds/class-sounds/thief.mp3';
+import cardDrawSound from '../../ui/assets/sounds/card-draw.mp3';
 
 const DUCK_VOLUME = 0.1;
 const FADE_TIME = 300;
@@ -38,7 +39,7 @@ const soundMap = {
     diceRoll: new Howl({
         src: [diceRollSound]
     }),
-    // cardDraw: new Howl({ src: ['/assets/sounds/card-draw.mp3'] }),
+    cardDraw: new Howl({ src: [cardDrawSound] }),
     challenge: new Howl({ src: [ChallengeSound] })
 };
 

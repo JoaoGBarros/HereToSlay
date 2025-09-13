@@ -7,6 +7,7 @@ import guardianAvatar from '../../assets/class-avatars/guardian.png';
 import rangerAvatar from '../../assets/class-avatars/ranger.png';
 import './css/GameHeader.css';
 import { useEffect, useState } from "react";
+import { playSound } from "@/utils/SoundManager/SoundManager";
 
 interface GameHeaderProps {
     playersData: { [id: string]: any };
@@ -54,7 +55,7 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
 
     function handleDeckClick() {
         if (isPlayerTurn && diceRolled && !partyLeaderSelection) {
-            setIsDrawing(true);
+            playSound('cardDraw');
             if (socket && socket.current) {
                 socket.current.send(JSON.stringify({
                     type: 'match',
@@ -66,6 +67,21 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
         }
 
     }
+
+    useEffect(() => {
+        if (socket && socket.current) {
+            socket.current.onmessage = (event: MessageEvent) => {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'sound' && data.subtype === 'play_draw_card_sound') {
+                    if (currentPlayerIdx === turn) {
+                        setIsDrawing(true);
+                        playSound('cardDraw');
+                    }
+                }
+            }
+        }
+    }, [socket, currentPlayerIdx, turn]);
 
     function handlePlayerChange(player: any, id: string) {
         setCurrentPlayerIdx(id);

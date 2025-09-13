@@ -158,7 +158,9 @@ public class Match {
 
     public void broadcast(String message) {
         for (WebSocket conn : players.keySet()) {
-            conn.send(message);
+            if (conn != null && conn.isOpen()) {
+                conn.send(message);
+            }
         }
     }
 
@@ -188,6 +190,9 @@ public class Match {
                 .put("currentPlayerTurn", turnOrder.isEmpty() ? "" : AuthService.getInstance().getPlayerByConnection(turnOrder.get(currentPlayerTurnIndex)).getId().toString())
                 .put("matchState", matchState.toString())
                 .put ("challengeWindowTime", challengeWindowDuration)
+                .put("challengerSet", challengers.stream()
+                        .map(conn -> AuthService.getInstance().getPlayerByConnection(conn).getId())
+                        .collect(Collectors.toList()))
                 .put("players", playersJson);
     }
 
@@ -232,6 +237,12 @@ public class Match {
     }
 
     public void drawCard(GameState gameState) {
+
+        JSONObject drawSound = new JSONObject();
+        drawSound.put("type", "sound");
+        drawSound.put("subtype", "play_draw_card_sound");
+        broadcast(drawSound.toString());
+
         if (drawPile.isEmpty()) {
             reshuffleDiscardIntoDraw();
         }
@@ -387,6 +398,12 @@ public class Match {
             if (heroRoll >= challengerRoll) {
                 resultMsg.put("winner", AuthService.getInstance().getPlayerByConnection(turnOrder.get(currentPlayerTurnIndex)).getId());
                 matchState = MatchState.CHALLENGE_WINDOW;
+                JSONObject matchUpdate = new JSONObject();
+                matchUpdate.put("type", "match");
+                matchUpdate.put("subtype", "match_state");
+                matchUpdate.put("payload", getMatchState());
+                broadcast(matchUpdate.toString());
+
                 challengeTimer = new Timer();
                 challengeWindowStartTime = System.currentTimeMillis();
                 challengeTimer.schedule(new TimerTask() {
@@ -410,11 +427,6 @@ public class Match {
                         }
                     }
                 }, 0, 100);
-                JSONObject matchUpdate = new JSONObject();
-                matchUpdate.put("type", "match");
-                matchUpdate.put("subtype", "match_state");
-                matchUpdate.put("payload", getMatchState());
-                broadcast(matchUpdate.toString());
             } else {
                 discardPile.push(currentHeroCard);
                 GameState heroState = players.get(turnOrder.get(currentPlayerTurnIndex));
