@@ -7,7 +7,7 @@ import rangerAvatar from '../ui/assets/class-avatars/ranger.png';
 
 export const classAvatars: Record<string, string> = {
     "BARD": bardAvatar,
-    "WARRIOR": warriorAvatar,
+    "FIGHTER": warriorAvatar,
     "WIZARD": wizardAvatar,
     "THIEF": thiefAvatar,
     "RANGER": rangerAvatar,

@@ -3,7 +3,7 @@
     height: 100%;
     display: flex;
     justify-content: center;
-    margin-top: 5%;
+    align-items: center;
     animation: text-slide-in 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
@@ -24,11 +24,11 @@
     justify-content: center;
     align-items: center;
     border-width: 10px;
-    border-color: #f59a00;
+    border-color: #e6a600;
 }
 
 .turn-indicator-background {
-    background: #d70007;
+    background: #800000;
     height: 300px;
     display: flex;
     align-items: center;

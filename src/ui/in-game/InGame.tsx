@@ -153,9 +153,11 @@ function InGame() {
                     setCurrentPlayerIdx(turn);
                     setCurrentPlayerData(playersData[turn]);
                     setIsTransitioning(false);
-                    setShowTurnIndicator(true);
-                    setTimeout(() => setShowTurnIndicator(false), 1500);
-                }, 1000);
+                    if (matchState !== "PARTY_LEADER_SELECTION") {
+                        setShowTurnIndicator(true);
+                        setTimeout(() => setShowTurnIndicator(false), 1500);
+                    }
+                }, 300);
             } else {
                 setCurrentPlayerIdx(turn);
                 setCurrentPlayerData(playersData[turn]);
@@ -237,90 +239,90 @@ function InGame() {
 
     return (
         <div className='ingame-background'>
+            {!showTurnIndicator ? (
+                <div className='player-area'>
 
-            <div className='player-area'>
-
-                <GameHeader
-                    playersData={playersData}
-                    partyLeaderSelection={partyLeaderSelection}
-                    isPlayerTurn={isPlayerTurn}
-                    diceRolled={diceRolled[currentPlayerIdx]}
-                    socket={socket}
-                    id={id}
-                    turn={turn}
-                    setCurrentPlayerData={setCurrentPlayerData}
-                    setCurrentPlayerIdx={(newIdx: string) => {
-                        if (newIdx !== currentPlayerIdx) {
-                            setIsTransitioning(true);
-                            setTimeout(() => {
-                                setCurrentPlayerIdx(newIdx);
-                                setIsTransitioning(false);
-                            }, 300);
-                        }
-                    }}
-                    currentPlayerIdx={currentPlayerIdx}
-                    deckImg={deckImg}
-                    loggedUserId={loggedUserId}
-                />
-
-                {showTurnIndicator && !partyLeaderSelection && (
-                    <TurnIndicator playerName={playersData[turn]?.username || "Player"} key={turn} leader={playersData[turn]?.leader || "BARD"} />
-                )}
-
-
-                <div className={`party-area flex ${isTransitioning ? 'slide-out' : 'slide-in'}`}>
-                    {!showTurnIndicator ? (
-                        !diceRolled[currentPlayerIdx] ? (
-                            <>
-                                <DiceComponent
-                                    currentPlayerIdx={currentPlayerIdx}
-                                    loggedUserId={loggedUserId}
-                                    socket={socket}
-                                    id={id}
-                                    canUse={!hasPlayerChallenged}
-                                    currentPlayerData={playersData[currentPlayerIdx]}
-                                    pendingHeroCard={showHeroBoard}
-                                    isPlayerChallenger={isPlayerChallenger}
-                                    challengeWindowDuration={challengeWindowTime}
-                                    isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
-                                />
-
-                                {showHeroBoard ? (
-                                    <DiceBoardHeroComponent currentPlayerData={playersData[currentPlayerIdx]} />
-                                ) : (
-                                    (matchState === "ORDER_SELECTION" || matchState === "CHALLENGE_ROLL") && (
-                                        <DiceBoardOrderComponent playersData={playersData} isChallenger={matchState === "CHALLENGE_ROLL"} challengerHero={playersData[challengeHero]} challengerOpponent={playersData[challengeOpponent]} />
-                                    )
-                                )}
-
-                            </>
-
-                        ) : (
-                            <PartyComponent
-                                isPlayerTurn={isPlayerTurn}
-                                currentPlayerData={playersData[currentPlayerIdx]}
-                                partyLeaderSelection={partyLeaderSelection}
-                                monsterCard={monsterCard}
-                                availablePartyLeaders={availablePartyLeaders}
-                                socket={socket}
-                                id={id}
-                                currentPlayerIdx={currentPlayerIdx}
-                            />
-                        )
-                    ) : null}
-                </div>
-
-
-                <div className='hand-area flex relative row mt-10'>
-                    <PlayerInfoComponent currentPlayerData={playersData[currentPlayerIdx]} />
-                    <HandComponent
-                        currentPlayerData={playersData[currentPlayerIdx]}
+                    <GameHeader
+                        playersData={playersData}
+                        partyLeaderSelection={partyLeaderSelection}
+                        isPlayerTurn={isPlayerTurn}
+                        diceRolled={diceRolled[currentPlayerIdx]}
+                        socket={socket}
+                        id={id}
+                        turn={turn}
+                        setCurrentPlayerData={setCurrentPlayerData}
+                        setCurrentPlayerIdx={(newIdx: string) => {
+                            if (newIdx !== currentPlayerIdx) {
+                                setIsTransitioning(true);
+                                setTimeout(() => {
+                                    setCurrentPlayerIdx(newIdx);
+                                    setIsTransitioning(false);
+                                }, 300);
+                            }
+                        }}
                         currentPlayerIdx={currentPlayerIdx}
+                        deckImg={deckImg}
                         loggedUserId={loggedUserId}
                     />
-                </div>
 
-            </div>
+                    <div className={`party-area flex ${isTransitioning ? 'slide-out' : 'slide-in'}`}>
+                        {!showTurnIndicator ? (
+                            !diceRolled[currentPlayerIdx] ? (
+                                <>
+                                    <DiceComponent
+                                        currentPlayerIdx={currentPlayerIdx}
+                                        loggedUserId={loggedUserId}
+                                        socket={socket}
+                                        id={id}
+                                        canUse={!hasPlayerChallenged}
+                                        currentPlayerData={playersData[currentPlayerIdx]}
+                                        pendingHeroCard={showHeroBoard}
+                                        isPlayerChallenger={isPlayerChallenger}
+                                        challengeWindowDuration={challengeWindowTime}
+                                        isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
+                                    />
+
+                                    {showHeroBoard ? (
+                                        <DiceBoardHeroComponent currentPlayerData={playersData[currentPlayerIdx]} />
+                                    ) : (
+                                        (matchState === "ORDER_SELECTION" || matchState === "CHALLENGE_ROLL") && (
+                                            <DiceBoardOrderComponent playersData={playersData} isChallenger={matchState === "CHALLENGE_ROLL"} challengerHero={playersData[challengeHero]} challengerOpponent={playersData[challengeOpponent]} />
+                                        )
+                                    )}
+
+                                </>
+
+                            ) : (
+                                <PartyComponent
+                                    isPlayerTurn={isPlayerTurn}
+                                    currentPlayerData={playersData[currentPlayerIdx]}
+                                    partyLeaderSelection={partyLeaderSelection}
+                                    monsterCard={monsterCard}
+                                    availablePartyLeaders={availablePartyLeaders}
+                                    socket={socket}
+                                    id={id}
+                                    currentPlayerIdx={currentPlayerIdx}
+                                />
+                            )
+                        ) : null}
+                    </div>
+
+                    {!isTransitioning &&
+                        <div className='hand-area flex relative row mt-10'>
+                            <PlayerInfoComponent currentPlayerData={playersData[currentPlayerIdx]} />
+                            <HandComponent
+                                currentPlayerData={playersData[currentPlayerIdx]}
+                                currentPlayerIdx={currentPlayerIdx}
+                                loggedUserId={loggedUserId}
+                            />
+                        </div>}
+
+
+                </div>) : (<>
+                    {!partyLeaderSelection && (
+                        <TurnIndicator playerName={playersData[turn]?.username || "Player"} key={turn} leader={playersData[turn]?.leader || "BARD"} />
+                    )}</>)}
+
 
         </div>
     );

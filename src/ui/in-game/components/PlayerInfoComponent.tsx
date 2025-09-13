@@ -1,23 +1,9 @@
 import { Card } from "@heroui/card";
 import { useState } from "react";
-import bardAvatar from '../../assets/class-avatars/bard.png';
-import warriorAvatar from '../../assets/class-avatars/fighter.png';
-import wizardAvatar from '../../assets/class-avatars/wizard.png';
-import thiefAvatar from '../../assets/class-avatars/thief.png';
-import guardianAvatar from '../../assets/class-avatars/guardian.png';
-import rangerAvatar from '../../assets/class-avatars/ranger.png';
 import avatarImg from '../../assets/150.jpg';
+import { classAvatars } from "@/utils/ClassImages";
 
 function PlayerInfoComponent({ currentPlayerData }: { currentPlayerData: any }) {
-
-    const classAvatars: Record<string, string> = {
-        "BARD": bardAvatar,
-        "WARRIOR": warriorAvatar,
-        "WIZARD": wizardAvatar,
-        "THIEF": thiefAvatar,
-        "RANGER": rangerAvatar,
-        "GUARDIAN": guardianAvatar,
-    };
 
     const [showTooltip, setShowTooltip] = useState(false);
 
