@@ -1,13 +1,8 @@
 import { Card } from "@heroui/card";
-import bardAvatar from '../../assets/class-avatars/bard.png';
-import warriorAvatar from '../../assets/class-avatars/fighter.png';
-import wizardAvatar from '../../assets/class-avatars/wizard.png';
-import thiefAvatar from '../../assets/class-avatars/thief.png';
-import guardianAvatar from '../../assets/class-avatars/guardian.png';
-import rangerAvatar from '../../assets/class-avatars/ranger.png';
 import './css/GameHeader.css';
 import { useEffect, useState } from "react";
 import { playSound } from "@/utils/SoundManager/SoundManager";
+import { classAvatars } from "@/utils/ClassImages";
 
 interface GameHeaderProps {
     playersData: { [id: string]: any };
@@ -29,14 +24,6 @@ interface GameHeaderProps {
 
 function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolled, socket, id, turn, currentPlayerIdx, deckImg, loggedUserId, setCurrentPlayerIdx, setCurrentPlayerData }: GameHeaderProps) {
 
-    const classAvatars: Record<string, string> = {
-        "BARD": bardAvatar,
-        "WARRIOR": warriorAvatar,
-        "WIZARD": wizardAvatar,
-        "THIEF": thiefAvatar,
-        "RANGER": rangerAvatar,
-        "GUARDIAN": guardianAvatar,
-    };
     const [hoveredPlayerId, setHoveredPlayerId] = useState<string | null>(null);
     const [isDrawing, setIsDrawing] = useState(false);
 

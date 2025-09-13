@@ -18,7 +18,7 @@ import DiceBoardOrderComponent from './components/DiceBoardOrderComponent';
 import DiceBoardHeroComponent from './components/DiceBoardHeroComponent';
 import ChallengeButton from './components/ChallengeButton';
 import { playBackgroundMusic, playClassSound, playSound, type ClassSoundType } from '@/utils/SoundManager/SoundManager';
-
+import TurnIndicator from './components/TurnIndicator';
 
 function InGame() {
 
@@ -40,6 +40,8 @@ function InGame() {
     const [challengeWindowTime, setChallengeWindowTime] = useState(0);
     const [isTransitioning, setIsTransitioning] = useState(false);
     const [hasPlayerChallenged, setHasPlayerChallenged] = useState(false);
+    const [showTurnIndicator, setShowTurnIndicator] = useState(false);
+    const [pendingTurn, setPendingTurn] = useState<string | null>(null);
 
     const [showChallengeButton, setShowChallengeButton] = useState(false);
     const [showHeroBoard, setShowHeroBoard] = useState(false);
@@ -143,8 +145,21 @@ function InGame() {
 
     useEffect(() => {
         if (turn && turn.length > 0) {
-            setCurrentPlayerIdx(turn);
-            setCurrentPlayerData(playersData[turn]);
+            if (turn !== currentPlayerIdx) {
+                setIsTransitioning(true);
+                setShowTurnIndicator(false);
+                setPendingTurn(turn);
+                setTimeout(() => {
+                    setCurrentPlayerIdx(turn);
+                    setCurrentPlayerData(playersData[turn]);
+                    setIsTransitioning(false);
+                    setShowTurnIndicator(true);
+                    setTimeout(() => setShowTurnIndicator(false), 1500);
+                }, 1000);
+            } else {
+                setCurrentPlayerIdx(turn);
+                setCurrentPlayerData(playersData[turn]);
+            }
             setIsPlayerTurn(turn === loggedUserId);
         }
     }, [turn]);
@@ -248,45 +263,51 @@ function InGame() {
                     loggedUserId={loggedUserId}
                 />
 
+                {showTurnIndicator && !partyLeaderSelection && (
+                    <TurnIndicator playerName={playersData[turn]?.username || "Player"} key={turn} leader={playersData[turn]?.leader || "BARD"} />
+                )}
+
 
                 <div className={`party-area flex ${isTransitioning ? 'slide-out' : 'slide-in'}`}>
-                    {!diceRolled[currentPlayerIdx] ? (
-                        <>
-                            <DiceComponent
-                                currentPlayerIdx={currentPlayerIdx}
-                                loggedUserId={loggedUserId}
+                    {!showTurnIndicator ? (
+                        !diceRolled[currentPlayerIdx] ? (
+                            <>
+                                <DiceComponent
+                                    currentPlayerIdx={currentPlayerIdx}
+                                    loggedUserId={loggedUserId}
+                                    socket={socket}
+                                    id={id}
+                                    canUse={!hasPlayerChallenged}
+                                    currentPlayerData={playersData[currentPlayerIdx]}
+                                    pendingHeroCard={showHeroBoard}
+                                    isPlayerChallenger={isPlayerChallenger}
+                                    challengeWindowDuration={challengeWindowTime}
+                                    isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
+                                />
+
+                                {showHeroBoard ? (
+                                    <DiceBoardHeroComponent currentPlayerData={playersData[currentPlayerIdx]} />
+                                ) : (
+                                    (matchState === "ORDER_SELECTION" || matchState === "CHALLENGE_ROLL") && (
+                                        <DiceBoardOrderComponent playersData={playersData} isChallenger={matchState === "CHALLENGE_ROLL"} challengerHero={playersData[challengeHero]} challengerOpponent={playersData[challengeOpponent]} />
+                                    )
+                                )}
+
+                            </>
+
+                        ) : (
+                            <PartyComponent
+                                isPlayerTurn={isPlayerTurn}
+                                currentPlayerData={playersData[currentPlayerIdx]}
+                                partyLeaderSelection={partyLeaderSelection}
+                                monsterCard={monsterCard}
+                                availablePartyLeaders={availablePartyLeaders}
                                 socket={socket}
                                 id={id}
-                                canUse={!hasPlayerChallenged}
-                                currentPlayerData={playersData[currentPlayerIdx]}
-                                pendingHeroCard={showHeroBoard}
-                                isPlayerChallenger={isPlayerChallenger}
-                                challengeWindowDuration={challengeWindowTime}
-                                isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
+                                currentPlayerIdx={currentPlayerIdx}
                             />
-
-                            {showHeroBoard ? (
-                                <DiceBoardHeroComponent currentPlayerData={playersData[currentPlayerIdx]} />
-                            ) : (
-                                (matchState === "ORDER_SELECTION" || matchState === "CHALLENGE_ROLL") && (
-                                    <DiceBoardOrderComponent playersData={playersData} isChallenger={matchState === "CHALLENGE_ROLL"} challengerHero={playersData[challengeHero]} challengerOpponent={playersData[challengeOpponent]} />
-                                )
-                            )}
-
-                        </>
-
-                    ) : (
-                        <PartyComponent
-                            isPlayerTurn={isPlayerTurn}
-                            currentPlayerData={playersData[currentPlayerIdx]}
-                            partyLeaderSelection={partyLeaderSelection}
-                            monsterCard={monsterCard}
-                            availablePartyLeaders={availablePartyLeaders}
-                            socket={socket}
-                            id={id}
-                            currentPlayerIdx={currentPlayerIdx}
-                        />
-                    )}
+                        )
+                    ) : null}
                 </div>
 
 

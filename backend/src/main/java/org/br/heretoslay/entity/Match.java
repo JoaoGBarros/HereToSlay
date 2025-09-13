@@ -83,6 +83,10 @@ public class Match {
         }
 
         if(gameState.getCurrentAP() == 0) {
+            JSONObject endTurn = new JSONObject();
+            endTurn.put("type", "animation");
+            endTurn.put("subtype", "end_turn");
+            broadcast(endTurn.toString());
             currentPlayerTurnIndex = (currentPlayerTurnIndex + 1) % turnOrder.size();
             gameState.setCurrentAP(gameState.getMaxAP());
         }

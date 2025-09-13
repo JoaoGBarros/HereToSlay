@@ -1,0 +1,70 @@
+.turn-indicator-container {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    margin-top: 5%;
+    animation: text-slide-in 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.turn-indicator-text {
+    font-size: 4rem;
+    /* 64px */
+    font-weight: bold;
+    color: white;
+    text-shadow: 0 0 15px rgba(0, 0, 0, 0.8), 0 2px 4px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+    /* A animação agora é mais curta, apenas para a entrada */
+}
+
+.turn-indicator-glow {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border-width: 10px;
+    border-color: #f59a00;
+}
+
+.turn-indicator-background {
+    background: #d70007;
+    height: 300px;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    justify-content: center;
+    padding: 10px;
+}
+
+.turn-indicator-animation-in {
+    animation: text-slide-in 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+.turn-inidicator-animation-out {
+    animation: text-slide-out 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+/* Animação simplificada apenas para a entrada do texto */
+@keyframes text-slide-in {
+    from {
+        opacity: 0;
+        transform: translateX(10%);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes text-slide-out {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(10%);
+    }
+}
