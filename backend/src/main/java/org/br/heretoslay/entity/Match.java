@@ -387,6 +387,8 @@ public class Match {
             gameState.getHand().remove(pendingHero);
             gameState.setPendingHeroCard(null);
         }
+
+        matchState = MatchState.GAMEPLAY;
     }
 
     public synchronized void processDuelRoll(WebSocket player, int roll) {

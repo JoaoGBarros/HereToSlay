@@ -135,7 +135,7 @@ function InGame() {
         const player = playersData[currentPlayerIdx];
         if (!player) return;
 
-        const needsToRollForOrder = matchState === "ORDER_SELECTION" && player.orderRoll === null;
+        const needsToRollForOrder = matchState === "ORDER_SELECTION" && player.lastRoll === null;
         const needsToRollForHero = player.pendingHeroCard != null;
         const needsToRollForChallenge = matchState === "CHALLENGE_ROLL" && (currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent);
 
@@ -191,6 +191,7 @@ function InGame() {
             setPartyLeaderSelection(false);
             setAvailablePartyLeaders([]);
             setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
+            setTimeout(() => setIsDiceRollVisible(false), 2000);
         }
     }, [matchState]);
 
@@ -198,13 +199,13 @@ function InGame() {
         if (matchState === "CHALLENGE_ROLL") {
             playSound('challenge');
             setIsPlayerChallenger(loggedUserId === challengeHero || loggedUserId === challengeOpponent);
-            setIsDiceRollVisible(currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent);
             setDiceRolled((prev) => ({
                 ...prev,
                 [challengeHero]: false,
                 [challengeOpponent]: false,
             }));
             setPendingHeroCard(false);
+            setIsDiceRollVisible(currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent);
         }
     }, [currentPlayerIdx, challengeHero, challengeOpponent, matchState, loggedUserId]);
 
@@ -212,10 +213,18 @@ function InGame() {
         if (matchState === "WAITING_HERO_ROLL") {
             setIsPlayerChallenger(false);
             setChallengeHero("");
+            setIsDiceRollVisible(true);
             setChallengeOpponent("");
         }
     }, [matchState, challengeHero, challengeOpponent]);
 
+
+
+    useEffect(() => {
+        if (matchState === "CHALLENGE_WINDOW") {
+            setIsDiceRollVisible(false);
+        }
+    }, [matchState, challengeHero, challengeOpponent]);
 
 
 
@@ -289,6 +298,7 @@ function InGame() {
                                         loggedUserId={loggedUserId}
                                         socket={socket}
                                         id={id}
+                                        isDiceRollVisible={isDiceRollVisible}
                                         canUse={!hasPlayerChallenged}
                                         currentPlayerData={playersData[currentPlayerIdx]}
                                         pendingHeroCard={showHeroBoard}

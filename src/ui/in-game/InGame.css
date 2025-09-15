@@ -180,3 +180,50 @@
         opacity: 1;
     }
 }
+
+/* Party Hero Appear Animation */
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-150px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.party-hero-slide-in {
+  animation: slideInLeft 0.7s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(120px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.dice-slide-in {
+  animation: slideInUp 0.7s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+
+.dice-selection-container {
+  transition: width 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  overflow: hidden;
+}
+
+.dices {
+  transition: transform 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.dices.slide-left {
+  transform: translateX(-120px);
+}
+.dices.slide-center {
+  transform: translateX(0);
+}
