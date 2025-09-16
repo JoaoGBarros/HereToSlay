@@ -93,14 +93,11 @@ function InGame() {
                         setPlayersData(data.payload.players);
                         setMatchState(data.payload.matchState);
                         setTurn(data.payload.currentPlayerTurn);
-                        setCurrentPlayerData(data.payload.players[currentPlayerIdx]);
-                        setPendingHeroCard(data.payload.players[currentPlayerIdx]?.pendingHeroCard != null);
                         setAvailablePartyLeaders(data.payload.availablePartyLeaders || []);
                         setChallengeWindowTime(data.payload.challengeWindowTime || 0);
                         setHasPlayerChallenged((data.payload.challengerSet || []).includes(loggedUserId));
                     } else if (data.subtype === 'order_selection_tie') {
                         setPlayersData(data.payload.players);
-                        setCurrentPlayerData(data.payload.players[currentPlayerIdx]);
                     } else if (data.subtype === 'challenge_window_open') {
                         console.log("Duel: " + data);
                         setShowChallengeButton(true);
@@ -159,25 +156,20 @@ function InGame() {
 
     useEffect(() => {
         if (turn && turn.length > 0) {
-            if (turn !== currentPlayerIdx) {
-                setShowTurnIndicator(false);
-                setPendingTurn(turn);
-                setTimeout(() => {
-                    if (autoSwitchView) {
-                        setCurrentPlayerIdx(turn);
-                        setCurrentPlayerData(playersData[turn]);
-                    }
+            setShowTurnIndicator(false);
+            setPendingTurn(turn);
+            setTimeout(() => {
+                if (autoSwitchView) {
+                    setCurrentPlayerIdx(turn);
+                    setCurrentPlayerData(playersData[turn]);
+                }
 
-                    setIsTransitioning(false);
-                    if (matchState !== "PARTY_LEADER_SELECTION") {
-                        setShowTurnIndicator(true);
-                        setTimeout(() => setShowTurnIndicator(false), 1500);
-                    }
-                }, 1500);
-            } else {
-                setCurrentPlayerIdx(turn);
-                setCurrentPlayerData(playersData[turn]);
-            }
+                setIsTransitioning(false);
+                if (matchState !== "PARTY_LEADER_SELECTION") {
+                    setShowTurnIndicator(true);
+                    setTimeout(() => setShowTurnIndicator(false), 1000);
+                }
+            }, 1500);
             setIsPlayerTurn(turn === loggedUserId);
         }
     }, [turn]);
@@ -276,12 +268,6 @@ function InGame() {
             setPendingHeroCard(playersData[currentPlayerIdx]?.pendingHeroCard != null);
         }
     }, [currentPlayerIdx, playersData]);
-
-    // useEffect(() => {
-    //     if (pendingHeroCard === false && matchState !== "ORDER_SELECTION") {
-    //         setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
-    //     }
-    // }, [pendingHeroCard, matchState]);
 
     useEffect(() => {
         if (pendingHeroCard) {
@@ -437,7 +423,7 @@ function InGame() {
                                             loggedUserId={loggedUserId}
                                             socket={socket}
                                             id={id}
-                                            isDiceRollVisible={isDiceRollVisible}
+                                            isDiceRollVisible={isDiceRollVisible && matchState === "ORDER_SELECTION"}
                                             canUse={!hasPlayerChallenged}
                                             currentPlayerData={playersData[currentPlayerIdx]}
                                             pendingHeroCard={showHeroBoard}
@@ -446,7 +432,7 @@ function InGame() {
                                             isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
                                         />
 
-                                        {isDiceRollVisible && (
+                                        {isDiceRollVisible && matchState === "ORDER_SELECTION" && (
                                             <OrderSelectionScoreboard playersData={playersData} />
                                         )}
                                     </>

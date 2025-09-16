@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Divider } from "@heroui/divider";
 
-export function PartyHero({ id } : {id: string}) {
+export function PartyHero({ id, height, width } : {id: string, height?: number, width?: number}) {
 
     const [expanded, setExpanded] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
@@ -58,10 +58,10 @@ export function PartyHero({ id } : {id: string}) {
             <div onClick={handleCardClick} style={{ display: "inline-block", cursor: "pointer", width: "200px", height: "260px" }} className="relative">
                 <TiltedCard
                     imageSrc={heroImg}
-                    containerHeight="250px"
-                    containerWidth="200px"
-                    imageHeight="250px"
-                    imageWidth="200px"
+                    containerHeight={`${height || 250}px`}
+                    containerWidth={`${width || 200}px`}
+                    imageHeight={`${height || 250}px`}
+                    imageWidth={`${width || 200}px`}
                     rotateAmplitude={12}
                     scaleOnHover={1.2}
                     showMobileWarning={false}

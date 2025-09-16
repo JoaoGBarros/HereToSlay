@@ -20,12 +20,15 @@ interface DiceComponentProps {
 }
 
 
-function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerData, pendingHeroCard, id, isPlayerChallenger, challengeWindowDuration, isDuel, canUse, isDiceRollVisible}: DiceComponentProps) {
+function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerData, pendingHeroCard, id, isPlayerChallenger, challengeWindowDuration, isDuel, canUse, isDiceRollVisible }: DiceComponentProps) {
     const [dice1Result, setDice1ResultState] = useState<number | null>(null);
     const [dice2Result, setDice2ResultState] = useState<number | null>(null);
     const [isDiceDisabled, setIsDiceDisabled] = useState(false);
     const [challengeWindowTimeRemaining, setChallengeWindowTimeRemaining] = useState<number | undefined>(0);
     const [progress, setProgress] = useState(100);
+    const [showResult, setShowResult] = useState(false);
+    const [rolledValue, setRolledValue] = useState<number | null>(null);
+    const [minValue, setMinValue] = useState<number | null>(null);
 
     useEffect(() => {
         if (socket && socket.current) {
@@ -34,6 +37,15 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
                 if (data.type === 'match' && data.subtype === 'timer_update') {
                     setChallengeWindowTimeRemaining(data.payload.remainingTime);
                 }
+
+                if (data.type === 'dice_roll' && data.subtype === 'hero_roll') {
+                    console.log('Received hero roll:', data.diceRoll);
+                    setRolledValue(data.diceRoll);
+                    setMinValue(data.minValue);
+                    setShowResult(true);
+                    setTimeout(() => setShowResult(false), 2000);
+                }
+
             };
         }
     }, [socket]);
@@ -111,9 +123,9 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
 
     return (
         <div className="dice-selection-container justify-center items-center flex" style={{ width: isDiceRollVisible ? '70%' : '100%' }}>
-            {pendingHeroCard && (
-                <div className="hero-card-container mr-[200px] party-hero-slide-in">
-                    <PartyHero id={currentPlayerData?.pendingHeroCard} />
+            {(pendingHeroCard || showResult) && (
+                <div className="hero-card-container mr-[200px] mb-[100px] party-hero-slide-in flex flex-col items-center">
+                    <PartyHero id={currentPlayerData?.pendingHeroCard} height={350} width={350} />
                 </div>
             )}
             <div className={
@@ -126,40 +138,53 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
                     </div>
                 )}
                 <div className='flex flex-row justify-center gap-16'>
-                    <div style={{ pointerEvents: areDiceDisabled ? 'none' : 'auto', opacity: areDiceDisabled ? 0.5 : 1 }}>
-                        <Die
-                            id="dice-1"
-                            size={150}
-                            onRoll={(value) => {
-                                setDice1ResultState(value);
-                            }}
-                            
-                            onClick={(roll) => {
-                                if (!areDiceDisabled) {
-                                    playSound('diceRoll')
-                                    roll()
-                                }
-                            }}
-                        />
-                    </div>
 
-                    <div style={{ pointerEvents: areDiceDisabled ? 'none' : 'auto', opacity: areDiceDisabled ? 0.5 : 1 }}>
-                        <Die
-                            id="dice-2"
-                            size={150}
-                            onRoll={(value) => {
+                    {showResult && rolledValue !== null ?
+                        (<>
+                            <div className="text-4xl font-bold text-white mt-4">
+                                {`${rolledValue} ${minValue ? `(Min: ${minValue})` : ''}`}
+                            </div>
 
-                                setDice2ResultState(value);
+                        </>) :
+                        <>
 
-                            }}
-                            onClick={(roll) => {
-                                if (!areDiceDisabled) {
-                                    playSound('diceRoll')
-                                    roll()
-                                }
-                            }}
-                        />
-                    </div>
+                            <div style={{ pointerEvents: areDiceDisabled ? 'none' : 'auto', opacity: areDiceDisabled ? 0.5 : 1 }}>
+                                <Die
+                                    id="dice-1"
+                                    size={150}
+                                    onRoll={(value) => {
+                                        setDice1ResultState(value);
+                                    }}
+
+                                    onClick={(roll) => {
+                                        if (!areDiceDisabled) {
+                                            playSound('diceRoll')
+                                            roll()
+                                        }
+                                    }}
+                                />
+                            </div>
+
+                            <div style={{ pointerEvents: areDiceDisabled ? 'none' : 'auto', opacity: areDiceDisabled ? 0.5 : 1 }}>
+                                <Die
+                                    id="dice-2"
+                                    size={150}
+                                    onRoll={(value) => {
+
+                                        setDice2ResultState(value);
+
+                                    }}
+                                    onClick={(roll) => {
+                                        if (!areDiceDisabled) {
+                                            playSound('diceRoll')
+                                            roll()
+                                        }
+                                    }}
+                                />
+                            </div>
+                        </>
+                    }
+
                 </div>
             </div>
         </div>

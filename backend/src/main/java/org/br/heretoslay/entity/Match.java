@@ -380,8 +380,9 @@ public class Match {
     public void processHeroDiceRoll(GameState gameState, int diceValue) {
         Card pendingHero = gameState.getPendingHeroCard();
         gameState.setLastRoll(diceValue);
+        int minValue = 0;
         if (pendingHero != null && pendingHero.getType() == CardType.HERO) {
-            int minValue = ((HeroCard) pendingHero).getDiceValue();
+            minValue = ((HeroCard) pendingHero).getDiceValue();
             gameState.getParty().add(pendingHero);
             if (diceValue >= minValue) {
                 pendingHero.applyEffect(this, gameState);
@@ -391,6 +392,13 @@ public class Match {
         }
 
         matchState = MatchState.GAMEPLAY;
+        JSONObject rollResponse = new JSONObject();
+        rollResponse.put("type", "dice_roll");
+        rollResponse.put("subtype", "hero_roll");
+        rollResponse.put("diceRoll", diceValue);
+        rollResponse.put("minValue", minValue);
+        broadcast(rollResponse.toString());
+
     }
 
     public synchronized void processDuelRoll(WebSocket player, int roll) {

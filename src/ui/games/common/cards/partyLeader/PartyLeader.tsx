@@ -10,6 +10,7 @@ import thiefImg from "../../../../assets/party-leader/thief.png";
 import wizImg from "../../../../assets/party-leader/wizard.png";
 import TiltedCard from "@/components/TiltedCard";
 import { useEffect, useRef, useState } from "react";
+import { playClassSound, playSound } from "@/utils/SoundManager/SoundManager";
 
 export function PartyLeader({ leader, isSelectionStage, isPlayerTurn, chooseLeader, className }: { leader: string, isSelectionStage: boolean, isPlayerTurn: boolean, chooseLeader: (leader: string) => void, className?: string }) {
     const [expanded, setExpanded] = useState(false);
@@ -42,13 +43,14 @@ export function PartyLeader({ leader, isSelectionStage, isPlayerTurn, chooseLead
     };
 
     const handleChooseLeader = () => {
-        if(isSelectionStage){
+        if (isSelectionStage) {
             chooseLeader(leader);
         }
     }
 
-    const handleView = () => {
+    const handleView = (leader: "BARD" | "FIGHTER" | "GUARDIAN" | "RANGER" | "THIEF" | "WIZARD") => {
         setExpanded(true);
+        playClassSound(leader);
         setMenuOpen(false);
     };
 
@@ -107,7 +109,7 @@ export function PartyLeader({ leader, isSelectionStage, isPlayerTurn, chooseLead
                                 cursor: "pointer",
                                 fontSize: "16px"
                             }}
-                            onClick={handleView}
+                            onClick={() => handleView(leader)}
                         >
                             Visualizar
                         </button>
