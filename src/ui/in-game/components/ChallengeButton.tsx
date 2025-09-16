@@ -1,6 +1,7 @@
 import challengeIcon from "../../assets/cards/challenge-icon.png";
 import ElectricBorder from '../../../components/ElectricBorder';
 import GlareHover from "@/components/GlareHover";
+import { useState } from "react";
 
 interface ChallengeButtonProps {
     socket: React.MutableRefObject<WebSocket | null> | null;
@@ -15,6 +16,8 @@ function ChallengeButton({ socket, id, progress, timeRemaining, canUse }: Challe
     if (timeRemaining <= 0.1) {
         timeRemaining = 0;
     }
+
+    const [showTooltip, setShowTooltip] = useState(false);
 
 
     function handleChallengeClick() {
@@ -64,11 +67,38 @@ function ChallengeButton({ socket, id, progress, timeRemaining, canUse }: Challe
                                 zIndex: 10,
                             }}
                             className={canUse ? '' : 'grayscale'}
+                            onMouseEnter={() => setShowTooltip(true)}
+                            onMouseLeave={() => setShowTooltip(false)}
                         />
+
 
                     </div>
                 </ElectricBorder>
             </button>
+
+            {showTooltip && (
+                <div
+                    style={{
+                        position: "absolute",
+                        bottom: "100%",
+                        left: "50%",
+                        transform: "translateX(-50%)",
+                        marginBottom: "8px",
+                        background: "#fffbe6",
+                        color: "#b48a5a",
+                        border: "1px solid #e2b007",
+                        borderRadius: "8px",
+                        padding: "6px 16px",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                        fontWeight: "bold",
+                        fontSize: "16px",
+                        whiteSpace: "nowrap",
+                        zIndex: 100,
+                    }}
+                >
+                    Required 1 Challenge card
+                </div>
+            )}
             {timeRemaining > 0 && (
                 <p className="text-center mt-2 text-white">{`Tempo restante: ${timeRemaining.toFixed(1)}s`}</p>
             )}
