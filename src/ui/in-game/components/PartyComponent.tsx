@@ -1,6 +1,8 @@
 import { PartyHero } from "@/ui/games/common/cards/partyHero/PartyHero";
 import { PartyLeader } from "@/ui/games/common/cards/partyLeader/PartyLeader";
 import { useEffect, useState } from "react";
+import { useDrop } from "react-dnd";
+import { CARD_TYPE } from "@/ui/games/common/cards/handCards/HandCards";
 
 interface PartyComponentProps {
     isPlayerTurn: boolean;
@@ -53,38 +55,33 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
         }
     }
 
-
-    function handleOnDrop(e: React.DragEvent) {
-        console.log("drop");
-        const cardId = e.dataTransfer.getData("cardId");
-        console.log(cardId);
-        if (socket && socket.current && isPlayerTurn) {
-            socket.current.send(JSON.stringify({
-                type: 'match',
-                subtype: 'action',
-                action: 'play_card',
-                id: id,
-                payload: {
-                    card_id: cardId,
-                }
-            }));
-        }
-        e.dataTransfer.clearData();
-    }
-
-    function handleDragOver(e: React.DragEvent) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = "move";
-    }
-
-
+    const [{ isOver, canDrop }, dropRef] = useDrop({
+        accept: CARD_TYPE,
+        drop: (item: { id: number; isUserCard: boolean }) => {
+            if (socket && socket.current && isPlayerTurn) {
+                socket.current.send(JSON.stringify({
+                    type: 'match',
+                    subtype: 'action',
+                    action: 'play_card',
+                    id: id,
+                    payload: {
+                        card_id: item.id,
+                    }
+                }));
+            }
+        },
+        collect: (monitor) => ({
+            isOver: monitor.isOver(),
+            canDrop: monitor.canDrop(),
+        }),
+    });
 
     return (
         <>
             <div
                 className='ml-4 flex party-leader items-center gap-4'
                 style={{
-                    width: `${partyLeaderSelection ? 20 + monsterCard.length * 15 : 20 + 5 * 15}%`,
+                    width: `${!partyLeaderSelection ? 30 + monsterCard.length * 60 : 20 + 5 * 15}%`,
                     transition: 'width 0.3s'
                 }}
             >
@@ -134,24 +131,32 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                 </button>
             )}
 
-            <div
-                className='heroCard-area grid grid-cols-3 items-center'
-                style={{
-                    width: `70%`,
-                    transition: 'width 0.3s'
-                }}
-                onDrop={handleOnDrop}
-                onDragOver={handleDragOver}
-            >
-                {currentHeroCards?.length > 0 && currentHeroCards?.map((card, index) => (
-                    <div
-                        key={card.cardId}
-                        className="card-appear"
-                        style={{ animationDelay: `${index * 100}ms` }}
-                    >
-                        <PartyHero id={card.cardId.toString()} />
-                    </div>
-                ))}
+            <div ref={dropRef} style={{
+                minHeight: "180px",
+                border: isOver && canDrop ? "2px solid #4ade80" : "2px dashed #aaa",
+                background: isOver && canDrop ? "#bbf7d0" : "transparent",
+                borderRadius: "12px",
+                transition: "all 0.2s",
+                padding: "16px",
+                width: "100%",
+            }}>
+                <div
+                    className='heroCard-area grid grid-cols-3 items-center'
+                    style={{
+                        width: `100%`,
+                        transition: 'width 0.3s'
+                    }}
+                >
+                    {currentHeroCards?.length > 0 && currentHeroCards?.map((card, index) => (
+                        <div
+                            key={card.cardId}
+                            className="card-appear"
+                            style={{ animationDelay: `${index * 100}ms` }}
+                        >
+                            <PartyHero id={card.cardId.toString()} />
+                        </div>
+                    ))}
+                </div>
             </div>
 
             {heroPages > 1 && (

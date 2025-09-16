@@ -8,6 +8,8 @@ import Games from './games/Games';
 import Lobby from './games/lobby-page/Lobby';
 import InGame from './in-game/InGame';
 import { HeroUIProvider, ToastProvider } from '@heroui/react';
+import { DndProvider } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
 
 function App() {
 
@@ -23,16 +25,18 @@ function App() {
 
   return (
     <>
-      <BrowserRouter>
-        <div className='application'>
-          <Routes>
-            <Route path="/" element={<Login />} />
-            <Route path="/games" element={<Games />} />
-            <Route path="/lobby/:id" element={<Lobby/>} />
-            <Route path="/match/:id" element={<InGame />} />
-          </Routes>
-        </div>
-      </BrowserRouter>
+      <DndProvider backend={HTML5Backend}>
+        <BrowserRouter>
+          <div className='application'>
+            <Routes>
+              <Route path="/" element={<Login />} />
+              <Route path="/games" element={<Games />} />
+              <Route path="/lobby/:id" element={<Lobby />} />
+              <Route path="/match/:id" element={<InGame />} />
+            </Routes>
+          </div>
+        </BrowserRouter>
+      </DndProvider>
     </>
   )
 }

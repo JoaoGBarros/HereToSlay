@@ -12,6 +12,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
+
 public class Match {
 
     private final Map<WebSocket, GameState> players = new ConcurrentHashMap<>();
@@ -363,6 +364,7 @@ public class Match {
         }else{
             matchState = MatchState.GAMEPLAY;
         }
+
         currentHeroCard = null;
         currentHeroPlayer = null;
         challengers.clear();
@@ -393,6 +395,16 @@ public class Match {
 
     public synchronized void processDuelRoll(WebSocket player, int roll) {
         duelRolls.put(player, roll);
+        JSONObject rollResponse = new JSONObject();
+        rollResponse.put("type", "roll_result");
+        rollResponse.put("subtype", "duel_roll");
+        rollResponse.put("payload", duelRolls.entrySet().stream()
+                .collect(Collectors.toMap(
+                        entry -> AuthService.getInstance().getPlayerByConnection(entry.getKey()).getId().toString(),
+                        Map.Entry::getValue
+                )));
+        broadcast(rollResponse.toString());
+
         if (duelRolls.size() == 2) {
             int heroRoll = duelRolls.get(turnOrder.get(currentPlayerTurnIndex));
             int challengerRoll = duelRolls.get(duelChallenger);
@@ -439,9 +451,12 @@ public class Match {
                 heroState.getHand().remove(currentHeroCard);
                 heroState.setPendingHeroCard(null);
                 currentHeroCard = null;
+
                 closeChallengeWindow();
                 resultMsg.put("winner", AuthService.getInstance().getPlayerByConnection(duelChallenger).getId());
+
             }
+            resultMsg.put("Rolls", duelRolls);
             broadcast(resultMsg.toString());
 
             duelRolls.clear();

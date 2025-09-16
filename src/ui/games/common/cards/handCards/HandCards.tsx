@@ -3,30 +3,45 @@ import heroCard from "../../../../assets/hero.png";
 import deckCard from "../../../../assets/deck.png";
 import ReactDOM from "react-dom";
 import { useEffect, useState } from "react";
+import { useDrag } from "react-dnd";
 
-function HandCards({ onDrag, card, isUserCard }: { onDrag: (e: React.DragEvent) => void; card: { id: number }; isUserCard: boolean })  {
+export const CARD_TYPE = "TILTED_CARD";
 
+function HandCards({ card, isUserCard }: { card: { id: number }; isUserCard: boolean })  {
     const [expanded, setExpanded] = useState(false);
+
+    const [{ isDragging }, dragRef] = useDrag({
+        type: CARD_TYPE,
+        item: { id: card.id, isUserCard },
+        collect: (monitor) => ({
+            isDragging: monitor.isDragging(),
+        }),
+    });
 
     const handleClick = () => setExpanded(true);
     const handleClose = () => setExpanded(false);
 
     useEffect(() => {
         if (!expanded) return;
-
         const handleEsc = (e: KeyboardEvent) => {
-            if (e.key === "Escape") {
-                setExpanded(false);
-            }
+            if (e.key === "Escape") setExpanded(false);
         };
-
         window.addEventListener("keydown", handleEsc);
         return () => window.removeEventListener("keydown", handleEsc);
     }, [expanded]);
 
     return (
         <>
-            <div onClick={handleClick} style={{ display: "inline-block", cursor: "pointer" }} draggable onDragStart={(e) => onDrag(e)} id={card.id.toString()}>
+            <div
+                ref={dragRef}
+                onClick={handleClick}
+                style={{
+                    display: "inline-block",
+                    cursor: isDragging ? "grabbing" : "grab",
+                    opacity: isDragging ? 0.5 : 1,
+                }}
+                id={card.id.toString()}
+            >
                 <TiltedCard
                     imageSrc={isUserCard ? heroCard : deckCard}
                     containerHeight="280px"

@@ -67,6 +67,10 @@
 }
 
 
+.versus {
+    font-size: xx-large;
+}
+
 /* Animações */
 
 
@@ -226,4 +230,73 @@
 }
 .dices.slide-center {
   transform: translateX(0);
+}
+
+@keyframes slideInLeftFast {
+  from {
+    transform: translateX(-120%);
+    opacity: 0.7;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes slideInRightFast {
+  from {
+    transform: translateX(120%);
+    opacity: 0.7;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes vsDrop {
+  0% {
+    transform: translateY(-120px) scale(0.7);
+    opacity: 0;
+  }
+  70% {
+    transform: translateY(10px) scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.challenge-roll .hero {
+  animation: slideInLeftFast 0.6s cubic-bezier(.7,1.7,.7,1) forwards;
+}
+
+.challenge-roll .challenger {
+  animation: slideInRightFast 0.6s cubic-bezier(.7,1.7,.7,1) forwards;
+}
+
+.challenge-roll .versus {
+  opacity: 0;
+  animation: vsDrop 0.7s cubic-bezier(.7,1.7,.7,1) 0.38s forwards;
+}
+
+@keyframes crownSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-60px) scale(0.7) rotate(-15deg);
+  }
+  70% {
+    opacity: 1;
+    transform: translateY(10px) scale(1.1) rotate(5deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+}
+
+.crown-slide-in {
+  animation: crownSlideIn 0.5s cubic-bezier(.7,1.7,.7,1) forwards;
 }

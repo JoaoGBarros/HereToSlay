@@ -20,6 +20,9 @@ import ChallengeButton from './components/ChallengeButton';
 import { playBackgroundMusic, playClassSound, playSound, type ClassSoundType } from '@/utils/SoundManager/SoundManager';
 import TurnIndicator from './components/TurnIndicator';
 import OrderSelectionScoreboard from './components/OrderSelectionScoreboard';
+import ChallengeRoll from './components/ChallengeRoll';
+import crownImg from '../assets/crown.png'
+import { classAvatars } from '@/utils/ClassImages';
 
 function InGame() {
 
@@ -46,12 +49,13 @@ function InGame() {
     const [autoSwitchView, setAutoSwitchView] = useState(true);
     const [playersRolls, setPlayersRolls] = useState<{ [playerId: string]: number | null }>({});
     const [isDiceRollVisible, setIsDiceRollVisible] = useState(true);
-
+    const [winnerId, setWinnerId] = useState<string | null>(null);
     const [showChallengeButton, setShowChallengeButton] = useState(false);
     const [showHeroBoard, setShowHeroBoard] = useState(false);
     const [showHeroRollWaiting, setShowHeroRollWaiting] = useState(false);
     const [showChallenge, setShowChallenge] = useState(false);
-
+    const [showChallengeResult, setShowChallengeResult] = useState(false);
+    const [challengeRolls, setChallengeRolls] = useState<{ [playerId: string]: number | null }>({});
 
 
     const classIcons: Record<string, string> = {
@@ -66,7 +70,7 @@ function InGame() {
     const { id } = useParams();
 
     const monsterCard = [
-        // { id: 1, name: "Goblin" },
+        { id: 1, name: "Goblin" },
         // { id: 2, name: "Orc" },
         // { id: 3, name: "Dragon" },
     ]
@@ -107,6 +111,7 @@ function InGame() {
                         setMatchState(data.payload.matchState);
                     } else if (data.subtype === 'duel_result') {
                         console.log("Duel Result: ", data.winner);
+                        setWinnerId(data.winner);
                     }
                 }
 
@@ -116,6 +121,11 @@ function InGame() {
                     if (className) {
                         playClassSound(className);
                     }
+                }
+
+                if (data.type === 'roll_result' && data.subtype === 'duel_roll') {
+                    setShowChallengeResult(true);
+                    setChallengeRolls(data.payload);
                 }
 
             } catch (error) {
@@ -192,6 +202,12 @@ function InGame() {
             setAvailablePartyLeaders([]);
             setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
             setTimeout(() => setIsDiceRollVisible(false), 2000);
+            if (Object.keys(challengeRolls).length !== 0) {
+                setTimeout(() => {
+                    setShowChallenge(false);
+                    setChallengeRolls({})
+                }, 5000);
+            }
         }
     }, [matchState]);
 
@@ -205,6 +221,9 @@ function InGame() {
                 [challengeOpponent]: false,
             }));
             setPendingHeroCard(false);
+            setShowChallenge(true);
+            setShowChallengeResult(false);
+            setWinnerId(null);
             setIsDiceRollVisible(currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent);
         }
     }, [currentPlayerIdx, challengeHero, challengeOpponent, matchState, loggedUserId]);
@@ -215,6 +234,12 @@ function InGame() {
             setChallengeHero("");
             setIsDiceRollVisible(true);
             setChallengeOpponent("");
+            if (Object.keys(challengeRolls).length !== 0) {
+                setTimeout(() => {
+                    setShowChallenge(false);
+                    setChallengeRolls({})
+                }, 2000);
+            }
         }
     }, [matchState, challengeHero, challengeOpponent]);
 
@@ -223,6 +248,13 @@ function InGame() {
     useEffect(() => {
         if (matchState === "CHALLENGE_WINDOW") {
             setIsDiceRollVisible(false);
+            setShowChallengeResult(false);
+            if (Object.keys(challengeRolls).length !== 0) {
+                setTimeout(() => {
+                    setShowChallenge(false);
+                    setChallengeRolls({})
+                }, 2000);
+            }
         }
     }, [matchState, challengeHero, challengeOpponent]);
 
@@ -290,31 +322,135 @@ function InGame() {
                     />
 
                     <div className={`party-area flex ${isTransitioning ? 'slide-out' : 'slide-in'}`}>
-                        {!showTurnIndicator ? (
+                        {!showTurnIndicator && (
                             !diceRolled[currentPlayerIdx] || isDiceRollVisible ? (
-                                <>
-                                    <DiceComponent
-                                        currentPlayerIdx={currentPlayerIdx}
-                                        loggedUserId={loggedUserId}
-                                        socket={socket}
-                                        id={id}
-                                        isDiceRollVisible={isDiceRollVisible}
-                                        canUse={!hasPlayerChallenged}
-                                        currentPlayerData={playersData[currentPlayerIdx]}
-                                        pendingHeroCard={showHeroBoard}
-                                        isPlayerChallenger={isPlayerChallenger}
-                                        challengeWindowDuration={challengeWindowTime}
-                                        isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
-                                    />
+                                showChallenge ? (
+                                    // Challenge view
+                                    <>
+                                        <div className="challenge-roll w-full flex items-center h-full relative">
+                                            <div className="hero bg-blue-600 p-4 rounded-lg flex flex-col items-center w-[50%] h-full z-10">
+                                                <div className='player-info flex items-center flex-col'>
+                                                    <img
+                                                        src={classAvatars[playersData[challengeHero]?.leader]}
+                                                        alt={playersData[challengeHero]?.username || 'Challenger'}
+                                                        style={{
+                                                            width: "150px",
+                                                            height: "150px",
+                                                            borderRadius: "50%",
+                                                            objectFit: "cover"
+                                                        }}
+                                                    />
+                                                    <div className='flex items-center mt-2'>
+                                                        <span className='text-white font-bold text-2xl mr-2'>{playersData[challengeHero]?.username || 'Hero'}</span>
+                                                        {winnerId === challengeHero && (<img
+                                                            src={crownImg}
+                                                            style={{
+                                                                width: "70px",
+                                                                height: "70px",
+                                                                borderRadius: "50%",
+                                                            }}
+                                                            className='crown-slide-in'
+                                                        />)}</div>
+                                                </div>
+                                                {!challengeRolls[challengeHero] ? (
+                                                    <div className='challenge-dice mt-20 w-full flex justify-center items-center h-fit'>
+                                                        <DiceComponent
+                                                            currentPlayerIdx={challengeHero}
+                                                            loggedUserId={loggedUserId}
+                                                            socket={socket}
+                                                            id={id}
+                                                            isDiceRollVisible={true}
+                                                            canUse={loggedUserId === challengeHero}
+                                                            currentPlayerData={playersData[challengeHero]}
+                                                            pendingHeroCard={showHeroBoard}
+                                                            isPlayerChallenger={isPlayerChallenger}
+                                                            challengeWindowDuration={challengeWindowTime}
+                                                            isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className='mt-30 text-white font-bold text-5xl'>
+                                                        {`${challengeRolls[challengeHero]}`}
+                                                    </div>
+                                                )}
 
-                                    {isDiceRollVisible && (
-                                        <OrderSelectionScoreboard playersData={playersData} />
-                                    )}
+                                            </div>
+                                            <div className="challenger w-[50%] bg-red-600 p-4 rounded-lg flex flex-col items-center h-full z-10">
+                                                <div className='player-info flex items-center flex-col'>
+                                                    <img
+                                                        src={classAvatars[playersData[challengeOpponent]?.leader]}
+                                                        alt={playersData[challengeOpponent]?.username || 'Opponent'}
+                                                        style={{
+                                                            width: "150px",
+                                                            height: "150px",
+                                                            borderRadius: "50%",
+                                                            objectFit: "cover"
+                                                        }}
+                                                    />
+                                                    <div className='flex items-center mt-2'>
+                                                        <span className='text-white font-bold text-2xl mr-2'>{playersData[challengeOpponent]?.username || 'Hero'}</span>
+                                                        {winnerId === challengeOpponent && (<img
+                                                            src={crownImg}
+                                                            style={{
+                                                                width: "70px",
+                                                                height: "70px",
+                                                                borderRadius: "50%",
+                                                            }}
+                                                            className='crown-slide-in'
+                                                        />)}</div>
+                                                </div>
 
-                                </>
+                                                {!challengeRolls[challengeOpponent] ? (
+                                                    <div className='challenge-dice mt-20 w-full flex justify-center items-center'>
+                                                        <DiceComponent
+                                                            currentPlayerIdx={challengeOpponent}
+                                                            loggedUserId={loggedUserId}
+                                                            socket={socket}
+                                                            id={id}
+                                                            isDiceRollVisible={true}
+                                                            canUse={loggedUserId === challengeOpponent}
+                                                            currentPlayerData={playersData[challengeOpponent]}
+                                                            pendingHeroCard={showHeroBoard}
+                                                            isPlayerChallenger={isPlayerChallenger}
+                                                            challengeWindowDuration={challengeWindowTime}
+                                                            isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className='mt-30 text-white font-bold text-5xl'>
+                                                        {`${challengeRolls[challengeOpponent]}`}
+                                                    </div>
+                                                )}
 
+                                            </div>
+                                            <div className="versus absolute z-20 items-center flex justify-center w-full font-bold text-9x1"
+                                                style={{ top: '50%', left: 0, transform: 'translateY(-50%)' }}>
+                                                VS
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    // Normal view
+                                    <>
+                                        <DiceComponent
+                                            currentPlayerIdx={currentPlayerIdx}
+                                            loggedUserId={loggedUserId}
+                                            socket={socket}
+                                            id={id}
+                                            isDiceRollVisible={isDiceRollVisible}
+                                            canUse={!hasPlayerChallenged}
+                                            currentPlayerData={playersData[currentPlayerIdx]}
+                                            pendingHeroCard={showHeroBoard}
+                                            isPlayerChallenger={isPlayerChallenger}
+                                            challengeWindowDuration={challengeWindowTime}
+                                            isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
+                                        />
 
-
+                                        {isDiceRollVisible && (
+                                            <OrderSelectionScoreboard playersData={playersData} />
+                                        )}
+                                    </>
+                                )
                             ) : (
                                 <PartyComponent
                                     isPlayerTurn={isPlayerTurn}
@@ -327,7 +463,7 @@ function InGame() {
                                     currentPlayerIdx={currentPlayerIdx}
                                 />
                             )
-                        ) : null}
+                        )}
                     </div>
 
                     {!isTransitioning &&

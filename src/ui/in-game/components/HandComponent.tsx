@@ -7,12 +7,6 @@ interface HandComponentProps {
 }
 
 function HandComponent({ currentPlayerData, currentPlayerIdx, loggedUserId }: HandComponentProps) {
-
-    function handleOnDrag(e: React.DragEvent) {
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("cardId", e.currentTarget.id);
-    }
-
     return (
         <div className='hand-cards'>
             {currentPlayerData && currentPlayerData.hand ? (
@@ -38,7 +32,7 @@ function HandComponent({ currentPlayerData, currentPlayerIdx, loggedUserId }: Ha
                                 transition: "transform 0.2s",
                             }}
                         >
-                            <HandCards onDrag={handleOnDrag} card={{ id: card.cardId }} isUserCard={currentPlayerIdx === loggedUserId} />
+                            <HandCards card={{ id: card.cardId }} isUserCard={currentPlayerIdx === loggedUserId} />
                         </div>
                     );
                 })
