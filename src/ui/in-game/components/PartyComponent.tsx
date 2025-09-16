@@ -55,6 +55,20 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
         }
     }
 
+    const useHeroCard = (cardId: number) => {
+        if (socket && socket.current && isPlayerTurn) {
+            socket.current.send(JSON.stringify({
+                type: 'match',
+                subtype: 'action',
+                action: 'use_card',
+                id: id,
+                payload: {
+                    card_id: cardId,
+                }
+            }));
+        }
+    }
+
     const [{ isOver, canDrop }, dropRef] = useDrop({
         accept: CARD_TYPE,
         drop: (item: { id: number; isUserCard: boolean }) => {
@@ -153,7 +167,7 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                             className="card-appear"
                             style={{ animationDelay: `${index * 100}ms` }}
                         >
-                            <PartyHero id={card.cardId.toString()} />
+                            <PartyHero id={card.cardId} handleCardUse={useHeroCard} isPlayerTurn={isPlayerTurn} />
                         </div>
                     ))}
                 </div>

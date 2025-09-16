@@ -68,16 +68,15 @@ public class Match {
             case "play_card":
                 playCard(gameState, json.getJSONObject("payload").getLong("card_id"));
                 break;
-                case "process_hero_roll":
-                    int roll = json.getJSONObject("payload").getInt("roll");
-                    if(gameState.getPendingHeroCard() != null) {
-                        processHeroDiceRoll(gameState, roll);
-                        gameState.setCurrentAP(gameState.getCurrentAP() - 1);
-                    }else{
-                        processHeroDiceRoll(gameState, roll);
-                    }
 
-                    break;
+            case "use_card":
+                useCard(gameState, json.getJSONObject("payload").getLong("card_id"));
+                break;
+            case "process_hero_roll":
+                int roll = json.getJSONObject("payload").getInt("roll");
+                processHeroDiceRoll(gameState, roll);
+                gameState.setCurrentAP(gameState.getCurrentAP() - 1);
+                break;
             default:
                 System.out.println("Unknown action: " + action);
                 break;
@@ -91,6 +90,8 @@ public class Match {
             currentPlayerTurnIndex = (currentPlayerTurnIndex + 1) % turnOrder.size();
             gameState.setCurrentAP(gameState.getMaxAP());
         }
+
+
 
         JSONObject drawResponse = new JSONObject();
         drawResponse.put("type", "match");
@@ -117,6 +118,15 @@ public class Match {
         rollResponse.put("subtype", "match_state");
         rollResponse.put("payload", getMatchState());
         broadcast(rollResponse.toString());
+    }
+
+    public void useCard(GameState gameState, Long cardId) {
+        Optional<Card> cardOpt = gameState.getParty().stream().filter(c -> c.getCardId().equals(cardId)).findFirst();
+        if (cardOpt.isEmpty()) return;
+        Card card = cardOpt.get();
+        if(card.getType() != CardType.HERO) return;
+        gameState.setPendingHeroCard(card);
+        matchState = MatchState.WAITING_HERO_ROLL;
     }
 
     private void checkAndFinalizeOrder() {
@@ -296,6 +306,8 @@ public class Match {
         this.matchState = MatchState.CHALLENGE_WINDOW;
         challengers.clear();
 
+        players.get(heroPlayer).getHand().remove(heroCard);
+        players.get(heroPlayer).getParty().add(currentHeroCard);
 
 
         // Notifica o front-end para mostrar o botão de desafio
@@ -383,11 +395,9 @@ public class Match {
         int minValue = 0;
         if (pendingHero != null && pendingHero.getType() == CardType.HERO) {
             minValue = ((HeroCard) pendingHero).getDiceValue();
-            gameState.getParty().add(pendingHero);
             if (diceValue >= minValue) {
                 pendingHero.applyEffect(this, gameState);
             }
-            gameState.getHand().remove(pendingHero);
             gameState.setPendingHeroCard(null);
         }
 
@@ -456,7 +466,7 @@ public class Match {
             } else {
                 discardPile.push(currentHeroCard);
                 GameState heroState = players.get(turnOrder.get(currentPlayerTurnIndex));
-                heroState.getHand().remove(currentHeroCard);
+                heroState.getParty().remove(currentHeroCard);
                 heroState.setPendingHeroCard(null);
                 currentHeroCard = null;
 

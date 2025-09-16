@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Divider } from "@heroui/divider";
 
-export function PartyHero({ id, height, width } : {id: string, height?: number, width?: number}) {
+export function PartyHero({ id, height, width, handleCardUse, isPlayerTurn } : {id: number, height?: number, width?: number, handleCardUse: (id: number) => void, isPlayerTurn: boolean}) {
 
     const [expanded, setExpanded] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
@@ -31,7 +31,7 @@ export function PartyHero({ id, height, width } : {id: string, height?: number, 
 
     const handleUse = () => {
         setMenuOpen(false);
-        alert("Utilizar ação!");
+        handleCardUse(id);
     };
 
     const handleView = () => {
@@ -111,6 +111,7 @@ export function PartyHero({ id, height, width } : {id: string, height?: number, 
                                 cursor: "pointer",
                                 fontSize: "16px"
                             }}
+                            disabled={!isPlayerTurn}
                             onClick={handleUse}
                         >
                             Utilizar
