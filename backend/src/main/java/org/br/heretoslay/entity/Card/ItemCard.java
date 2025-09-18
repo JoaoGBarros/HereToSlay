@@ -6,13 +6,7 @@ import org.java_websocket.WebSocket;
 
 public class ItemCard extends Card {
 
-    public ItemCard(Long cardId, String name) {
-        super(cardId,name, CardType.ITEM);
-    }
-
-
-    @Override
-    public void applyEffect(Match match, GameState gameState) {
-        gameState.setUsername("ITEM CARD PLAYED");
+    public ItemCard(Long cardId, String cardName, CardType type, CompositeCardEffect effect) {
+        super(cardId, cardName, type, effect);
     }
 }

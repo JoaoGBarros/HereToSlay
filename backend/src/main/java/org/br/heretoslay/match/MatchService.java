@@ -72,6 +72,17 @@ public class MatchService {
                 break;
 
 
+            case "get_selected_targets":
+                Match matchTargets = matches.get(id);
+                JSONObject targetsResponse = new JSONObject();
+                targetsResponse.put("type", "match");
+                targetsResponse.put("subtype", "select_effect_target");
+                targetsResponse.put("payload", matchTargets.getSelectedTargets());
+                conn.send(targetsResponse.toString());
+                break;
+
+
+
             case "process_challenge_roll":
                 roll = json.getJSONObject("payload").getInt("roll");
                 Match matchRoll = matches.get(id);

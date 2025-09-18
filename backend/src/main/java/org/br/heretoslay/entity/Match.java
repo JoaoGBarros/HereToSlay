@@ -1,10 +1,7 @@
 package org.br.heretoslay.entity;
 
 import org.br.heretoslay.auth.AuthService;
-import org.br.heretoslay.entity.Card.Card;
-import org.br.heretoslay.entity.Card.CardDeck;
-import org.br.heretoslay.entity.Card.CardType;
-import org.br.heretoslay.entity.Card.HeroCard;
+import org.br.heretoslay.entity.Card.*;
 import org.java_websocket.WebSocket;
 import org.json.JSONObject;
 
@@ -26,7 +23,7 @@ public class Match {
     private MatchState matchState;
     private int currentPlayerTurnIndex = 0;
     private Stack<Card> drawPile = new Stack<>();
-    private Stack<Card> discardPile = new Stack<>();
+    private List<Card> discardPile = new ArrayList<>();
     private boolean challengeWindowOpen = false;
     private Card currentHeroCard = null;
     private WebSocket currentHeroPlayer = null;
@@ -41,7 +38,7 @@ public class Match {
 
     public Match(List<WebSocket> connections) {
         for (WebSocket conn : connections) {
-            GameState gameState = new GameState(AuthService.getInstance().getPlayerByConnection(conn).getUsername());
+            GameState gameState = new GameState(AuthService.getInstance().getPlayerByConnection(conn).getUsername(), AuthService.getInstance().getPlayerByConnection(conn).getId());
             players.put(conn, gameState);
         }
         matchState = MatchState.ORDER_SELECTION;
@@ -52,6 +49,10 @@ public class Match {
 
     public Map<WebSocket, GameState> getPlayers() {
         return players;
+    }
+
+    public List<Card> getDiscardPile() {
+        return discardPile;
     }
 
     public void performAction(WebSocket conn, String action, JSONObject json) {
@@ -76,6 +77,51 @@ public class Match {
                 int roll = json.getJSONObject("payload").getInt("roll");
                 processHeroDiceRoll(gameState, roll);
                 gameState.setCurrentAP(gameState.getCurrentAP() - 1);
+                break;
+
+            case "apply_card_effects":
+                Card pendingHero = gameState.getPendingHeroCard();
+                pendingHero.getEffect().applyEffect(this, gameState);
+                gameState.setPendingHeroCard(null);
+                matchState = MatchState.GAMEPLAY;
+                JSONObject matchUpdate = new JSONObject();
+                matchUpdate.put("type", "match");
+                matchUpdate.put("subtype", "match_state");
+                matchUpdate.put("payload", getMatchState());
+                broadcast(matchUpdate.toString());
+                break;
+
+            case "select_effect_target":
+                Long targetCardId = json.getJSONObject("payload").getLong("card_id");
+                String targetPlayerId = json.getJSONObject("payload").getString("player_id");
+                if (gameState.getPendingHeroCard() != null && gameState.getPendingHeroCard().getType() == CardType.HERO) {
+                    HeroCard heroCard = (HeroCard) gameState.getPendingHeroCard();
+                    Map<String, List<Long>> targetMap = heroCard.addTarget(targetCardId, targetPlayerId);
+                    JSONObject effectMsg = new JSONObject();
+                    effectMsg.put("type", "match");
+                    effectMsg.put("subtype", "select_effect_target");
+                    effectMsg.put("payload", new JSONObject()
+                            .put("target",targetMap)
+                            .put("maxTargets", heroCard.getMaxDestroy()));
+
+                    broadcast(effectMsg.toString());
+                }
+                break;
+
+
+            case "deselect_effect_target":
+                Long deselectCardId = json.getJSONObject("payload").getLong("card_id");
+                String deselectPlayerId = json.getJSONObject("payload").getString("player_id");
+                if (gameState.getPendingHeroCard() != null && gameState.getPendingHeroCard().getType() == CardType.HERO) {
+                    HeroCard heroCard = (HeroCard) gameState.getPendingHeroCard();
+                    Map<String, List<Long>> targetMap  = heroCard.removeTarget(deselectCardId, deselectPlayerId);
+
+                    JSONObject effectMsg = new JSONObject();
+                    effectMsg.put("type", "match");
+                    effectMsg.put("subtype", "select_effect_target");
+                    effectMsg.put("payload", new JSONObject().put("target",targetMap).put("maxTargets", heroCard.getMaxDestroy()));
+                    broadcast(effectMsg.toString());
+                }
                 break;
             default:
                 System.out.println("Unknown action: " + action);
@@ -103,6 +149,22 @@ public class Match {
 
 
 
+    }
+
+    public Map<String, List<Long>> getSelectedTargets() {
+        Card pendingHero = players.get(turnOrder.get(currentPlayerTurnIndex)).getPendingHeroCard();
+        if (pendingHero != null && pendingHero.getType() == CardType.HERO) {
+            HeroCard heroCard = (HeroCard) pendingHero;
+            CompositeCardEffect effect = heroCard.getEffect();
+            if (effect != null) {
+                for (CardEffect subEffect : effect.getEffects()) {
+                    if (subEffect instanceof DestroyCardEffect) {
+                        return ((DestroyCardEffect) subEffect).getPlayerIdToCardId();
+                    }
+                }
+            }
+        }
+        return Collections.emptyMap();
     }
 
     public synchronized void processOrderSelectionRoll(WebSocket conn, int roll) {
@@ -293,7 +355,7 @@ public class Match {
             return true;
         }
 
-        card.applyEffect(this, gameState);
+        //card.applyEffect(this, gameState);
         gameState.getHand().remove(card);
         gameState.getParty().add(card);
         return true;
@@ -389,25 +451,62 @@ public class Match {
         System.out.println("Mensagem enviada");
     }
 
+    public boolean isSelectableHeroAvailable(GameState player) {
+        for (GameState gameState : players.values()) {
+            if(gameState == player) continue;
+            for (Card card : gameState.getParty()) {
+                if (card.getType() == CardType.HERO) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+
+
     public void processHeroDiceRoll(GameState gameState, int diceValue) {
         Card pendingHero = gameState.getPendingHeroCard();
         gameState.setLastRoll(diceValue);
         int minValue = 0;
         if (pendingHero != null && pendingHero.getType() == CardType.HERO) {
-            minValue = ((HeroCard) pendingHero).getDiceValue();
+            HeroCard card = (HeroCard) pendingHero;
+            minValue = card.getDiceValue();
+            JSONObject rollResponse = new JSONObject();
+            rollResponse.put("type", "dice_roll");
+            rollResponse.put("subtype", "hero_roll");
+            rollResponse.put("diceRoll", diceValue);
+            rollResponse.put("minValue", minValue);
+            broadcast(rollResponse.toString());
             if (diceValue >= minValue) {
-                pendingHero.applyEffect(this, gameState);
+                if(card.checkForSelectableEffect() && isSelectableHeroAvailable(gameState)){
+                    gameState.setPendingHeroCard(card);
+                    matchState = MatchState.SELECTING_CARDS;
+                    JSONObject effectMsg = new JSONObject();
+                    effectMsg.put("type", "match");
+                    effectMsg.put("subtype", "match_state");
+                    effectMsg.put("payload", getMatchState());
+                    broadcast(effectMsg.toString());
+
+                    effectMsg.put("type", "match");
+                    effectMsg.put("subtype", "select_effect_target");
+                    effectMsg.put("payload", new JSONObject()
+                            .put("maxTargets", card.getMaxDestroy())
+                            .put("target", Collections.emptyMap()));
+                    broadcast(effectMsg.toString());
+                    return;
+                }
+
+                if(!card.checkForSelectableEffect()) {
+                    ((HeroCard) pendingHero).applyEffect(this, gameState);
+                }
             }
             gameState.setPendingHeroCard(null);
         }
 
         matchState = MatchState.GAMEPLAY;
-        JSONObject rollResponse = new JSONObject();
-        rollResponse.put("type", "dice_roll");
-        rollResponse.put("subtype", "hero_roll");
-        rollResponse.put("diceRoll", diceValue);
-        rollResponse.put("minValue", minValue);
-        broadcast(rollResponse.toString());
+
+
 
     }
 
@@ -464,7 +563,7 @@ public class Match {
                     }
                 }, 0, 100);
             } else {
-                discardPile.push(currentHeroCard);
+                discardPile.add(currentHeroCard);
                 GameState heroState = players.get(turnOrder.get(currentPlayerTurnIndex));
                 heroState.getParty().remove(currentHeroCard);
                 heroState.setPendingHeroCard(null);

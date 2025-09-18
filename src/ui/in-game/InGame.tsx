@@ -56,6 +56,10 @@ function InGame() {
     const [showChallenge, setShowChallenge] = useState(false);
     const [showChallengeResult, setShowChallengeResult] = useState(false);
     const [challengeRolls, setChallengeRolls] = useState<{ [playerId: string]: number | null }>({});
+    const [pendingHeroCardUsed, setPendingHeroCardUsed] = useState(false);
+    const [selectedCards, setSelectedCards] = useState<number[]>([]);
+    const [selectedCardsTarget, setSelectedCardsTarget] = useState<number[]>([]);
+    const [maxSelectableCards, setMaxSelectableCards] = useState<number>(0);
 
 
     const classIcons: Record<string, string> = {
@@ -123,6 +127,13 @@ function InGame() {
                 if (data.type === 'roll_result' && data.subtype === 'duel_roll') {
                     setShowChallengeResult(true);
                     setChallengeRolls(data.payload);
+                }
+
+                if (data.type === 'match' && data.subtype === 'select_effect_target') {
+                    const cardIds = Object.values(data.payload.target).flat().map(Number);
+                    console.log("Selected target cards updated:", data.payload);
+                    setSelectedCardsTarget(cardIds);
+                    setMaxSelectableCards(data.payload.maxTargets || 0);
                 }
 
             } catch (error) {
@@ -277,6 +288,12 @@ function InGame() {
         }
     }, [pendingHeroCard]);
 
+    useEffect(() => {
+        if (matchState === "SELECTING_CARDS") {
+            setIsDiceRollVisible(false);
+        }
+    });
+
     return (
         <div className='ingame-background'>
             {!showTurnIndicator ? (
@@ -305,11 +322,14 @@ function InGame() {
                         loggedUserId={loggedUserId}
                         autoSwitchView={autoSwitchView}
                         setAutoSwitchView={setAutoSwitchView}
+                        matchState={matchState}
+                        selectedCardsCount={selectedCardsTarget.length}
+                        maxSelectableCards={maxSelectableCards}
                     />
 
                     <div className={`party-area flex ${isTransitioning ? 'slide-out' : 'slide-in'}`}>
                         {!showTurnIndicator && (
-                            !diceRolled[currentPlayerIdx] || isDiceRollVisible ? (
+                            (!diceRolled[currentPlayerIdx] || isDiceRollVisible) && matchState !== "SELECTING_CARDS" ? (
                                 showChallenge ? (
                                     // Challenge view
                                     <>
@@ -447,6 +467,10 @@ function InGame() {
                                     socket={socket}
                                     id={id}
                                     currentPlayerIdx={currentPlayerIdx}
+                                    matchState={matchState}
+                                    loggedUserId={loggedUserId}
+                                    turn={turn}
+                                    cardIds={selectedCardsTarget}
                                 />
                             )
                         )}

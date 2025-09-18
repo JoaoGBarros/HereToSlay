@@ -6,12 +6,9 @@ import org.java_websocket.WebSocket;
 
 public class MagicCard extends Card{
 
-    public MagicCard(Long cardId, String name) {
-        super(cardId,name, CardType.MAGIC);
+
+    public MagicCard(Long cardId, String cardName, CardType type, CompositeCardEffect effect) {
+        super(cardId, cardName, type, effect);
     }
 
-    @Override
-    public void applyEffect(Match match, GameState gameState) {
-        gameState.setUsername("MAGIC CARD PLAYED");
-    }
 }

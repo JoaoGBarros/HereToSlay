@@ -4,6 +4,7 @@ import org.br.heretoslay.entity.Card.Card;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class GameState {
 
@@ -16,13 +17,15 @@ public class GameState {
     private Integer orderRoll = null;
     private Card pendingHeroCard;
     private Integer lastRoll = null;
+    private UUID playerId;
 
-    public GameState(String username) {
+    public GameState(String username, UUID playerId) {
         this.maxAP = 3;
         this.hand = new ArrayList<>();
         this.party = new ArrayList<>();
         this.currentAP = this.maxAP;
         this.username = username;
+        this.playerId = playerId;
     }
 
     public void setUsername(String username) {

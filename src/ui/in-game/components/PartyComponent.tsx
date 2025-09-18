@@ -13,20 +13,46 @@ interface PartyComponentProps {
     socket: React.MutableRefObject<WebSocket | null> | null;
     id: string | undefined;
     currentPlayerIdx?: string;
+    matchState?: string;
+    loggedUserId?: string;
+    turn?: string;
+    cardIds? : Array<number>;
 }
 
-function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection, monsterCard, availablePartyLeaders, socket, id, currentPlayerIdx }: PartyComponentProps) {
+function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection, monsterCard,
+    availablePartyLeaders, socket, id, currentPlayerIdx, matchState, loggedUserId, turn, cardIds }: PartyComponentProps) {
 
     const [heroPage, setHeroPage] = useState(0);
     const [currentHeroCards, setCurrentHeroCards] = useState<Array<any>>([]);
     const [heroPages, setHeroPages] = useState(0);
     const heroesPerPage = 6;
+    const [selectedTargetCard, setSelectedTargetCard] = useState<number[] | null>(null);
+    const [showTargetSign, setShowTargetSign] = useState(false);
 
     const classes = ["BARD", "FIGHTER", "GUARDIAN", "RANGER", "THIEF", "WIZARD"];
 
     useEffect(() => {
         setHeroPage(0);
     }, [currentPlayerData]);
+
+    useEffect(() => {
+        setSelectedTargetCard(cardIds || null);
+    }, [cardIds]);
+
+
+    useEffect(() => {
+        if (matchState === "SELECTING_CARDS") {
+            if (socket && socket.current) {
+                socket.current.send(JSON.stringify({
+                    type: 'match',
+                    subtype: 'get_selected_targets',
+                    id: id,
+                }));
+            }
+
+            setShowTargetSign(currentPlayerIdx === turn);
+        }
+    }, [matchState, socket, currentPlayerIdx, turn, id]);
 
 
     useEffect(() => {
@@ -42,6 +68,7 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
         }
     }, [currentPlayerData, heroPage]);
 
+
     function handleChoosePartyLeader(leader: string) {
         if (socket && socket.current) {
             socket.current.send(JSON.stringify({
@@ -50,6 +77,39 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                 id: id,
                 payload: {
                     party_leader: leader,
+                }
+            }));
+        }
+    }
+
+
+    function handleSelectPartyHeroTarget(cardId: number) {
+
+        if (socket && socket.current && matchState === "SELECTING_CARDS" && isPlayerTurn && currentPlayerIdx !== loggedUserId) {
+            socket.current.send(JSON.stringify({
+                type: 'match',
+                subtype: 'action',
+                action: 'select_effect_target',
+                id: id,
+                payload: {
+                    card_id: cardId,
+                    player_id: currentPlayerIdx,
+                }
+            }));
+        }
+    }
+
+    function handleDeselectPartyHeroTarget(cardId: number) {
+
+        if (socket && socket.current && matchState === "SELECTING_CARDS" && isPlayerTurn && currentPlayerIdx !== loggedUserId) {
+            socket.current.send(JSON.stringify({
+                type: 'match',
+                subtype: 'action',
+                action: 'deselect_effect_target',
+                id: id,
+                payload: {
+                    card_id: cardId,
+                    player_id: currentPlayerIdx,
                 }
             }));
         }
@@ -92,6 +152,34 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
 
     return (
         <>
+
+            {showTargetSign && (
+                <div style={{
+                    position: "absolute",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    left: "0",
+                    top: "0",
+                    width: "100%",
+                    height: "100%",
+                    background: "rgba(17, 4, 4, 0.7)",
+                    backdropFilter: "blur(2px)",
+                    color: "white",
+                    textAlign: "center",
+                    fontWeight: "bold",
+                    fontSize: "1.5rem",
+                    padding: "12px 0",
+                    zIndex: 1000
+                }}>
+                    {loggedUserId === turn ? (
+                        <span>Selecione cartas de outros jogadores</span>
+                    ) : (
+                        <span>{currentPlayerData?.username} está selecionando alvos...</span>
+                    )}
+                </div>
+            )}
+
             <div
                 className='ml-4 flex party-leader items-center gap-4'
                 style={{
@@ -161,15 +249,35 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                         transition: 'width 0.3s'
                     }}
                 >
-                    {currentHeroCards?.length > 0 && currentHeroCards?.map((card, index) => (
-                        <div
-                            key={card.cardId}
-                            className="card-appear"
-                            style={{ animationDelay: `${index * 100}ms` }}
-                        >
-                            <PartyHero id={card.cardId} handleCardUse={useHeroCard} isPlayerTurn={isPlayerTurn} />
-                        </div>
-                    ))}
+                    {currentHeroCards?.length > 0 && currentHeroCards?.map((card, index) => {
+                        const isSelectable = (
+                            matchState === "SELECTING_CARDS" &&
+                            isPlayerTurn &&
+                            currentPlayerIdx !== loggedUserId
+                        );
+                        const isSelected = selectedTargetCard?.includes(card.cardId) ?? false;
+
+                        return (
+                            <div
+                                key={card.cardId}
+                                className="card-appear"
+                                style={{
+                                    animationDelay: `${index * 100}ms`,
+                                    position: "relative"
+                                }}
+                            >
+                                <PartyHero
+                                    id={card.cardId}
+                                    handleCardUse={useHeroCard}
+                                    isPlayerTurn={isPlayerTurn}
+                                    isSelectable={isSelectable}
+                                    isSelected={isSelected}
+                                    onSelect={() => handleSelectPartyHeroTarget(card.cardId)}
+                                    onDeselect={() => handleDeselectPartyHeroTarget(card.cardId)}
+                                />
+                            </div>
+                        );
+                    })}
                 </div>
             </div>
 

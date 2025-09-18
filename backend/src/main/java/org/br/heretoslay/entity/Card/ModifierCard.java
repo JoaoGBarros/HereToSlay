@@ -8,17 +8,13 @@ public class ModifierCard extends Card {
 
     private int modifierValue;
 
-    public ModifierCard(Long cardId, String cardName, int modifierValue) {
-        super(cardId, cardName, CardType.MODIFIER);
-        this.modifierValue = modifierValue;
+    public ModifierCard(Long cardId, String cardName, CardType type, CompositeCardEffect effect) {
+        super(cardId, cardName, type, effect);
     }
+
 
     public int getModifierValue() {
         return modifierValue;
     }
 
-    @Override
-    public void applyEffect(Match match, GameState gameState) {
-        gameState.setUsername("MODIFIER CARD PLAYED");
-    }
 }
