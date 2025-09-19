@@ -128,13 +128,14 @@ public class Match {
                 break;
         }
 
-        if(gameState.getCurrentAP() == 0) {
+        if(gameState.getCurrentAP() == 0 && matchState != MatchState.CHALLENGE_WINDOW && matchState != MatchState.CHALLENGE_ROLL && matchState != MatchState.SELECTING_CARDS){
             JSONObject endTurn = new JSONObject();
             endTurn.put("type", "animation");
             endTurn.put("subtype", "end_turn");
             broadcast(endTurn.toString());
             currentPlayerTurnIndex = (currentPlayerTurnIndex + 1) % turnOrder.size();
             gameState.setCurrentAP(gameState.getMaxAP());
+            gameState.getUsedCardIds().clear();
         }
 
 
@@ -187,7 +188,9 @@ public class Match {
         if (cardOpt.isEmpty()) return;
         Card card = cardOpt.get();
         if(card.getType() != CardType.HERO) return;
+        if (gameState.getUsedCardIds().contains(card.getCardId())) return;
         gameState.setPendingHeroCard(card);
+        gameState.getUsedCardIds().add(cardId);
         matchState = MatchState.WAITING_HERO_ROLL;
     }
 
@@ -257,6 +260,7 @@ public class Match {
                     .put("currentAP", player.getCurrentAP())
                     .put("username", player.getUsername())
                     .put("pendingHeroCard", player.getPendingHeroCard() == null ? JSONObject.NULL : player.getPendingHeroCard())
+                    .put("usedCardIds", player.getUsedCardIds())
                     .put("orderRoll", player.getOrderRoll() == null ? JSONObject.NULL : player.getOrderRoll());
             playersJson.put(AuthService.getInstance().getPlayerByConnection(conn).getId().toString(), playerJson);
         }

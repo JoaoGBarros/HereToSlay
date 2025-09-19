@@ -1,8 +1,9 @@
 import { PartyHero } from "@/ui/games/common/cards/partyHero/PartyHero";
 import { PartyLeader } from "@/ui/games/common/cards/partyLeader/PartyLeader";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDrop } from "react-dnd";
 import { CARD_TYPE } from "@/ui/games/common/cards/handCards/HandCards";
+import './css/PartyComponent.css'
 
 interface PartyComponentProps {
     isPlayerTurn: boolean;
@@ -16,7 +17,7 @@ interface PartyComponentProps {
     matchState?: string;
     loggedUserId?: string;
     turn?: string;
-    cardIds? : Array<number>;
+    cardIds?: Array<number>;
 }
 
 function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection, monsterCard,
@@ -28,16 +29,48 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
     const heroesPerPage = 6;
     const [selectedTargetCard, setSelectedTargetCard] = useState<number[] | null>(null);
     const [showTargetSign, setShowTargetSign] = useState(false);
+    const [destroyedCardId, setDestroyedCardId] = useState<number | null>(null);
+    const [isDestroying, setIsDestroying] = useState(false);
+    const [locallyUsedCardIds, setLocallyUsedCardIds] = useState<number[]>([]);
+    const destructionTimeout = useRef<NodeJS.Timeout | null>(null);
 
     const classes = ["BARD", "FIGHTER", "GUARDIAN", "RANGER", "THIEF", "WIZARD"];
 
     useEffect(() => {
         setHeroPage(0);
+        setLocallyUsedCardIds([]);
     }, [currentPlayerData]);
 
     useEffect(() => {
         setSelectedTargetCard(cardIds || null);
     }, [cardIds]);
+
+    useEffect(() => {
+        if (!socket || !socket.current) return;
+
+        const ws = socket.current;
+        const handleMessage = (event: MessageEvent) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data?.type === "animation" && data?.subtype === "destroy_card") {
+                    console.log("Destroying card animation for cardId:", data.payload.cardId);
+                    setDestroyedCardId(data.payload.cardId);
+                    setIsDestroying(true);
+
+                    destructionTimeout.current = setTimeout(() => {
+                        setIsDestroying(false);
+                        setDestroyedCardId(null);
+                    }, 800);
+                }
+            } catch { }
+        };
+
+        ws.addEventListener("message", handleMessage);
+        return () => {
+            ws.removeEventListener("message", handleMessage);
+            if (destructionTimeout.current) clearTimeout(destructionTimeout.current);
+        };
+    }, [socket]);
 
 
     useEffect(() => {
@@ -127,6 +160,7 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                 }
             }));
         }
+        setLocallyUsedCardIds((prev) => [...prev, cardId]);
     }
 
     const [{ isOver, canDrop }, dropRef] = useDrop({
@@ -143,6 +177,7 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                     }
                 }));
             }
+            setLocallyUsedCardIds((prev) => [...prev, item.id]);
         },
         collect: (monitor) => ({
             isOver: monitor.isOver(),
@@ -256,11 +291,12 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                             currentPlayerIdx !== loggedUserId
                         );
                         const isSelected = selectedTargetCard?.includes(card.cardId) ?? false;
-
+                        const isDestroyed = destroyedCardId === card.cardId && isDestroying;
+                        const isUsed = (currentPlayerData?.usedCardIds?.includes(card.cardId) || locallyUsedCardIds.includes(card.cardId));
                         return (
                             <div
                                 key={card.cardId}
-                                className="card-appear"
+                                className={`card-appear ${isDestroyed ? "destroy-animation" : ""} ${isUsed ? "grayscale" : ""}`}
                                 style={{
                                     animationDelay: `${index * 100}ms`,
                                     position: "relative"
@@ -274,6 +310,7 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                                     isSelected={isSelected}
                                     onSelect={() => handleSelectPartyHeroTarget(card.cardId)}
                                     onDeselect={() => handleDeselectPartyHeroTarget(card.cardId)}
+
                                 />
                             </div>
                         );

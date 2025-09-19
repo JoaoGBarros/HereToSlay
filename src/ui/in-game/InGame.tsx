@@ -130,7 +130,8 @@ function InGame() {
                 }
 
                 if (data.type === 'match' && data.subtype === 'select_effect_target') {
-                    const cardIds = Object.values(data.payload.target).flat().map(Number);
+                    const target = data.payload.target;
+                    const cardIds = target ? Object.values(target).flat().map(Number) : [];
                     console.log("Selected target cards updated:", data.payload);
                     setSelectedCardsTarget(cardIds);
                     setMaxSelectableCards(data.payload.maxTargets || 0);
@@ -210,6 +211,10 @@ function InGame() {
                     setShowChallenge(false);
                     setChallengeRolls({})
                 }, 5000);
+            }
+
+            if (loggedUserId === turn) {
+                setCurrentPlayerIdx(loggedUserId);
             }
         }
     }, [matchState]);

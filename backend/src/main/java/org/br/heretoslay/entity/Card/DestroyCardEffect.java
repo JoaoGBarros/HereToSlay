@@ -2,6 +2,7 @@ package org.br.heretoslay.entity.Card;
 
 import org.br.heretoslay.entity.GameState;
 import org.br.heretoslay.entity.Match;
+import org.json.JSONObject;
 
 import java.util.*;
 
@@ -76,12 +77,23 @@ public class DestroyCardEffect implements CardEffect {
                                 .filter(c -> c.getCardId().equals(cardId))
                                 .findFirst();
                         cardOpt.ifPresent(card -> {
+                            JSONObject animaton = new JSONObject();
+                            animaton.put("type", "animation");
+                            animaton.put("subtype", "destroy_card");
+                            animaton.put("payload", new JSONObject()
+                                    .put("targetPlayerId", playerId)
+                                    .put("cardId", cardId)
+                            );
+                            match.broadcast(animaton.toString());
                             targetState.getParty().remove(card);
                             match.getDiscardPile().add(card);
+
                         });
                     }
                 }
             }
         }
+
+        playerIdToCardId.clear();
     }
 }

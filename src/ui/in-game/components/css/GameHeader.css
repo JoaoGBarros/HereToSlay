@@ -32,3 +32,39 @@
         opacity: 0;
     }
 }
+
+.deck-area,
+.discard-area {
+  transition: transform 0.5s, opacity 0.5s;
+}
+
+.deck-area.exit-left {
+  transform: translateX(-200%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.discard-area.exit-right {
+  transform: translateX(200%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.deck-area.enter,
+.discard-area.enter {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.selection-counter,
+.selection-confirm {
+  opacity: 0;
+  transform: scale(0.8);
+  transition: opacity 0.5s, transform 0.5s;
+}
+
+.selection-counter.enter,
+.selection-confirm.enter {
+  opacity: 1;
+  transform: scale(1);
+}

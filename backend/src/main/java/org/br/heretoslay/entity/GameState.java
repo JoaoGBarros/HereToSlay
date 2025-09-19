@@ -18,6 +18,7 @@ public class GameState {
     private Card pendingHeroCard;
     private Integer lastRoll = null;
     private UUID playerId;
+    private List<Long> usedCardIds = new ArrayList<>();
 
     public GameState(String username, UUID playerId) {
         this.maxAP = 3;
@@ -95,6 +96,14 @@ public class GameState {
 
     public void setLastRoll(Integer lastRoll) {
         this.lastRoll = lastRoll;
+    }
+
+    public UUID getPlayerId() {
+        return playerId;
+    }
+
+    public List<Long> getUsedCardIds() {
+        return usedCardIds;
     }
 
 }

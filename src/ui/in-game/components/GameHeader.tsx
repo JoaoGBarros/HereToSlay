@@ -29,7 +29,7 @@ interface GameHeaderProps {
 
 function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolled, socket, id, turn,
     currentPlayerIdx, deckImg, loggedUserId, setCurrentPlayerIdx, setCurrentPlayerData, autoSwitchView,
-    setAutoSwitchView, matchState, maxSelectableCards, selectedCardsCount}: GameHeaderProps) {
+    setAutoSwitchView, matchState, maxSelectableCards, selectedCardsCount }: GameHeaderProps) {
 
     const [hoveredPlayerId, setHoveredPlayerId] = useState<string | null>(null);
     const [isDrawing, setIsDrawing] = useState(false);
@@ -62,17 +62,17 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
 
     }
 
-    function onConfirmSelection(){
-        if(!socket?.current) return;
+    function onConfirmSelection() {
+        if (!socket?.current) return;
 
         socket.current.send(JSON.stringify({
             type: 'match',
             subtype: 'action',
             action: 'apply_card_effects',
             id: id
-        }) );
+        }));
     }
-   
+
 
     useEffect(() => {
         if (!socket?.current) return;
@@ -113,31 +113,39 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                 </div>
             )}
             <div className="deck-discard-row flex flex-row gap-8 mb-5 justify-around items-center">
-                <div className="deck-area deck-stack relative w-32 h-44" onClick={handleDeckClick} aria-disabled={!isPlayerTurn}>
+                <div
+                    className={`deck-area deck-stack relative w-32 h-44`}
+                    onClick={handleDeckClick}
+                    aria-disabled={!isPlayerTurn}
+                >
                     {matchState === "SELECTING_CARDS" ? (
-                        <div className="w-full h-full flex flex-col items-center justify-center bg-gray-800 rounded-lg border-2 border-dashed border-yellow-500 text-white p-2">
-                            <div className="text-lg font-bold">Selecionar Cartas</div>
+                        <div className={`selection-counter w-[90%] h-[50%] mt-[5vh] flex flex-col items-center justify-center bg-gray-800 rounded-lg border-2 border-dashed border-yellow-500 text-white p-2 enter ${matchState === "SELECTING_CARDS" ? "enter" : "exit-left"
+                            }`}>
                             <div className="text-2xl mt-2">
                                 <span>{selectedCardsCount ?? 0}</span>
                                 <span className="text-base"> / {maxSelectableCards ?? '...'}</span>
                             </div>
                         </div>
                     ) : (
-                        deck.map((card, idx) => (
-                            <Card
-                                key={card.id}
-                                className="deck-card absolute w-24 h-36 flex items-center justify-center bg-white shadow"
-                                style={{
-                                    left: `${idx * 2}px`,
-                                    top: `${idx * 3}px`,
-                                    zIndex: deck.length - idx,
-                                    transform: `rotate(90deg) translateY(-30px) translateX(30px)`,
-                                    backgroundImage: `url(${deckImg})`,
-                                    backgroundSize: 'cover',
-                                    backgroundPosition: 'center',
-                                }}
-                            />
-                        ))
+                        <div className={`${matchState === "SELECTING_CARDS" ? "exit-left" : "enter"
+                            }`}>
+
+                            {deck.map((card, idx) => (
+                                <Card
+                                    key={card.id}
+                                    className="deck-card absolute w-24 h-36 flex items-center justify-center bg-white shadow"
+                                    style={{
+                                        left: `${idx * 2}px`,
+                                        top: `${idx * 3}px`,
+                                        zIndex: deck.length - idx,
+                                        transform: `rotate(90deg) translateY(-30px) translateX(30px)`,
+                                        backgroundImage: `url(${deckImg})`,
+                                        backgroundSize: 'cover',
+                                        backgroundPosition: 'center',
+                                    }}
+                                />
+                            ))}
+                        </div>
                     )}
                 </div>
                 <div className='player-turn-indicator text-center flex flex-row justify-center items-center gap-2'>
@@ -241,33 +249,40 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                     </button>
 
                 </div>
-                <div className="discard-area deck-stack relative w-32 h-44">
+                <div
+                    className={`discard-area deck-stack relative w-32 h-44 `}
+                >
                     {matchState === "SELECTING_CARDS" ? (
                         <div className="w-full h-full flex items-center justify-center">
                             <button
                                 onClick={onConfirmSelection}
                                 disabled={!isPlayerTurn || selectedCardsCount! !== maxSelectableCards!}
-                                className="px-4 py-2 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors"
+                                className={`selection-confirm px-4 py-2 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors ${matchState === "SELECTING_CARDS" ? "enter" : "exit-right"
+                                    }`}
                             >
                                 Concluir Ação
                             </button>
                         </div>
                     ) : (
-                        discard.map((card, idx) => (
-                            <Card
-                                key={card.id}
-                                className="deck-card absolute w-24 h-36 flex items-center justify-center bg-white shadow"
-                                style={{
-                                    left: `${idx * 2}px`,
-                                    top: `${idx * 3}px`,
-                                    zIndex: discard.length - idx,
-                                    transform: `rotate(90deg) translateY(-30px) translateX(30px)`,
-                                    backgroundImage: `url(${deckImg})`,
-                                    backgroundSize: 'cover',
-                                    backgroundPosition: 'center',
-                                }}
-                            />
-                        ))
+                        <div className={`${matchState === "SELECTING_CARDS" ? "exit-right" : "enter"}`}>
+                            {
+                                discard.map((card, idx) => (
+                                    <Card
+                                        key={card.id}
+                                        className="deck-card absolute w-24 h-36 flex items-center justify-center bg-white shadow"
+                                        style={{
+                                            left: `${idx * 2}px`,
+                                            top: `${idx * 3}px`,
+                                            zIndex: discard.length - idx,
+                                            transform: `rotate(90deg) translateY(-30px) translateX(30px)`,
+                                            backgroundImage: `url(${deckImg})`,
+                                            backgroundSize: 'cover',
+                                            backgroundPosition: 'center',
+                                        }}
+                                    />
+                                ))
+                            }
+                        </div>
                     )}
                 </div>
             </div>
