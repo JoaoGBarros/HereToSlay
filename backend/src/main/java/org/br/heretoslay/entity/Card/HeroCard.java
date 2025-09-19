@@ -1,9 +1,10 @@
 package org.br.heretoslay.entity.Card;
 
+import org.br.heretoslay.entity.Card.CardEffects.CompositeCardEffect;
+import org.br.heretoslay.entity.Card.CardEffects.StealCardEffect;
 import org.br.heretoslay.entity.GameState;
 import org.br.heretoslay.entity.Match;
-import org.br.heretoslay.entity.Card.DestroyCardEffect;
-import org.java_websocket.WebSocket;
+import org.br.heretoslay.entity.Card.CardEffects.DestroyCardEffect;
 
 import java.util.Collections;
 import java.util.List;

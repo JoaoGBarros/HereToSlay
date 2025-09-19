@@ -1,8 +1,6 @@
 package org.br.heretoslay.entity.Card;
 
-import org.br.heretoslay.entity.GameState;
-import org.br.heretoslay.entity.Match;
-import org.java_websocket.WebSocket;
+import org.br.heretoslay.entity.Card.CardEffects.CompositeCardEffect;
 
 public class ChallengeCard extends Card{
 

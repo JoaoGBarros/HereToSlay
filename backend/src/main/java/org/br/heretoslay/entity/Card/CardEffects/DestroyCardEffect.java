@@ -1,5 +1,7 @@
-package org.br.heretoslay.entity.Card;
+package org.br.heretoslay.entity.Card.CardEffects;
 
+import org.br.heretoslay.entity.Card.Card;
+import org.br.heretoslay.entity.Card.CardEffect;
 import org.br.heretoslay.entity.GameState;
 import org.br.heretoslay.entity.Match;
 import org.json.JSONObject;

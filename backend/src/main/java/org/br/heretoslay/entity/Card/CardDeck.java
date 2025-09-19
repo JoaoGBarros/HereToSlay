@@ -1,5 +1,9 @@
 package org.br.heretoslay.entity.Card;
 
+import org.br.heretoslay.entity.Card.CardEffects.CompositeCardEffect;
+import org.br.heretoslay.entity.Card.CardEffects.DrawEffect;
+import org.br.heretoslay.entity.Card.CardEffects.StealCardEffect;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.Stack;
@@ -12,8 +16,8 @@ public class CardDeck {
         for(int i = 1; i <= 120; i++){
             deck.push(new HeroCard((long) i, "bard " + i, CardType.HERO, new CompositeCardEffect(
                     List.of(
-                            new StealCardEffect(
-                                    1, new HashMap<>()
+                            new DrawEffect(
+                                    2
                             )
                     )
             ))

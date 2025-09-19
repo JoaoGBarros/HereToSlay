@@ -2,6 +2,8 @@ package org.br.heretoslay.entity;
 
 import org.br.heretoslay.auth.AuthService;
 import org.br.heretoslay.entity.Card.*;
+import org.br.heretoslay.entity.Card.CardEffects.CompositeCardEffect;
+import org.br.heretoslay.entity.Card.CardEffects.DestroyCardEffect;
 import org.java_websocket.WebSocket;
 import org.json.JSONObject;
 
