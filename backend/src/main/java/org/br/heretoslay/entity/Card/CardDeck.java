@@ -12,7 +12,7 @@ public class CardDeck {
         for(int i = 1; i <= 120; i++){
             deck.push(new HeroCard((long) i, "bard " + i, CardType.HERO, new CompositeCardEffect(
                     List.of(
-                            new DestroyCardEffect(
+                            new StealCardEffect(
                                     1, new HashMap<>()
                             )
                     )

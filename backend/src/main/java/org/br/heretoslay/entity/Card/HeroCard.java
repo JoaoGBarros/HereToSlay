@@ -32,7 +32,7 @@ public class HeroCard extends Card {
         CompositeCardEffect effect = this.getEffect();
         if (effect != null) {
             for (CardEffect subEffect : effect.getEffects()) {
-                if (subEffect instanceof DestroyCardEffect) {
+                if (subEffect instanceof DestroyCardEffect || subEffect instanceof StealCardEffect) {
                     return true;
                 }
             }
@@ -48,6 +48,10 @@ public class HeroCard extends Card {
                 if (subEffect instanceof DestroyCardEffect) {
                     targets = ((DestroyCardEffect) subEffect).addTarget(userId, cardId);
                 }
+
+                if (subEffect instanceof StealCardEffect) {
+                    targets = ((StealCardEffect) subEffect).addTarget(userId, cardId);
+                }
             }
         }
 
@@ -61,6 +65,10 @@ public class HeroCard extends Card {
                 if (subEffect instanceof DestroyCardEffect) {
                     return ((DestroyCardEffect) subEffect).removeTarget(userId, cardId);
                 }
+
+                if (subEffect instanceof StealCardEffect) {
+                    return ((StealCardEffect) subEffect).removeTarget(userId, cardId);
+                }
             }
         }
         return Collections.emptyMap();
@@ -72,6 +80,10 @@ public class HeroCard extends Card {
             for (CardEffect subEffect : effect.getEffects()) {
                 if (subEffect instanceof DestroyCardEffect) {
                     return ((DestroyCardEffect) subEffect).getMaxDestroy();
+                }
+
+                if(subEffect instanceof StealCardEffect) {
+                    return ((StealCardEffect) subEffect).getMaxSteal();
                 }
             }
         }

@@ -52,8 +52,9 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
         const handleMessage = (event: MessageEvent) => {
             try {
                 const data = JSON.parse(event.data);
-                if (data?.type === "animation" && data?.subtype === "destroy_card") {
+                if (data?.type === "animation" && (data?.subtype === "destroy_card" || data?.subtype === "steal_card")) {
                     console.log("Destroying card animation for cardId:", data.payload.cardId);
+                    setSelectedTargetCard(null);
                     setDestroyedCardId(data.payload.cardId);
                     setIsDestroying(true);
 
@@ -160,7 +161,6 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                 }
             }));
         }
-        setLocallyUsedCardIds((prev) => [...prev, cardId]);
     }
 
     const [{ isOver, canDrop }, dropRef] = useDrop({

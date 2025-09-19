@@ -216,6 +216,9 @@ function InGame() {
             if (loggedUserId === turn) {
                 setCurrentPlayerIdx(loggedUserId);
             }
+
+            setSelectedCardsTarget([]);
+            setMaxSelectableCards(0);
         }
     }, [matchState]);
 
