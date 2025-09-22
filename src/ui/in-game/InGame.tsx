@@ -129,11 +129,13 @@ function InGame() {
                     setChallengeRolls(data.payload);
                 }
 
-                if (data.type === 'match' && data.subtype === 'select_effect_target') {
+                if (data.type === 'match' && (data.subtype === 'select_effect_target' || data.subtype === 'select_hand_target') ) {
                     const target = data.payload.target;
                     const cardIds = target ? Object.values(target).flat().map(Number) : [];
                     console.log("Selected target cards updated:", data.payload);
                     setSelectedCardsTarget(cardIds);
+
+                    
                     setMaxSelectableCards(data.payload.maxTargets || 0);
                 }
 
@@ -218,6 +220,7 @@ function InGame() {
             }
 
             setSelectedCardsTarget([]);
+            setSelectedCards([]);
             setMaxSelectableCards(0);
         }
     }, [matchState]);
@@ -297,10 +300,10 @@ function InGame() {
     }, [pendingHeroCard]);
 
     useEffect(() => {
-        if (matchState === "SELECTING_CARDS") {
+        if (matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS") {
             setIsDiceRollVisible(false);
         }
-    });
+    }, [matchState]);
 
     return (
         <div className='ingame-background'>
@@ -337,7 +340,7 @@ function InGame() {
 
                     <div className={`party-area flex ${isTransitioning ? 'slide-out' : 'slide-in'}`}>
                         {!showTurnIndicator && (
-                            (!diceRolled[currentPlayerIdx] || isDiceRollVisible) && matchState !== "SELECTING_CARDS" ? (
+                            (!diceRolled[currentPlayerIdx] || isDiceRollVisible) && (matchState !== "SELECTING_CARDS" && matchState !== "SELECTING_HAND_CARDS") ? (
                                 showChallenge ? (
                                     // Challenge view
                                     <>
@@ -491,6 +494,13 @@ function InGame() {
                                 currentPlayerData={playersData[currentPlayerIdx]}
                                 currentPlayerIdx={currentPlayerIdx}
                                 loggedUserId={loggedUserId}
+                                socket={socket}
+                                id={id}
+                                matchState={matchState}
+                                isPlayerTurn={isPlayerTurn}
+                                selectedCards={selectedCards}
+                                setMaxSelectableCards={setMaxSelectableCards}
+                                setSelectedCards={setSelectedCards}
                             />
                         </div>}
 

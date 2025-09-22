@@ -2,6 +2,7 @@ package org.br.heretoslay.entity.Card;
 
 import org.br.heretoslay.entity.Card.CardEffects.CompositeCardEffect;
 import org.br.heretoslay.entity.Card.CardEffects.StealCardEffect;
+import org.br.heretoslay.entity.Card.CardEffects.StealHandEffect;
 import org.br.heretoslay.entity.GameState;
 import org.br.heretoslay.entity.Match;
 import org.br.heretoslay.entity.Card.CardEffects.DestroyCardEffect;
@@ -29,11 +30,23 @@ public class HeroCard extends Card {
         }
     }
 
-    public boolean checkForSelectableEffect() {
+    public boolean checkForSelectablePartyEffect() {
         CompositeCardEffect effect = this.getEffect();
         if (effect != null) {
             for (CardEffect subEffect : effect.getEffects()) {
                 if (subEffect instanceof DestroyCardEffect || subEffect instanceof StealCardEffect) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public boolean checkForSelectableHandEffect() {
+        CompositeCardEffect effect = this.getEffect();
+        if (effect != null) {
+            for (CardEffect subEffect : effect.getEffects()) {
+                if (subEffect instanceof StealHandEffect) {
                     return true;
                 }
             }
@@ -53,6 +66,10 @@ public class HeroCard extends Card {
                 if (subEffect instanceof StealCardEffect) {
                     targets = ((StealCardEffect) subEffect).addTarget(userId, cardId);
                 }
+
+                if(subEffect instanceof StealHandEffect) {
+                    targets = ((StealHandEffect) subEffect).addTarget(userId, cardId);
+                }
             }
         }
 
@@ -70,6 +87,10 @@ public class HeroCard extends Card {
                 if (subEffect instanceof StealCardEffect) {
                     return ((StealCardEffect) subEffect).removeTarget(userId, cardId);
                 }
+
+                if(subEffect instanceof StealHandEffect) {
+                    return ((StealHandEffect) subEffect).removeTarget(userId, cardId);
+                }
             }
         }
         return Collections.emptyMap();
@@ -85,6 +106,10 @@ public class HeroCard extends Card {
 
                 if(subEffect instanceof StealCardEffect) {
                     return ((StealCardEffect) subEffect).getMaxSteal();
+                }
+
+                if(subEffect instanceof StealHandEffect) {
+                    return ((StealHandEffect) subEffect).getMaxCardsToSteal();
                 }
             }
         }

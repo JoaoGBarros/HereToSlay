@@ -83,10 +83,16 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                     id: id,
                 }));
             }
-
-            setShowTargetSign(currentPlayerIdx === turn);
         }
     }, [matchState, socket, currentPlayerIdx, turn, id]);
+
+
+    useEffect(() => {
+        if (matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS") {
+            console.log("Setting showTargetSign:", currentPlayerIdx === turn, loggedUserId === turn);
+            setShowTargetSign(currentPlayerIdx === turn);
+        }
+    }, [matchState, currentPlayerIdx, turn]);
 
 
     useEffect(() => {

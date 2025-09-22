@@ -8,20 +8,17 @@ import org.json.JSONObject;
 
 import java.util.*;
 
-public class DestroyCardEffect implements CardEffect {
+public class StealHandEffect implements CardEffect {
 
-    private Integer maxDestroy;
+    private final Integer maxCardsToSteal;
     private final Map<String, List<Long>> playerIdToCardId;
 
-
-    public DestroyCardEffect(Integer maxDestroy, Map<String, List<Long>> playerIdToCardId) {
-        this.maxDestroy = maxDestroy;
+    public StealHandEffect(Integer maxCardsToSteal, Map<String, List<Long>> playerIdToCardId) {
+        this.maxCardsToSteal = maxCardsToSteal;
         this.playerIdToCardId = playerIdToCardId;
     }
 
-    public Integer getMaxDestroy() {
-        return maxDestroy;
-    }
+    public Integer getMaxCardsToSteal() {return maxCardsToSteal;}
 
     public Map<String, List<Long>> getPlayerIdToCardId() {
         return playerIdToCardId;
@@ -37,7 +34,7 @@ public class DestroyCardEffect implements CardEffect {
             return playerIdToCardId;
         }
 
-        if (playerIdToCardId.values().stream().mapToInt(List::size).sum() < maxDestroy) {
+        if (playerIdToCardId.values().stream().mapToInt(List::size).sum() < maxCardsToSteal) {
             playerIdToCardId.get(playerId).add(cardId);
         }
 
@@ -45,7 +42,7 @@ public class DestroyCardEffect implements CardEffect {
     }
 
     public boolean isReady() {
-        return playerIdToCardId.size() == maxDestroy;
+        return playerIdToCardId.size() == maxCardsToSteal;
     }
 
     public Map<String, List<Long>> removeTarget(String playerId, Long cardId) {
@@ -56,17 +53,16 @@ public class DestroyCardEffect implements CardEffect {
                 playerIdToCardId.remove(playerId);
             }
 
+
             return playerIdToCardId;
         }
         return Collections.emptyMap();
     }
 
-
     @Override
     public void applyEffect(Match match, GameState gameState) {
-
-        if (playerIdToCardId.size() > maxDestroy) {
-            throw new IllegalArgumentException("Cannot destroy more than " + maxDestroy + " cards.");
+        if (playerIdToCardId.size() > maxCardsToSteal) {
+            throw new IllegalArgumentException("Cannot destroy more than " + maxCardsToSteal + " cards.");
         }
 
         for (Map.Entry<String, List<Long>> entry : playerIdToCardId.entrySet()) {
@@ -78,21 +74,12 @@ public class DestroyCardEffect implements CardEffect {
                     .orElse(null);
             if (targetState != null) {
                 for (Long cardId : cardsId) {
-                    Optional<Card> cardOpt = targetState.getParty().stream()
+                    Optional<Card> cardOpt = targetState.getHand().stream()
                             .filter(c -> c.getCardId().equals(cardId))
                             .findFirst();
                     cardOpt.ifPresent(card -> {
-                        JSONObject animaton = new JSONObject();
-                        animaton.put("type", "animation");
-                        animaton.put("subtype", "destroy_card");
-                        animaton.put("payload", new JSONObject()
-                                .put("targetPlayerId", playerId)
-                                .put("cardId", cardId)
-                        );
-                        match.broadcast(animaton.toString());
-                        targetState.getParty().remove(card);
-                        match.getDiscardPile().add(card);
-
+                        targetState.getHand().remove(card);
+                        gameState.getHand().add(card);
                     });
                 }
             }
@@ -100,4 +87,4 @@ public class DestroyCardEffect implements CardEffect {
 
         playerIdToCardId.clear();
     }
-}
+    }

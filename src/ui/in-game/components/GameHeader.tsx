@@ -33,6 +33,7 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
 
     const [hoveredPlayerId, setHoveredPlayerId] = useState<string | null>(null);
     const [isDrawing, setIsDrawing] = useState(false);
+    const playerIds = Object.keys(playersData);
 
     const deck = [
         { id: 1, name: "Carta 1" },
@@ -72,7 +73,7 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
             id: id
         }));
     }
-
+    
 
     useEffect(() => {
         if (!socket?.current) return;
@@ -100,6 +101,19 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
         setCurrentPlayerIdx(id);
     }
 
+    function handlePlayerSwitcherWheel(e: React.WheelEvent<HTMLDivElement>) {
+        e.preventDefault();
+        if (playerIds.length <= 1) return;
+        const currentIdx = playerIds.indexOf(currentPlayerIdx);
+        let nextIdx;
+        if (e.deltaY > 0) {
+            nextIdx = (currentIdx + 1) % playerIds.length;
+        } else {
+            nextIdx = (currentIdx - 1 + playerIds.length) % playerIds.length;
+        }
+        setCurrentPlayerIdx(playerIds[nextIdx]);
+    }
+
     return (
         <>
             {isDrawing && (
@@ -118,7 +132,7 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                     onClick={handleDeckClick}
                     aria-disabled={!isPlayerTurn}
                 >
-                    {matchState === "SELECTING_CARDS" ? (
+                    {matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" ? (
                         <div className={`selection-counter w-[90%] h-[50%] mt-[5vh] flex flex-col items-center justify-center bg-gray-800 rounded-lg border-2 border-dashed border-yellow-500 text-white p-2 enter ${matchState === "SELECTING_CARDS" ? "enter" : "exit-left"
                             }`}>
                             <div className="text-2xl mt-2">
@@ -157,7 +171,7 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                         </>
                     )}
                 </div>
-                <div className="player-switcher flex gap-4 mb-6 items-center">
+                <div className="player-switcher flex gap-4 mb-6 items-center" onWheel={handlePlayerSwitcherWheel} tabIndex={0}>
                     {Object.entries(playersData).map(([id, player]: [string, any]) => {
                         const isTurn = turn?.toString() === id;
                         const isLogged = loggedUserId?.toString() === id;
@@ -166,7 +180,7 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                         if (currentPlayerIdx === id && currentPlayerIdx != loggedUserId) boxShadow += `0 0 0 4px #ff00d4ff,`;
                         if (isTurn) boxShadow += "0 0 0 8px #4fc3f7,";
                         if (
-                            matchState === "SELECTING_CARDS" &&
+                            (matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS") &&
                             turn?.toString() === loggedUserId?.toString() &&
                             id !== loggedUserId?.toString()
                         ) {
@@ -177,7 +191,7 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                         return (
                             <button
                                 key={id}
-                                disabled={partyLeaderSelection || (!diceRolled && isPlayerTurn && matchState !== "SELECTING_CARDS")}
+                                disabled={partyLeaderSelection || (!diceRolled && isPlayerTurn && (matchState !== "SELECTING_CARDS" && matchState !== "SELECTING_HAND_CARDS"))}
                                 onMouseEnter={() => setHoveredPlayerId(id)}
                                 onMouseLeave={() => setHoveredPlayerId(null)}
                                 onClick={() => handlePlayerChange(player, id)}
@@ -252,19 +266,19 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                 <div
                     className={`discard-area deck-stack relative w-32 h-44 `}
                 >
-                    {matchState === "SELECTING_CARDS" ? (
+                    {matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" ? (
                         <div className="w-full h-full flex items-center justify-center">
                             <button
                                 onClick={onConfirmSelection}
-                                disabled={!isPlayerTurn || selectedCardsCount! !== maxSelectableCards!}
-                                className={`selection-confirm px-4 py-2 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors ${matchState === "SELECTING_CARDS" ? "enter" : "exit-right"
+                                disabled={!isPlayerTurn || selectedCardsCount! == 0}
+                                className={`selection-confirm px-4 py-2 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors ${matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" ? "enter" : "exit-right"
                                     }`}
                             >
                                 Concluir Ação
                             </button>
                         </div>
                     ) : (
-                        <div className={`${matchState === "SELECTING_CARDS" ? "exit-right" : "enter"}`}>
+                        <div className={`${matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" ? "exit-right" : "enter"}`}>
                             {
                                 discard.map((card, idx) => (
                                     <Card

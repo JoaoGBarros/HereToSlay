@@ -4,10 +4,11 @@ import deckCard from "../../../../assets/deck.png";
 import ReactDOM from "react-dom";
 import { useEffect, useState } from "react";
 import { useDrag } from "react-dnd";
+import './HandCards.css';
 
 export const CARD_TYPE = "TILTED_CARD";
 
-function HandCards({ card, isUserCard }: { card: { id: number }; isUserCard: boolean })  {
+function HandCards({ card, isUserCard, isSelectable, isSelected, onSelect, onDeselect}: { card: { id: number }; isUserCard: boolean; isSelectable: boolean; isSelected: boolean; onSelect: () => void; onDeselect: () => void; })  {
     const [expanded, setExpanded] = useState(false);
 
     const [{ isDragging }, dragRef] = useDrag({
@@ -34,13 +35,27 @@ function HandCards({ card, isUserCard }: { card: { id: number }; isUserCard: boo
         <>
             <div
                 ref={dragRef}
-                onClick={handleClick}
+                onClick={!isSelectable ? handleClick : (isSelected ? onDeselect : onSelect)}
                 style={{
                     display: "inline-block",
                     cursor: isDragging ? "grabbing" : "grab",
                     opacity: isDragging ? 0.5 : 1,
+                    width: "200px",
+                    height: "fit-content",
+                    boxShadow: isSelected
+                        ? "0 0 16px 6px #42a5f5, 0 0 32px 12px #90caf9"
+                        : isSelectable
+                            ? "0 0 8px 2px #e53935"
+                            : undefined,
+                    boxSizing: "border-box",
+                    position: "relative",
+                    padding: 0,
+                    margin: 0,
+                    transition: "box-shadow 0.2s"
                 }}
+                className="card-container"
                 id={card.id.toString()}
+                
             >
                 <TiltedCard
                     imageSrc={isUserCard ? heroCard : deckCard}
