@@ -46,7 +46,7 @@ function HandComponent({ currentPlayerData, currentPlayerIdx, loggedUserId, sock
             if (data.type === 'match' && data.subtype === 'select_hand_target') {
                 const target = data.payload.target;
                 const cardIds = target ? Object.values(target).flat().map(Number) : [];
-                setSelectedCards(cardIds);
+                setSelectedCardsState(cardIds);
                 setMaxSelectableCards(data.payload.maxTargets || 0);
             }
         };

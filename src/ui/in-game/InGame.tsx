@@ -132,7 +132,7 @@ function InGame() {
                 if (data.type === 'match' && (data.subtype === 'select_effect_target' || data.subtype === 'select_hand_target') ) {
                     const target = data.payload.target;
                     const cardIds = target ? Object.values(target).flat().map(Number) : [];
-                    console.log("Selected target cards updated:", data.payload);
+                    console.log("Selected target cards updated:", cardIds);
                     setSelectedCardsTarget(cardIds);
 
                     
