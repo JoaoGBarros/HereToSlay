@@ -88,7 +88,7 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
 
 
     useEffect(() => {
-        if (matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS") {
+        if (matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" || matchState === "SELECTING_PLAYER") {
             console.log("Setting showTargetSign:", currentPlayerIdx === turn, loggedUserId === turn);
             setShowTargetSign(currentPlayerIdx === turn);
         }

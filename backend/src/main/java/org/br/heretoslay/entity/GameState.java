@@ -106,4 +106,8 @@ public class GameState {
         return usedCardIds;
     }
 
+    public void setHand(List<Card> hand) {
+        this.hand = hand;
+    }
+
 }

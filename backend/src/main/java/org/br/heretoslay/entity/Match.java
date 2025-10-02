@@ -126,6 +126,31 @@ public class Match {
                     broadcast(effectMsg.toString());
                 }
                 break;
+
+            case "select_effect_player":
+                String selectPlayerId = json.getString("targetPlayerId");
+                if (gameState.getPendingHeroCard() != null) {
+                    HeroCard heroCard = (HeroCard) gameState.getPendingHeroCard();
+                    String targetedPlayer = heroCard.addTargetPlayer(selectPlayerId);
+                    JSONObject effectMsg = new JSONObject();
+                    effectMsg.put("type", "match");
+                    effectMsg.put("subtype", "select_player_target");
+                    effectMsg.put("payload", new JSONObject().put("target", targetedPlayer).put("maxTargets", 1));
+                    broadcast(effectMsg.toString());
+                }
+                break;
+            case "deselect_effect_player":
+                String playerId = json.getString("targetPlayerId");
+                if (gameState.getPendingHeroCard() != null) {
+                    HeroCard heroCard = (HeroCard) gameState.getPendingHeroCard();
+                    String targetedPlayer = heroCard.removeTargetPlayer(playerId);
+                    JSONObject effectMsg = new JSONObject();
+                    effectMsg.put("type", "match");
+                    effectMsg.put("subtype", "select_player_target");
+                    effectMsg.put("payload", new JSONObject().put("target", targetedPlayer).put("maxTargets", 1));
+                    broadcast(effectMsg.toString());
+                }
+                break;
             default:
                 System.out.println("Unknown action: " + action);
                 break;
@@ -503,6 +528,7 @@ public class Match {
             rollResponse.put("minValue", minValue);
             broadcast(rollResponse.toString());
             if (diceValue >= minValue) {
+                gameState.getUsedCardIds().add(card.getCardId());
                 if(card.checkForSelectablePartyEffect() && isSelectableHeroAvailable(gameState)){
                     gameState.setPendingHeroCard(card);
                     matchState = MatchState.SELECTING_CARDS;
@@ -535,6 +561,24 @@ public class Match {
                     effectMsg.put("subtype", "select_effect_target");
                     effectMsg.put("payload", new JSONObject()
                             .put("maxTargets", card.getMaxDestroy())
+                            .put("target", Collections.emptyMap()));
+                    broadcast(effectMsg.toString());
+                    return;
+                }
+
+                if(card.checkForSelectablePlayerEffect()){
+                    gameState.setPendingHeroCard(card);
+                    matchState =  MatchState.SELECTING_PLAYER;
+                    gameState.getUsedCardIds().add(card.getCardId());
+                    JSONObject effectMsg = new JSONObject();
+                    effectMsg.put("type", "match");
+                    effectMsg.put("subtype", "match_state");
+                    effectMsg.put("payload", getMatchState());
+                    broadcast(effectMsg.toString());
+
+                    effectMsg.put("type", "match");
+                    effectMsg.put("subtype", "select_effect_target");
+                    effectMsg.put("payload", new JSONObject()
                             .put("target", Collections.emptyMap()));
                     broadcast(effectMsg.toString());
                     return;

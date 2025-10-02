@@ -1,11 +1,8 @@
 package org.br.heretoslay.entity.Card;
 
-import org.br.heretoslay.entity.Card.CardEffects.CompositeCardEffect;
-import org.br.heretoslay.entity.Card.CardEffects.StealCardEffect;
-import org.br.heretoslay.entity.Card.CardEffects.StealHandEffect;
+import org.br.heretoslay.entity.Card.CardEffects.*;
 import org.br.heretoslay.entity.GameState;
 import org.br.heretoslay.entity.Match;
-import org.br.heretoslay.entity.Card.CardEffects.DestroyCardEffect;
 
 import java.util.Collections;
 import java.util.List;
@@ -54,6 +51,18 @@ public class HeroCard extends Card {
         return false;
     }
 
+    public boolean checkForSelectablePlayerEffect() {
+        CompositeCardEffect effect = this.getEffect();
+        if (effect != null) {
+            for (CardEffect subEffect : effect.getEffects()) {
+                if (subEffect instanceof TradeHandEffect) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     public Map<String, List<Long>> addTarget(Long cardId, String userId) {
         CompositeCardEffect effect = this.getEffect();
         Map<String, List<Long>> targets = null;
@@ -74,6 +83,35 @@ public class HeroCard extends Card {
         }
 
         return targets;
+    }
+
+    public String addTargetPlayer(String userId) {
+        CompositeCardEffect effect = this.getEffect();
+        String targetPlayerId = null;
+        if (effect != null) {
+            for (CardEffect subEffect : effect.getEffects()) {
+                if (subEffect instanceof TradeHandEffect) {
+                    ((TradeHandEffect) subEffect).setPlayerSelected(userId);
+                    targetPlayerId = ((TradeHandEffect) subEffect).getPlayerSelected();
+                }
+            }
+        }
+
+        return targetPlayerId;
+    }
+
+    public String removeTargetPlayer(String userId) {
+        CompositeCardEffect effect = this.getEffect();
+        String targetPlayerId = null;
+        if (effect != null) {
+            for (CardEffect subEffect : effect.getEffects()) {
+                if (subEffect instanceof TradeHandEffect) {
+                    ((TradeHandEffect) subEffect).setPlayerSelected(null);
+                    targetPlayerId = ((TradeHandEffect) subEffect).getPlayerSelected();
+                }
+            }
+        }
+        return targetPlayerId;
     }
 
     public Map<String, List<Long>>  removeTarget(Long cardId, String userId) {

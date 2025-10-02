@@ -60,6 +60,7 @@ function InGame() {
     const [selectedCards, setSelectedCards] = useState<number[]>([]);
     const [selectedCardsTarget, setSelectedCardsTarget] = useState<number[]>([]);
     const [maxSelectableCards, setMaxSelectableCards] = useState<number>(0);
+    const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
 
     const classIcons: Record<string, string> = {
@@ -137,6 +138,13 @@ function InGame() {
 
                     
                     setMaxSelectableCards(data.payload.maxTargets || 0);
+                }
+
+                if( data.type === 'match' && data.subtype === 'select_player_target') {
+                    const target = data.payload.target;
+                    console.log("Selected target updated:", target);
+                    setSelectedPlayerId(target || null);
+                    setMaxSelectableCards(data.payload.maxTargets || 1);
                 }
 
             } catch (error) {
@@ -222,6 +230,7 @@ function InGame() {
             setSelectedCardsTarget([]);
             setSelectedCards([]);
             setMaxSelectableCards(0);
+            setSelectedPlayerId(null);
         }
     }, [matchState]);
 
@@ -300,7 +309,7 @@ function InGame() {
     }, [pendingHeroCard]);
 
     useEffect(() => {
-        if (matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS") {
+        if (matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" || matchState === "SELECTING_PLAYER") {
             setIsDiceRollVisible(false);
         }
     }, [matchState]);
@@ -336,11 +345,12 @@ function InGame() {
                         matchState={matchState}
                         selectedCardsCount={selectedCardsTarget.length}
                         maxSelectableCards={maxSelectableCards}
+                        selectedPlayerId={selectedPlayerId}
                     />
 
                     <div className={`party-area flex ${isTransitioning ? 'slide-out' : 'slide-in'}`}>
                         {!showTurnIndicator && (
-                            (!diceRolled[currentPlayerIdx] || isDiceRollVisible) && (matchState !== "SELECTING_CARDS" && matchState !== "SELECTING_HAND_CARDS") ? (
+                            (!diceRolled[currentPlayerIdx] || isDiceRollVisible) && (matchState !== "SELECTING_CARDS" && matchState !== "SELECTING_HAND_CARDS" && matchState !== "SELECTING_PLAYER") ? (
                                 showChallenge ? (
                                     // Challenge view
                                     <>

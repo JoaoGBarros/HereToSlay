@@ -1,6 +1,6 @@
 import { Card } from "@heroui/card";
 import './css/GameHeader.css';
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { playSound } from "@/utils/SoundManager/SoundManager";
 import { classAvatars } from "@/utils/ClassImages";
 
@@ -22,6 +22,7 @@ interface GameHeaderProps {
     matchState?: string;
     maxSelectableCards?: number;
     selectedCardsCount?: number;
+    selectedPlayerId?: string | null;
 
 }
 
@@ -29,10 +30,12 @@ interface GameHeaderProps {
 
 function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolled, socket, id, turn,
     currentPlayerIdx, deckImg, loggedUserId, setCurrentPlayerIdx, setCurrentPlayerData, autoSwitchView,
-    setAutoSwitchView, matchState, maxSelectableCards, selectedCardsCount }: GameHeaderProps) {
+    setAutoSwitchView, matchState, maxSelectableCards, selectedCardsCount, selectedPlayerId}: GameHeaderProps) {
 
     const [hoveredPlayerId, setHoveredPlayerId] = useState<string | null>(null);
     const [isDrawing, setIsDrawing] = useState(false);
+    const [menuOpen, setMenuOpen] = useState<string | null>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
     const playerIds = Object.keys(playersData);
 
     const deck = [
@@ -97,8 +100,43 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
         };
     }, [socket, currentPlayerIdx, turn]);
 
-    function handlePlayerChange(player: any, id: string) {
+    function handlePlayerChange(_player: any, id: string) {
         setCurrentPlayerIdx(id);
+    }
+
+    function handleView(playerId: string) {
+        setCurrentPlayerIdx(playerId);
+        setMenuOpen(null);
+    }
+
+    function handleSelect(playerId: string) {
+
+        if(playerId === loggedUserId) return;
+        if (socket?.current) {
+
+            let message = "";
+
+            if(selectedPlayerId === playerId) {
+                message = JSON.stringify({
+                    type: 'match',
+                    subtype: 'action',
+                    action: 'deselect_effect_player',
+                    targetPlayerId: playerId,
+                    id: id
+                });
+            }else{
+                message = JSON.stringify({
+                    type: 'match',
+                    subtype: 'action',
+                    action: 'select_effect_player',
+                    targetPlayerId: playerId,
+                    id: id
+                });
+            }
+            
+            socket.current.send(message);
+        }
+        setMenuOpen(null);
     }
 
     function handlePlayerSwitcherWheel(e: React.WheelEvent<HTMLDivElement>) {
@@ -113,6 +151,27 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
         }
         setCurrentPlayerIdx(playerIds[nextIdx]);
     }
+
+    function openMenu(playerId: string) {
+        setMenuOpen(menuOpen === playerId ? null : playerId);
+    }
+
+    // Close menu when clicking outside
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setMenuOpen(null);
+            }
+        }
+
+        if (menuOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [menuOpen]);
 
     return (
         <>
@@ -132,16 +191,16 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                     onClick={handleDeckClick}
                     aria-disabled={!isPlayerTurn}
                 >
-                    {matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" ? (
+                    {matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" || matchState === "SELECTING_PLAYER" ? (
                         <div className={`selection-counter w-[90%] h-[50%] mt-[5vh] flex flex-col items-center justify-center bg-gray-800 rounded-lg border-2 border-dashed border-yellow-500 text-white p-2 enter ${matchState === "SELECTING_CARDS" ? "enter" : "exit-left"
                             }`}>
                             <div className="text-2xl mt-2">
-                                <span>{selectedCardsCount ?? 0}</span>
+                                <span>{selectedCardsCount ? maxSelectableCards : selectedPlayerId ? 1 : 0}</span>
                                 <span className="text-base"> / {maxSelectableCards ?? '...'}</span>
                             </div>
                         </div>
                     ) : (
-                        <div className={`${matchState === "SELECTING_CARDS" ? "exit-left" : "enter"
+                        <div className={`${matchState === "SELECTING_CARDS"  ? "exit-left" : "enter"
                             }`}>
 
                             {deck.map((card, idx) => (
@@ -180,21 +239,25 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                         if (currentPlayerIdx === id && currentPlayerIdx != loggedUserId) boxShadow += `0 0 0 4px #ff00d4ff,`;
                         if (isTurn) boxShadow += "0 0 0 8px #4fc3f7,";
                         if (
-                            (matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS") &&
+                            (matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" || matchState === "SELECTING_PLAYER") &&
                             turn?.toString() === loggedUserId?.toString() &&
                             id !== loggedUserId?.toString()
                         ) {
                             boxShadow += "0 0 0 6px #e53935,";
+                        }
+
+                        if(id === selectedPlayerId) {
+                            boxShadow += "0 0 0 10px #43a047,";
                         }
                         if (boxShadow.endsWith(",")) boxShadow = boxShadow.slice(0, -1);
 
                         return (
                             <button
                                 key={id}
-                                disabled={partyLeaderSelection || (!diceRolled && isPlayerTurn && (matchState !== "SELECTING_CARDS" && matchState !== "SELECTING_HAND_CARDS"))}
+                                disabled={partyLeaderSelection || (!diceRolled && isPlayerTurn && (matchState !== "SELECTING_CARDS" && matchState !== "SELECTING_HAND_CARDS" && matchState !== "SELECTING_PLAYER"))}
                                 onMouseEnter={() => setHoveredPlayerId(id)}
                                 onMouseLeave={() => setHoveredPlayerId(null)}
-                                onClick={() => handlePlayerChange(player, id)}
+                                onClick={() => matchState === "SELECTING_PLAYER" && turn != loggedUserId ? handlePlayerChange(player, id) : openMenu(id)}
                                 style={{
                                     padding: 0,
                                     borderRadius: "50%",
@@ -244,7 +307,63 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                                         {player.username}
                                     </div>
                                 )}
+                                {menuOpen === id && (
+                                    <div
+                                        ref={menuRef}
+                                        style={{
+                                            position: "absolute",
+                                            top: "100%",
+                                            left: "50%",
+                                            transform: "translateX(-50%)",
+                                            marginTop: "8px",
+                                            background: "#fff",
+                                            border: "1px solid #b48a5a",
+                                            borderRadius: "8px",
+                                            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                                            padding: "8px 0",
+                                            zIndex: 100,
+                                            minWidth: "120px"
+                                        }}
+                                    >
+                                        <button
+                                            style={{
+                                                display: "block",
+                                                width: "100%",
+                                                background: "none",
+                                                border: "none",
+                                                padding: "8px 16px",
+                                                textAlign: "left",
+                                                cursor: "pointer",
+                                                fontSize: "16px",
+                                                color: "#333"
+                                            }}
+                                            onClick={() => handleView(id)}
+                                        >
+                                            Visualizar
+                                        </button>
+                                        <hr style={{ margin: "4px 0", border: "none", borderTop: "1px solid #e0e0e0" }} />
+                                        {matchState === "SELECTING_PLAYER" && id !== loggedUserId ? (
+                                            <button
+                                                style={{
+                                                    display: "block",
+                                                    width: "100%",
+                                                    background: "none",
+                                                    border: "none",
+                                                    padding: "8px 16px",
+                                                    textAlign: "left",
+                                                    cursor: "pointer",
+                                                    fontSize: "16px",
+                                                    color: "#333"
+                                                }}
+                                                onClick={() => handleSelect(id)}
+                                            >
+                                                {id == selectedPlayerId ? "Remover Seleção" : "Selecionar"}
+                                            </button>
+                                        ) : null}
+                                    </div>
+                                )}
                             </button>
+                            
                         );
                     })}
                     <button
@@ -266,19 +385,19 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                 <div
                     className={`discard-area deck-stack relative w-32 h-44 `}
                 >
-                    {matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" ? (
+                    {matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" || matchState === "SELECTING_PLAYER" || matchState === "SELECTING_PLAYER" ? (
                         <div className="w-full h-full flex items-center justify-center">
                             <button
                                 onClick={onConfirmSelection}
-                                disabled={!isPlayerTurn || selectedCardsCount! == 0}
-                                className={`selection-confirm px-4 py-2 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors ${matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" ? "enter" : "exit-right"
+                                disabled={!isPlayerTurn || (selectedCardsCount! == 0 && matchState !== "SELECTING_PLAYER") || (!selectedPlayerId && matchState === "SELECTING_PLAYER")}
+                                className={`selection-confirm px-4 py-2 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors ${matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" || matchState === "SELECTING_PLAYER" ? "enter" : "exit-right"
                                     }`}
                             >
                                 Concluir Ação
                             </button>
                         </div>
                     ) : (
-                        <div className={`${matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" ? "exit-right" : "enter"}`}>
+                        <div className={`${matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" || matchState === "SELECTING_PLAYER" ? "exit-right" : "enter"}`}>
                             {
                                 discard.map((card, idx) => (
                                     <Card
