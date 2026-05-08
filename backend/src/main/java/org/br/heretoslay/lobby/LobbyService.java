@@ -3,6 +3,7 @@ package org.br.heretoslay.lobby;
 import org.br.heretoslay.auth.AuthService;
 import org.br.heretoslay.entity.Lobby;
 import org.br.heretoslay.entity.LobbyStatus;
+import org.br.heretoslay.entity.Player;
 import org.br.heretoslay.match.MatchService;
 import org.java_websocket.WebSocket;
 import org.json.JSONObject;
@@ -65,7 +66,10 @@ public class LobbyService {
                 lobby.startCountdown(
                     () -> {
                         lobby.setStatus(LobbyStatus.IN_PROGRESS);
-                        MatchService.getInstance().startMatch(lobby.getId(), lobby.getPlayers().stream().toList());
+                        List<Player> startingPlayers = lobby.getPlayers().stream()
+                                .map(playerConn -> AuthService.getInstance().getPlayerByConnection(playerConn))
+                                .toList();
+                        MatchService.getInstance().startMatch(lobby.getId(), startingPlayers);
                         JSONObject startMsg = new JSONObject();
                         startMsg.put("type", "lobby");
                         startMsg.put("subtype", "countdown_finished");
@@ -137,9 +141,8 @@ public class LobbyService {
                     }
 
                     List<String> usernames = lobbyToJoin.getPlayers().stream()
-                            .map(playerConn -> AuthService.getInstance().getPlayerByConnection(playerConn).getUsername())
+                            .map(playerConn -> AuthService.getInstance().getPlayerByConnection(conn).getUsername())
                             .toList();
-
                     JSONObject lobbyInfo = new JSONObject();
                     lobbyInfo.put("id", lobbyToJoin.getId());
                     lobbyInfo.put("name", lobbyToJoin.getName());
@@ -168,7 +171,7 @@ public class LobbyService {
                         lobbyToLeave.setStatus(LobbyStatus.WAITING_FOR_PLAYERS);
                     }
                     List<String> usernames = lobbyToLeave.getPlayers().stream()
-                            .map(playerConn -> AuthService.getInstance().getPlayerByConnection(playerConn).getUsername())
+                            .map(playerConn -> AuthService.getInstance().getPlayerByConnection(conn).getUsername())
                             .toList();
 
                     JSONObject lobbyInfo = new JSONObject();

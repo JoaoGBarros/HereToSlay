@@ -1,6 +1,12 @@
 package org.br.heretoslay;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.br.heretoslay.auth.AuthService;
+import org.br.heretoslay.entity.Player;
 import org.br.heretoslay.lobby.LobbyService;
 import org.br.heretoslay.match.MatchService;
 import org.java_websocket.WebSocket;
@@ -9,15 +15,21 @@ import org.java_websocket.server.WebSocketServer;
 import org.json.JSONObject;
 
 import java.net.InetSocketAddress;
+import java.time.Duration;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
 
 public class HereToSlay extends WebSocketServer {
 
     private final AuthService authService = AuthService.getInstance();
     private final LobbyService lobbyService = LobbyService.getInstance();
     private final MatchService matchService = MatchService.getInstance();
+    private KafkaProducer<String, String> producer;
 
     public HereToSlay(int port) {
         super(new InetSocketAddress(port));
+        initKafka();
     }
 
     public static void main(String[] args) {
@@ -50,7 +62,16 @@ public class HereToSlay extends WebSocketServer {
                 lobbyService.handleMessage(conn, obj);
                 break;
                 case "match":
-                    matchService.handleMessage(conn, obj);
+                    try {
+                        Player p = authService.getPlayerByConnection(conn);
+                        if (p == null) return;
+                        obj.put("playerId", p.getId().toString());
+                        ProducerRecord<String, String> record = new ProducerRecord<>("game-actions-in", obj.get("id").toString(), obj.toString());
+                        producer.send(record);
+                    } catch (Exception e) {
+                        System.err.println("Erro ao encaminhar para o Kafka: " + e.getMessage());
+                    }
+                    break;
 
         }
     }
@@ -63,5 +84,49 @@ public class HereToSlay extends WebSocketServer {
     @Override
     public void onStart() {
         System.out.println("onStart");
+    }
+
+    private void initKafka() {
+        Properties producerProps = new Properties();
+        producerProps.put("bootstrap.servers", "localhost:9092");
+        producerProps.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        producerProps.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        this.producer = new KafkaProducer<>(producerProps);
+
+        new Thread(this::startKafkaConsumer).start();
+    }
+
+    private void startKafkaConsumer() {
+        Properties consumerProps = new Properties();
+        consumerProps.put("bootstrap.servers", "localhost:9092");
+        consumerProps.put("group.id", "heretoslay-gateway");
+        consumerProps.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        consumerProps.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+
+        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
+        consumer.subscribe(Collections.singletonList("game-state-out"));
+
+        while (true) {
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+            for (ConsumerRecord<String, String> record : records) {
+                Long matchId = Long.parseLong(record.key());
+                String message = record.value();
+                broadcastToMatch(matchId, message);
+            }
+        }
+    }
+
+    private void broadcastToMatch(Long matchId, String message) {
+        List<String> playerIds = matchService.getPlayerIdsInMatch(matchId);
+
+        for (String playerId : playerIds) {
+            WebSocket conn = authService.getConnectionByPlayerId(playerId);
+
+            if (conn != null && conn.isOpen()) {
+                conn.send(message);
+            } else {
+                System.out.println("Aviso: Jogador " + playerId + " não encontrado ou desconectado.");
+            }
+        }
     }
 }

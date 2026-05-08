@@ -5,6 +5,7 @@ import org.br.heretoslay.entity.Card.*;
 import org.br.heretoslay.entity.Card.CardEffects.CompositeCardEffect;
 import org.br.heretoslay.entity.Card.CardEffects.DestroyCardEffect;
 import org.br.heretoslay.entity.Card.CardEffects.StealHandEffect;
+import org.br.heretoslay.match.MatchService;
 import org.java_websocket.WebSocket;
 import org.json.JSONObject;
 
@@ -15,8 +16,8 @@ import java.util.stream.Collectors;
 
 public class Match {
 
-    private final Map<WebSocket, GameState> players = new ConcurrentHashMap<>();
-    private List<WebSocket> turnOrder = new ArrayList<>();
+    private final Map<String, GameState> players = new ConcurrentHashMap<>();
+    private List<String> turnOrder = new ArrayList<>();
     private List<String> availablePartyLeaders = new ArrayList<>(
             Arrays.stream(PartyLeader.values())
                     .map(Enum::name)
@@ -29,28 +30,29 @@ public class Match {
     private List<Card> discardPile = new ArrayList<>();
     private boolean challengeWindowOpen = false;
     private Card currentHeroCard = null;
-    private WebSocket currentHeroPlayer = null;
-    private Set<WebSocket> challengers = new HashSet<>();
+    private String currentHeroPlayer = null;
+    private Set<String> challengers = new HashSet<>();
     private Timer challengeTimer = new Timer();
-    private Map<WebSocket, Integer> duelRolls = new HashMap<>();
-    private WebSocket duelChallenger = null;
+    private Map<String, Integer> duelRolls = new HashMap<>();
+    private String duelChallenger = null;
     private long challengeWindowRemainingTime;
     private long challengeWindowStartTime;
     private long challengeWindowDuration = 10000;
+    private final Long matchId;
 
 
-    public Match(List<WebSocket> connections) {
-        for (WebSocket conn : connections) {
-            GameState gameState = new GameState(AuthService.getInstance().getPlayerByConnection(conn).getUsername(), AuthService.getInstance().getPlayerByConnection(conn).getId());
-            players.put(conn, gameState);
+    public Match(Long matchId, List<Player> startingPlayers) {
+        this.matchId = matchId;
+        for (Player player : startingPlayers) {
+            GameState gameState = new GameState(player.getUsername(), player.getId());
+            players.put(player.getId().toString(), gameState);
         }
         matchState = MatchState.ORDER_SELECTION;
         drawPile = CardDeck.createDeck();
-
         Collections.shuffle(drawPile);
     }
 
-    public Map<WebSocket, GameState> getPlayers() {
+    public Map<String, GameState> getPlayers() {
         return players;
     }
 
@@ -58,10 +60,10 @@ public class Match {
         return discardPile;
     }
 
-    public void performAction(WebSocket conn, String action, JSONObject json) {
+    public void performAction(String playerId, String action, JSONObject json) {
 
-        if (turnOrder.get(currentPlayerTurnIndex) != conn) return;
-        GameState gameState = players.get(conn);
+        if (!turnOrder.get(currentPlayerTurnIndex).equals(playerId)) return;
+        GameState gameState = players.get(playerId);
 
         switch (action) {
             case "draw_card":
@@ -140,10 +142,10 @@ public class Match {
                 }
                 break;
             case "deselect_effect_player":
-                String playerId = json.getString("targetPlayerId");
+                String deselectTargetPlayerId = json.getString("targetPlayerId");
                 if (gameState.getPendingHeroCard() != null) {
                     HeroCard heroCard = (HeroCard) gameState.getPendingHeroCard();
-                    String targetedPlayer = heroCard.removeTargetPlayer(playerId);
+                    String targetedPlayer = heroCard.removeTargetPlayer(deselectTargetPlayerId);
                     JSONObject effectMsg = new JSONObject();
                     effectMsg.put("type", "match");
                     effectMsg.put("subtype", "select_player_target");
@@ -204,8 +206,8 @@ public class Match {
         return Collections.emptyMap();
     }
 
-    public synchronized void processOrderSelectionRoll(WebSocket conn, int roll) {
-        GameState playerState = players.get(conn);
+    public synchronized void processOrderSelectionRoll(String playerId, int roll) {
+        GameState playerState = players.get(playerId);
         if (playerState != null && playerState.getOrderRoll() == null) {
             playerState.setOrderRoll(roll);
             System.out.println("Player " + playerState.getUsername() + " rolled: " + roll);
@@ -259,8 +261,8 @@ public class Match {
 
         System.out.println("Final turn order determined:");
         int i = 1;
-        for (WebSocket conn : turnOrder) {
-            System.out.println(i++ + ". " + players.get(conn).getUsername());
+        for (String playerId : turnOrder) {
+            System.out.println(i++ + ". " + players.get(playerId).getUsername());
         }
 
         JSONObject orderFinalizedResponse = new JSONObject();
@@ -272,19 +274,15 @@ public class Match {
     }
 
     public void broadcast(String message) {
-        for (WebSocket conn : players.keySet()) {
-            if (conn != null && conn.isOpen()) {
-                conn.send(message);
-            }
-        }
+        MatchService.getInstance().publishToKafka(this.matchId, message);
     }
 
 
 
     public JSONObject getMatchState() {
         JSONObject playersJson = new JSONObject();
-        for (Map.Entry<WebSocket, GameState> entry : players.entrySet()) {
-            WebSocket conn = entry.getKey();
+        for (Map.Entry<String, GameState> entry : players.entrySet()) {
+            String playerId = entry.getKey();
             GameState player = entry.getValue();
             JSONObject playerJson = new JSONObject()
                     .put("leader", player.getLeader() == null ? "" : player.getLeader().toString())
@@ -297,27 +295,27 @@ public class Match {
                     .put("pendingHeroCard", player.getPendingHeroCard() == null ? JSONObject.NULL : player.getPendingHeroCard())
                     .put("usedCardIds", player.getUsedCardIds())
                     .put("orderRoll", player.getOrderRoll() == null ? JSONObject.NULL : player.getOrderRoll());
-            playersJson.put(AuthService.getInstance().getPlayerByConnection(conn).getId().toString(), playerJson);
+            playersJson.put(playerId, playerJson);
         }
 
 
         return new JSONObject()
                 .put("availablePartyLeaders", availablePartyLeaders)
-                .put("currentPlayerTurn", turnOrder.isEmpty() ? "" : AuthService.getInstance().getPlayerByConnection(turnOrder.get(currentPlayerTurnIndex)).getId().toString())
+                .put("currentPlayerTurn", turnOrder.isEmpty() ? "" : AuthService.getInstance().getPlayerById(turnOrder.get(currentPlayerTurnIndex)).getId().toString())
                 .put("matchState", matchState.toString())
                 .put ("challengeWindowTime", challengeWindowDuration)
                 .put("challengerSet", challengers.stream()
-                        .map(conn -> AuthService.getInstance().getPlayerByConnection(conn).getId())
+                        .map(conn -> AuthService.getInstance().getPlayerById(conn).getId())
                         .collect(Collectors.toList()))
                 .put("players", playersJson);
     }
 
-    public synchronized boolean choosePartyLeader(WebSocket conn, String leaderName) {
+    public synchronized boolean choosePartyLeader(String playerId, String leaderName) {
 
-        System.out.println(turnOrder.get(currentPlayerTurnIndex) == conn);
-        if (turnOrder.get(currentPlayerTurnIndex) != conn) return false;
+        System.out.println(turnOrder.get(currentPlayerTurnIndex) == playerId);
+        if (!turnOrder.get(currentPlayerTurnIndex).equals(playerId)) return false;
         if (!availablePartyLeaders.contains(leaderName)) return false;
-        GameState playerState = players.get(conn);
+        GameState playerState = players.get(playerId);
         playerState.setLeader(PartyLeader.valueOf(leaderName));
         JSONObject playSound = new JSONObject();
         playSound.put("type", "sound");
@@ -331,8 +329,8 @@ public class Match {
         if (currentPlayerTurnIndex >= turnOrder.size()) {
             currentPlayerTurnIndex = 0;
             matchState = MatchState.GAMEPLAY;
-            for (WebSocket playerConn : turnOrder) {
-                GameState gs = players.get(playerConn);
+            for (String player : turnOrder) {
+                GameState gs = players.get(player);
                 for (int i = 0; i < 5; i++) {
                     if (!drawPile.isEmpty()) {
                         gs.getHand().add(drawPile.pop());
@@ -400,18 +398,17 @@ public class Match {
         return true;
     }
 
-    private void openChallengeWindow(WebSocket heroPlayer, Card heroCard) {
+    private void openChallengeWindow(String playerId, Card heroCard) {
         challengeWindowOpen = true;
         currentHeroCard = heroCard;
-        currentHeroPlayer = heroPlayer;
+        currentHeroPlayer = playerId;
         this.matchState = MatchState.CHALLENGE_WINDOW;
         challengers.clear();
 
-        players.get(heroPlayer).getHand().remove(heroCard);
-        players.get(heroPlayer).getParty().add(currentHeroCard);
+        players.get(playerId).getHand().remove(heroCard);
+        players.get(playerId).getParty().add(currentHeroCard);
 
 
-        // Notifica o front-end para mostrar o botão de desafio
         JSONObject challengeMsg = new JSONObject();
         challengeMsg.put("type", "match");
         challengeMsg.put("subtype", "challenge_window_open");
@@ -448,10 +445,10 @@ public class Match {
         return challengeWindowRemainingTime - (System.currentTimeMillis() - challengeWindowStartTime);
     }
 
-    public synchronized void challengeHero(WebSocket challenger) {
-        if (!challengeWindowOpen || challenger == currentHeroPlayer || challengers.contains(challenger)) return;
-        challengers.add(challenger);
-        duelChallenger = challenger;
+    public synchronized void challengeHero(String challengerId) {
+        if (!challengeWindowOpen || challengerId.equals(currentHeroPlayer) || challengers.contains(challengerId)) return;
+        challengers.add(challengerId);
+        duelChallenger = challengerId;
         duelRolls.clear();
         challengeWindowRemainingTime -= (System.currentTimeMillis() - challengeWindowStartTime);
         challengeTimer.cancel();
@@ -461,8 +458,8 @@ public class Match {
         duelMsg.put("type", "match");
         duelMsg.put("subtype", "duel_start");
         duelMsg.put("payload", new JSONObject()
-                .put("challenger", AuthService.getInstance().getPlayerByConnection(challenger).getId())
-                .put("heroPlayer", AuthService.getInstance().getPlayerByConnection(currentHeroPlayer).getId())
+                .put("challenger", challengerId)
+                .put("heroPlayer", currentHeroPlayer)
                 .put("matchState", matchState.toString()));
         broadcast(duelMsg.toString());
     }
@@ -599,14 +596,14 @@ public class Match {
 
     }
 
-    public synchronized void processDuelRoll(WebSocket player, int roll) {
-        duelRolls.put(player, roll);
+    public synchronized void processDuelRoll(String playerId, int roll) {
+        duelRolls.put(playerId, roll);
         JSONObject rollResponse = new JSONObject();
         rollResponse.put("type", "roll_result");
         rollResponse.put("subtype", "duel_roll");
         rollResponse.put("payload", duelRolls.entrySet().stream()
                 .collect(Collectors.toMap(
-                        entry -> AuthService.getInstance().getPlayerByConnection(entry.getKey()).getId().toString(),
+                        entry -> AuthService.getInstance().getPlayerById(entry.getKey()).getId().toString(),
                         Map.Entry::getValue
                 )));
         broadcast(rollResponse.toString());
@@ -620,7 +617,7 @@ public class Match {
             resultMsg.put("subtype", "duel_result");
 
             if (heroRoll >= challengerRoll) {
-                resultMsg.put("winner", AuthService.getInstance().getPlayerByConnection(turnOrder.get(currentPlayerTurnIndex)).getId());
+                resultMsg.put("winner", AuthService.getInstance().getPlayerById(turnOrder.get(currentPlayerTurnIndex)).getId());
                 matchState = MatchState.CHALLENGE_WINDOW;
                 JSONObject matchUpdate = new JSONObject();
                 matchUpdate.put("type", "match");
@@ -659,7 +656,7 @@ public class Match {
                 currentHeroCard = null;
 
                 closeChallengeWindow();
-                resultMsg.put("winner", AuthService.getInstance().getPlayerByConnection(duelChallenger).getId());
+                resultMsg.put("winner", AuthService.getInstance().getPlayerById(duelChallenger).getId());
 
             }
             resultMsg.put("Rolls", duelRolls);

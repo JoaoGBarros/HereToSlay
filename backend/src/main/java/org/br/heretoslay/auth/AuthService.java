@@ -61,4 +61,14 @@ public class AuthService {
     public Player getPlayerByConnection(WebSocket conn) {
         return onlinePlayers.get(conn);
     }
+
+    public Player getPlayerById(String playerId) {
+        return onlinePlayers.values().stream().filter(player -> player.getId().toString().equals(playerId)).findFirst().orElse(null);
+    }
+
+    public WebSocket getConnectionByPlayerId(String playerId) {
+        return onlinePlayers.values().stream().map(Player::getId).filter(id -> id.toString().equals(playerId)).findFirst()
+                .map(id -> onlinePlayers.entrySet().stream().filter(entry -> entry.getValue().getId().equals(id)).findFirst().orElse(null))
+                .map(Map.Entry::getKey).orElse(null);
+    }
 }
