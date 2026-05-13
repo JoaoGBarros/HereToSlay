@@ -58,6 +58,7 @@ public class MatchService {
         producerProps.put("bootstrap.servers", kafkaServer);
         producerProps.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         producerProps.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        producerProps.put("acks", "all");  // Aguarda todas as replicas ISR confirmarem
         this.kafkaProducer = new KafkaProducer<>(producerProps);
 
         new Thread(this::startKafkaConsumer).start();
