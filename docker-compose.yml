@@ -16,6 +16,30 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_LOG_RETAIN_CHECK_INTERVAL_MS: 5000
+      KAFKA_NUM_PARTITIONS: 1
+      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_LOG_FLUSH_INTERVAL_MESSAGES: 1
+
+  kafka-init:
+    image: apache/kafka:3.7.0
+    container_name: kafka-init
+    depends_on:
+      - kafka
+    command: >
+      bash -c "
+      echo 'Aguardando Kafka subir...'
+      kafka-topics.sh --bootstrap-server kafka:29092 --list
+      
+      echo 'Criando tópicos...'
+      kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic lobby-actions-in --partitions 1 --replication-factor 1
+      kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic lobby-state-out --partitions 1 --replication-factor 1
+      kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic game-state-out --partitions 1 --replication-factor 1
+      
+      kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic lobby-state-store --partitions 1 --replication-factor 1 --config cleanup.policy=compact
+      kafka-topics.sh --bootstrap-server kafka:29092 --create --if-not-exists --topic match-state-store --partitions 1 --replication-factor 1 --config cleanup.policy=compact
+      
+      echo 'Tópicos configurados com sucesso!'"
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest

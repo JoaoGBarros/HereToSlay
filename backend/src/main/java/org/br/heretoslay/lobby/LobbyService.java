@@ -61,7 +61,7 @@ public class LobbyService {
         consumer.subscribe(Collections.singletonList("lobby-actions-in"));
 
         while (true) {
-            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+            ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1000));
             for (ConsumerRecord<String, String> record : records) {
                 handleMessage(new JSONObject(record.value()));
             }
@@ -72,6 +72,7 @@ public class LobbyService {
         Lobby lobby = new Lobby((long)(lobbies.size() + 1), name, maxPlayers, minPlayers);
         lobbies.put(lobby.getId(), lobby);
         persistStateToKafka(lobby);
+        System.out.println("Lobby criado");
         return lobby.getId();
     }
 

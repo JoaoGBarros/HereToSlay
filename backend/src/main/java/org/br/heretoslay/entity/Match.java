@@ -1,15 +1,12 @@
 package org.br.heretoslay.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import org.br.heretoslay.auth.AuthService;
 import org.br.heretoslay.entity.Card.*;
 import org.br.heretoslay.entity.Card.CardEffects.CompositeCardEffect;
 import org.br.heretoslay.entity.Card.CardEffects.DestroyCardEffect;
 import org.br.heretoslay.entity.Card.CardEffects.StealHandEffect;
 import org.br.heretoslay.match.MatchService;
-import org.java_websocket.WebSocket;
 import org.json.JSONObject;
-import org.json.JSONPropertyIgnore;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,6 +38,9 @@ public class Match {
     private long challengeWindowStartTime;
     private long challengeWindowDuration = 10000;
     private final Long matchId;
+    private final List<MatchState> forbiddenTurnChange = new ArrayList<>(
+            Arrays.asList(MatchState.CHALLENGE_WINDOW, MatchState.CHALLENGE_ROLL, MatchState.SELECTING_CARDS, MatchState.SELECTING_HAND_CARDS, MatchState.SELECTING_PLAYER)
+    );
 
 
     public Match(Long matchId, List<Player> startingPlayers) {
@@ -160,9 +160,7 @@ public class Match {
                 break;
         }
 
-        if(gameState.getCurrentAP() == 0 && matchState != MatchState.CHALLENGE_WINDOW &&
-                matchState != MatchState.CHALLENGE_ROLL && matchState != MatchState.SELECTING_CARDS
-            && matchState != MatchState.SELECTING_HAND_CARDS){
+        if(gameState.getCurrentAP() == 0 && !forbiddenTurnChange.contains(matchState)){
 
             JSONObject endTurn = new JSONObject();
             endTurn.put("type", "animation");
@@ -375,11 +373,11 @@ public class Match {
         discardPile.clear();
     }
 
-    public boolean playCard(GameState gameState, Long cardId) {
+    public void playCard(GameState gameState, Long cardId) {
 
-        if (gameState.getCurrentAP() == 0) return false;
+        if (gameState.getCurrentAP() == 0) return;
         Optional<Card> cardOpt = gameState.getHand().stream().filter(c -> c.getCardId().equals(cardId)).findFirst();
-        if (cardOpt.isEmpty()) return false;
+        if (cardOpt.isEmpty()) return;
         Card card = cardOpt.get();
         challengeWindowRemainingTime = challengeWindowDuration;
 
@@ -390,13 +388,11 @@ public class Match {
                     .map(Map.Entry::getKey)
                     .findFirst()
                     .orElse(null) , card);
-            return true;
+            return;
         }
 
-        //card.applyEffect(this, gameState);
         gameState.getHand().remove(card);
         gameState.getParty().add(card);
-        return true;
     }
 
     private void openChallengeWindow(String playerId, Card heroCard) {
