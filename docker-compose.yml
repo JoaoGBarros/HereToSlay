@@ -51,6 +51,16 @@ services:
     depends_on:
       - kafka
 
+  lobby:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.lobby
+    container_name: lobby-service
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    depends_on:
+      - kafka
+
 volumes:
   kafka_data:
     driver: local

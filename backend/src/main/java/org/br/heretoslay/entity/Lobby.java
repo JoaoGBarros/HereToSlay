@@ -14,7 +14,7 @@ public class Lobby {
     private int maxPlayers;
     private int minPlayers;
     private LobbyStatus status;
-    private Set<WebSocket> players;
+    private Set<String> players;
     private transient Timer countdownTimer;
     private transient int countdownTimeLeft = -1;
 
@@ -33,13 +33,13 @@ public class Lobby {
         return id;
     }
 
-    public void addPlayer(WebSocket conn){
+    public void addPlayer(String id){
 
         if(players.size() >= maxPlayers) {
             throw new IllegalStateException("Lobby is full");
         }
 
-        players.add(conn);
+        players.add(id);
     }
 
     public String getName() {
@@ -62,7 +62,7 @@ public class Lobby {
         this.status = status;
     }
 
-    public Set<WebSocket> getPlayers() {
+    public Set<String> getPlayers() {
         return players;
     }
 

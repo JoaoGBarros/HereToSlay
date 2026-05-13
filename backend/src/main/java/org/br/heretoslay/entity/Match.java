@@ -1,5 +1,6 @@
 package org.br.heretoslay.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import org.br.heretoslay.auth.AuthService;
 import org.br.heretoslay.entity.Card.*;
 import org.br.heretoslay.entity.Card.CardEffects.CompositeCardEffect;
@@ -8,6 +9,7 @@ import org.br.heretoslay.entity.Card.CardEffects.StealHandEffect;
 import org.br.heretoslay.match.MatchService;
 import org.java_websocket.WebSocket;
 import org.json.JSONObject;
+import org.json.JSONPropertyIgnore;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -185,6 +187,7 @@ public class Match {
 
     }
 
+    @JsonIgnore
     public Map<String, List<Long>> getSelectedTargets() {
         Card pendingHero = players.get(turnOrder.get(currentPlayerTurnIndex)).getPendingHeroCard();
         if (pendingHero != null && pendingHero.getType() == CardType.HERO) {

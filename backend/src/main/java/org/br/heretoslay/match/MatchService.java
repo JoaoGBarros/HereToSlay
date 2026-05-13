@@ -198,15 +198,12 @@ public class MatchService {
     }
 
     public void publishToKafka(Long matchId, String message) {
-        ProducerRecord<String, String> record = new ProducerRecord<>("game-state-out", matchId.toString(), message);
+        List<String> targetIds = getPlayerIdsInMatch(matchId);
+        JSONObject wrapper = new JSONObject();
+        wrapper.put("targetPlayers", new JSONArray(targetIds));
+        wrapper.put("payload", new JSONObject(message));
+        ProducerRecord<String, String> record = new ProducerRecord<>("game-state-out", matchId.toString(), wrapper.toString());
         this.kafkaProducer.send(record);
-    }
-
-    public void broadcastToMatch(Long matchId, String message) {
-        Match match = matches.get(matchId);
-        if (match != null) {
-            match.broadcast(message);
-        }
     }
 
 

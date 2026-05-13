@@ -7,27 +7,23 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.br.heretoslay.auth.AuthService;
 import org.br.heretoslay.entity.Player;
-import org.br.heretoslay.lobby.LobbyService;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.net.InetSocketAddress;
 import java.time.Duration;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class HereToSlay extends WebSocketServer {
 
     private final AuthService authService = AuthService.getInstance();
-    private final LobbyService lobbyService = LobbyService.getInstance();
-    public final Map<Long, List<String>> activeMatches = new ConcurrentHashMap<>();
     private KafkaProducer<String, String> producer;
     private static HereToSlay instance;
+
 
 
     public HereToSlay(int port) {
@@ -67,19 +63,32 @@ public class HereToSlay extends WebSocketServer {
                 authService.handleMessage(conn, obj);
                 break;
             case "lobby":
-                lobbyService.handleMessage(conn, obj);
+                try {
+                    Player pLobby = authService.getPlayerByConnection(conn);
+                    if (pLobby == null) return;
+                    obj.put("playerId", pLobby.getId().toString());
+                    obj.put("username", pLobby.getUsername());
+                    String routingKey = obj.has("payload") && obj.getJSONObject("payload").has("lobbyId")
+                            ? String.valueOf(obj.getJSONObject("payload").getLong("lobbyId"))
+                            : pLobby.getId().toString();
+                    ProducerRecord<String, String> lobbyRecord = new ProducerRecord<>("lobby-actions-in", routingKey, obj.toString());
+                    producer.send(lobbyRecord);
+                } catch (Exception e) {
+                    System.err.println("Erro ao obter player para lobby: " + e.getMessage());
+                }
                 break;
-                case "match":
-                    try {
-                        Player p = authService.getPlayerByConnection(conn);
-                        if (p == null) return;
-                        obj.put("playerId", p.getId().toString());
-                        ProducerRecord<String, String> record = new ProducerRecord<>("game-actions-in", obj.get("id").toString(), obj.toString());
-                        producer.send(record);
-                    } catch (Exception e) {
-                        System.err.println("Erro ao encaminhar para o Kafka: " + e.getMessage());
-                    }
-                    break;
+
+            case "match":
+                try {
+                    Player p = authService.getPlayerByConnection(conn);
+                    if (p == null) return;
+                    obj.put("playerId", p.getId().toString());
+                    ProducerRecord<String, String> record = new ProducerRecord<>("game-actions-in", obj.get("id").toString(), obj.toString());
+                    producer.send(record);
+                } catch (Exception e) {
+                    System.err.println("Erro ao encaminhar para o Kafka: " + e.getMessage());
+                }
+                break;
 
         }
     }
@@ -115,40 +124,53 @@ public class HereToSlay extends WebSocketServer {
             kafkaServer = "localhost:9092";
         }
         consumerProps.put("bootstrap.servers", kafkaServer);
-        consumerProps.put("group.id", "heretoslay-gateway");
+        consumerProps.put("group.id", "heretoslay-gateway-" + java.util.UUID.randomUUID().toString());
         consumerProps.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
         consumerProps.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
 
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
-        consumer.subscribe(Collections.singletonList("game-state-out"));
+        consumer.subscribe(Arrays.asList("game-state-out", "lobby-state-out"));
 
         while (true) {
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
             for (ConsumerRecord<String, String> record : records) {
-                Long matchId = Long.parseLong(record.key());
+                String topic = record.topic();
                 String message = record.value();
-                broadcastToMatch(matchId, message);
+
+                if (topic.equals("game-state-out")) {
+                    JSONObject msgJson = new JSONObject(message);
+                    JSONArray targetPlayers = msgJson.getJSONArray("targetPlayers");
+                    String payload = msgJson.getJSONObject("payload").toString();
+                    for (int i = 0; i < targetPlayers.length(); i++) {
+                        WebSocket conn = authService.getConnectionByPlayerId(targetPlayers.getString(i));
+                        if (conn != null && conn.isOpen()) {
+                            conn.send(payload);
+                        }
+                    }
+
+                } else if (topic.equals("lobby-state-out")) {
+                    handleLobbyStateOut(message);
+                }
             }
         }
     }
 
-    public void sendToKafka(String topic, String key, String value) {
-        try {
-            ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
-            this.producer.send(record);
-        } catch (Exception e) {
-            System.err.println("Erro ao enviar mensagem para o Kafka: " + e.getMessage());
-        }
-    }
+    private void handleLobbyStateOut(String message) {
+        JSONObject msgJson = new JSONObject(message);
+        JSONArray targetPlayers = msgJson.getJSONArray("targetPlayers");
+        String payload = msgJson.getJSONObject("payload").toString();
 
-    private void broadcastToMatch(Long matchId, String message) {
-        List<String> playerIds = this.activeMatches.get(matchId);
-
-        if (playerIds != null) {
-            for (String playerId : playerIds) {
-                WebSocket conn = authService.getConnectionByPlayerId(playerId);
+        if (!targetPlayers.isEmpty() && targetPlayers.getString(0).equals("ALL")) {
+            for (WebSocket conn : getConnections()) {
+                if (authService.getPlayerByConnection(conn) != null) {
+                    conn.send(payload);
+                }
+            }
+        } else {
+            for (int i = 0; i < targetPlayers.length(); i++) {
+                WebSocket conn = authService.getConnectionByPlayerId(targetPlayers.getString(i));
                 if (conn != null && conn.isOpen()) {
-                    conn.send(message);
+                    conn.send(payload);
                 }
             }
         }
