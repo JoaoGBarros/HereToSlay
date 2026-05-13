@@ -1,6 +1,6 @@
 import './InGame.css';
 import deckImg from '../assets/deck.png';
-import { use, useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import bardIcon from '../assets/class-icons/bard.png';
 import warriorIcon from '../assets/class-icons/warrior.png';
 import mageIcon from '../assets/class-icons/mage.png';
@@ -14,13 +14,9 @@ import DiceComponent from './components/DiceComponent';
 import PartyComponent from './components/PartyComponent';
 import HandComponent from './components/HandComponent';
 import PlayerInfoComponent from './components/PlayerInfoComponent';
-import DiceBoardOrderComponent from './components/DiceBoardOrderComponent';
-import DiceBoardHeroComponent from './components/DiceBoardHeroComponent';
-import ChallengeButton from './components/ChallengeButton';
 import { playBackgroundMusic, playClassSound, playSound, type ClassSoundType } from '@/utils/SoundManager/SoundManager';
 import TurnIndicator from './components/TurnIndicator';
 import OrderSelectionScoreboard from './components/OrderSelectionScoreboard';
-import ChallengeRoll from './components/ChallengeRoll';
 import crownImg from '../assets/crown.png'
 import { classAvatars } from '@/utils/ClassImages';
 
@@ -45,7 +41,7 @@ function InGame() {
     const [isTransitioning, setIsTransitioning] = useState(false);
     const [hasPlayerChallenged, setHasPlayerChallenged] = useState(false);
     const [showTurnIndicator, setShowTurnIndicator] = useState(false);
-    const [pendingTurn, setPendingTurn] = useState<string | null>(null)
+    const [pendingTurn, setPendingTurn] = useState<string | null>(null);
     const [autoSwitchView, setAutoSwitchView] = useState(true);
     const [playersRolls, setPlayersRolls] = useState<{ [playerId: string]: number | null }>({});
     const [isDiceRollVisible, setIsDiceRollVisible] = useState(true);
