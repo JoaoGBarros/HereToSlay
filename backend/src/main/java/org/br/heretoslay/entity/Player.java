@@ -15,6 +15,10 @@ public class Player {
         this.status = GameStatus.ONLINE;
     }
 
+    public Player(){
+        this.status = GameStatus.ONLINE;
+    }
+
     public UUID getId() {
         return id;
     }
@@ -31,4 +35,11 @@ public class Player {
         this.status = status;
     }
 
+    public void setId(UUID id) {
+        this.id = id;
+    }
+
+    public void setUsername(String username){
+        this.username = username;
+    }
 }

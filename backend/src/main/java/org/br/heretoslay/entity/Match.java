@@ -301,12 +301,10 @@ public class Match {
 
         return new JSONObject()
                 .put("availablePartyLeaders", availablePartyLeaders)
-                .put("currentPlayerTurn", turnOrder.isEmpty() ? "" : AuthService.getInstance().getPlayerById(turnOrder.get(currentPlayerTurnIndex)).getId().toString())
+                .put("currentPlayerTurn", turnOrder.isEmpty() ? "" : turnOrder.get(currentPlayerTurnIndex))
                 .put("matchState", matchState.toString())
                 .put ("challengeWindowTime", challengeWindowDuration)
-                .put("challengerSet", challengers.stream()
-                        .map(conn -> AuthService.getInstance().getPlayerById(conn).getId())
-                        .collect(Collectors.toList()))
+                .put("challengerSet", new ArrayList<>(challengers))
                 .put("players", playersJson);
     }
 
@@ -601,11 +599,7 @@ public class Match {
         JSONObject rollResponse = new JSONObject();
         rollResponse.put("type", "roll_result");
         rollResponse.put("subtype", "duel_roll");
-        rollResponse.put("payload", duelRolls.entrySet().stream()
-                .collect(Collectors.toMap(
-                        entry -> AuthService.getInstance().getPlayerById(entry.getKey()).getId().toString(),
-                        Map.Entry::getValue
-                )));
+        rollResponse.put("payload", duelRolls);
         broadcast(rollResponse.toString());
 
         if (duelRolls.size() == 2) {
@@ -617,7 +611,7 @@ public class Match {
             resultMsg.put("subtype", "duel_result");
 
             if (heroRoll >= challengerRoll) {
-                resultMsg.put("winner", AuthService.getInstance().getPlayerById(turnOrder.get(currentPlayerTurnIndex)).getId());
+                resultMsg.put("winner", turnOrder.get(currentPlayerTurnIndex));
                 matchState = MatchState.CHALLENGE_WINDOW;
                 JSONObject matchUpdate = new JSONObject();
                 matchUpdate.put("type", "match");
@@ -656,7 +650,7 @@ public class Match {
                 currentHeroCard = null;
 
                 closeChallengeWindow();
-                resultMsg.put("winner", AuthService.getInstance().getPlayerById(duelChallenger).getId());
+                resultMsg.put("winner", duelChallenger);
 
             }
             resultMsg.put("Rolls", duelRolls);
@@ -666,6 +660,10 @@ public class Match {
             duelChallenger = null;
         }
 
+        }
+
+        public Long getMatchId() {
+            return matchId;
         }
     }
 

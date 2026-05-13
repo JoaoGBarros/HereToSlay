@@ -26,16 +26,23 @@ public class HereToSlay extends WebSocketServer {
     private final LobbyService lobbyService = LobbyService.getInstance();
     private final MatchService matchService = MatchService.getInstance();
     private KafkaProducer<String, String> producer;
+    private static HereToSlay instance;
+
 
     public HereToSlay(int port) {
         super(new InetSocketAddress(port));
         initKafka();
+        instance = this;
     }
 
     public static void main(String[] args) {
         int port = 8887;
         HereToSlay server = new HereToSlay(port);
         server.start();
+    }
+
+    public static HereToSlay getInstance() {
+        return instance;
     }
 
 
@@ -88,7 +95,11 @@ public class HereToSlay extends WebSocketServer {
 
     private void initKafka() {
         Properties producerProps = new Properties();
-        producerProps.put("bootstrap.servers", "localhost:9092");
+        String kafkaServer = System.getenv("KAFKA_BOOTSTRAP_SERVERS");
+        if (kafkaServer == null) {
+            kafkaServer = "localhost:9092";
+        }
+        producerProps.put("bootstrap.servers", kafkaServer);
         producerProps.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         producerProps.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         this.producer = new KafkaProducer<>(producerProps);
@@ -98,7 +109,11 @@ public class HereToSlay extends WebSocketServer {
 
     private void startKafkaConsumer() {
         Properties consumerProps = new Properties();
-        consumerProps.put("bootstrap.servers", "localhost:9092");
+        String kafkaServer = System.getenv("KAFKA_BOOTSTRAP_SERVERS");
+        if (kafkaServer == null) {
+            kafkaServer = "localhost:9092";
+        }
+        consumerProps.put("bootstrap.servers", kafkaServer);
         consumerProps.put("group.id", "heretoslay-gateway");
         consumerProps.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
         consumerProps.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
@@ -127,6 +142,15 @@ public class HereToSlay extends WebSocketServer {
             } else {
                 System.out.println("Aviso: Jogador " + playerId + " não encontrado ou desconectado.");
             }
+        }
+    }
+
+    public void sendToKafka(String topic, String key, String value) {
+        try {
+            ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
+            this.producer.send(record);
+        } catch (Exception e) {
+            System.err.println("Erro ao enviar mensagem para o Kafka: " + e.getMessage());
         }
     }
 }

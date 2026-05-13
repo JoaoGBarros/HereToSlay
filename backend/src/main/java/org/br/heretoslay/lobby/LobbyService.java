@@ -1,11 +1,14 @@
 package org.br.heretoslay.lobby;
 
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.br.heretoslay.HereToSlay;
 import org.br.heretoslay.auth.AuthService;
 import org.br.heretoslay.entity.Lobby;
 import org.br.heretoslay.entity.LobbyStatus;
 import org.br.heretoslay.entity.Player;
 import org.br.heretoslay.match.MatchService;
 import org.java_websocket.WebSocket;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.List;
@@ -66,10 +69,25 @@ public class LobbyService {
                 lobby.startCountdown(
                     () -> {
                         lobby.setStatus(LobbyStatus.IN_PROGRESS);
-                        List<Player> startingPlayers = lobby.getPlayers().stream()
-                                .map(playerConn -> AuthService.getInstance().getPlayerByConnection(playerConn))
-                                .toList();
-                        MatchService.getInstance().startMatch(lobby.getId(), startingPlayers);
+                        JSONArray playersArray = new JSONArray();
+                        for (WebSocket playerConn : lobby.getPlayers()) {
+                            Player p = AuthService.getInstance().getPlayerByConnection(playerConn);
+                            if (p != null) {
+                                JSONObject pJson = new JSONObject();
+                                pJson.put("id", p.getId().toString());
+                                pJson.put("username", p.getUsername());
+                                playersArray.put(pJson);
+                            }
+                        }
+                        JSONObject startMatchEvent = new JSONObject();
+                        startMatchEvent.put("id", lobby.getId());
+                        startMatchEvent.put("subtype", "start_match");
+                        startMatchEvent.put("players", playersArray);
+                        HereToSlay.getInstance().sendToKafka(
+                                "game-actions-in",
+                                lobby.getId().toString(),
+                                startMatchEvent.toString()
+                        );
                         JSONObject startMsg = new JSONObject();
                         startMsg.put("type", "lobby");
                         startMsg.put("subtype", "countdown_finished");
