@@ -28,6 +28,29 @@ services:
     depends_on:
       - kafka
 
+  game-engine:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.engine
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    depends_on:
+      - kafka
+    deploy:
+      replicas: 3
+
+  gateway:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.gateway
+    container_name: game-gateway
+    ports:
+      - "8887:8887"
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    depends_on:
+      - kafka
+
 volumes:
   kafka_data:
     driver: local

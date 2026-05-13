@@ -11,6 +11,7 @@ import org.java_websocket.WebSocket;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -70,6 +71,7 @@ public class LobbyService {
                     () -> {
                         lobby.setStatus(LobbyStatus.IN_PROGRESS);
                         JSONArray playersArray = new JSONArray();
+                        List<String> playerIds = new ArrayList<>();
                         for (WebSocket playerConn : lobby.getPlayers()) {
                             Player p = AuthService.getInstance().getPlayerByConnection(playerConn);
                             if (p != null) {
@@ -77,8 +79,10 @@ public class LobbyService {
                                 pJson.put("id", p.getId().toString());
                                 pJson.put("username", p.getUsername());
                                 playersArray.put(pJson);
+                                playerIds.add(p.getId().toString());
                             }
                         }
+                        HereToSlay.getInstance().activeMatches.put(lobby.getId(), playerIds);
                         JSONObject startMatchEvent = new JSONObject();
                         startMatchEvent.put("id", lobby.getId());
                         startMatchEvent.put("subtype", "start_match");

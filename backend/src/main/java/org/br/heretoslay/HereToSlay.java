@@ -8,7 +8,6 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.br.heretoslay.auth.AuthService;
 import org.br.heretoslay.entity.Player;
 import org.br.heretoslay.lobby.LobbyService;
-import org.br.heretoslay.match.MatchService;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
@@ -18,13 +17,15 @@ import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class HereToSlay extends WebSocketServer {
 
     private final AuthService authService = AuthService.getInstance();
     private final LobbyService lobbyService = LobbyService.getInstance();
-    private final MatchService matchService = MatchService.getInstance();
+    public final Map<Long, List<String>> activeMatches = new ConcurrentHashMap<>();
     private KafkaProducer<String, String> producer;
     private static HereToSlay instance;
 
@@ -131,26 +132,25 @@ public class HereToSlay extends WebSocketServer {
         }
     }
 
-    private void broadcastToMatch(Long matchId, String message) {
-        List<String> playerIds = matchService.getPlayerIdsInMatch(matchId);
-
-        for (String playerId : playerIds) {
-            WebSocket conn = authService.getConnectionByPlayerId(playerId);
-
-            if (conn != null && conn.isOpen()) {
-                conn.send(message);
-            } else {
-                System.out.println("Aviso: Jogador " + playerId + " não encontrado ou desconectado.");
-            }
-        }
-    }
-
     public void sendToKafka(String topic, String key, String value) {
         try {
             ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
             this.producer.send(record);
         } catch (Exception e) {
             System.err.println("Erro ao enviar mensagem para o Kafka: " + e.getMessage());
+        }
+    }
+
+    private void broadcastToMatch(Long matchId, String message) {
+        List<String> playerIds = this.activeMatches.get(matchId);
+
+        if (playerIds != null) {
+            for (String playerId : playerIds) {
+                WebSocket conn = authService.getConnectionByPlayerId(playerId);
+                if (conn != null && conn.isOpen()) {
+                    conn.send(message);
+                }
+            }
         }
     }
 }
