@@ -136,26 +136,30 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.gateway
+    ports:
+      - "8887:8887" # A porta do gateway continua exposta para conexão direta
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092
     depends_on:
       - kafka-init
     deploy:
-      replicas: 2
+      replicas: 1
     networks:
       - kafka-network
 
-  nginx-lb:
-     image: nginx:latest
-     container_name: game-load-balancer
-     ports:
-       - "8887:80"
-     volumes:
-       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-     depends_on:
-       - gateway
-     networks:
-       - kafka-network
+  # O nginx-lb foi temporariamente desativado para simplificar a depuração.
+  # A conexão será feita diretamente no gateway.
+  # nginx-lb:
+  #   image: nginx:latest
+  #   container_name: game-load-balancer
+  #   ports:
+  #     - "8887:80" # Esta linha causava o conflito de porta
+  #   volumes:
+  #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+  #   depends_on:
+  #     - gateway
+  #   networks:
+  #     - kafka-network
 
   lobby:
     build:
@@ -180,4 +184,3 @@ volumes:
 networks:
   kafka-network:
     driver: bridge
-
