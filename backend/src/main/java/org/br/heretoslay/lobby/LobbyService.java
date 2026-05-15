@@ -42,6 +42,7 @@ public class LobbyService {
         producerProps.put("bootstrap.servers", kafkaServer);
         producerProps.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
         producerProps.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        producerProps.put("acks", "all");  // Aguarda todas as replicas ISR confirmarem
         this.kafkaProducer = new KafkaProducer<>(producerProps);
 
         new Thread(this::startKafkaConsumer).start();
@@ -189,12 +190,43 @@ public class LobbyService {
                 String name = json.getJSONObject("payload").getString("name");
                 Long lobbyId = createLobby(maxPlayers, minPlayers, name);
 
+                // Adiciona criador como player do lobby
+                Lobby createdLobby = lobbies.get(lobbyId);
+                if (createdLobby != null) {
+                    createdLobby.addPlayer(playerId);
+                    createdLobby.setStatus(LobbyStatus.WAITING_FOR_PLAYERS);
+                }
+
+                // Envia confirmação de criação para o criador
                 JSONObject response = new JSONObject();
                 response.put("type", "lobby");
                 response.put("subtype", "create_success");
                 response.put("payload", new JSONObject().put("lobbyId", lobbyId));
-
                 sendToPlayer(playerId, response);
+
+                // Notifica criador sobre seu próprio lobby
+                if (createdLobby != null) {
+                    JSONArray creatorUsernamesArray = new JSONArray();
+                    for (String id : createdLobby.getPlayers()) {
+                        creatorUsernamesArray.put(playerUsernames.getOrDefault(id, "Unknown"));
+                    }
+
+                    JSONObject lobbyInfo = new JSONObject();
+                    lobbyInfo.put("id", lobbyId);
+                    lobbyInfo.put("name", name);
+                    lobbyInfo.put("playerAmount", createdLobby.getPlayers().size());
+                    lobbyInfo.put("maxPlayers", maxPlayers);
+                    lobbyInfo.put("username", creatorUsernamesArray);
+
+                    JSONObject creatorMsg = new JSONObject();
+                    creatorMsg.put("type", "lobby");
+                    creatorMsg.put("subtype", "lobby_update");
+                    creatorMsg.put("payload", lobbyInfo);
+
+                    broadcastToLobby(lobbyId, creatorMsg);
+                }
+
+                // Notifica todos sobre a nova lobby na lista
                 broadcastLobbies();
                 break;
 

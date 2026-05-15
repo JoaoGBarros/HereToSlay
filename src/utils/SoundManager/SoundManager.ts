@@ -63,7 +63,7 @@ export const playSound = (sound: SoundType) => {
     if (sfx) {
         backgroundMusic.fade(currentMusicVolume, DUCK_VOLUME, FADE_TIME);
         sfx.play();
-        sfx.on('end', () => {
+        sfx.once('end', () => {
             backgroundMusic.fade(DUCK_VOLUME, currentMusicVolume, FADE_TIME * 2);
         });
     }
@@ -75,7 +75,7 @@ export const playClassSound = (className: ClassSoundType) => {
     if (sfx) {
         backgroundMusic.fade(currentMusicVolume, DUCK_VOLUME, FADE_TIME);
         sfx.play();
-        sfx.on('end', () => {
+        sfx.once('end', () => {
             backgroundMusic.fade(DUCK_VOLUME, currentMusicVolume, FADE_TIME * 2);
         });
     }

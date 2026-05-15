@@ -1,9 +1,6 @@
-import { Card, CardHeader, CardBody, CardFooter } from "@heroui/card";
-import { Divider } from "@heroui/divider";
-import { Image } from "@heroui/image";
+import { Card, CardHeader, CardBody } from "@heroui/card";
 import './Games.css'
-import { use, useContext, useEffect, useState } from "react";
-import LobbyForm from "./lobby-form/LobbyForm";
+import { useContext, useEffect, useState } from "react";
 
 import {
     Modal,
@@ -13,9 +10,8 @@ import {
     ModalFooter,
     Button,
     useDisclosure,
-    Checkbox,
     Input,
-    Link,
+
 } from "@heroui/react";
 import WebSocketContext from "@/utils/WebSocketContext";
 import { useNavigate } from "react-router-dom";
@@ -30,24 +26,41 @@ function Games() {
     const socket = useContext(WebSocketContext);
     const navigate = useNavigate();
 
-    if (socket && socket.current) {
+    // Requisita lista inicial e registra listener para atualizações
+    useEffect(() => {
+        if (socket && socket.current) {
             socket.current.send(JSON.stringify({
                 type: 'lobby',
                 subtype: 'list'
             }));
 
-            socket.current.onmessage = (event: MessageEvent) => {
-                try {
-                    const data = JSON.parse(event.data);
-                    if (data.type === 'lobby' && data.subtype === 'list_response') {
-                        setLobbys(data.payload);
-                    }
-                } catch (e) {
-                    console.error('Erro ao processar mensagem:', e);
+            socket.current.onmessage = (event) => {
+              try {
+                const data = JSON.parse(event.data);
+                console.log("Games.tsx: Mensagem recebida:", data); // Log para todas as mensagens
+
+                if (data.type === 'lobby') {
+                  if (data.subtype === 'list_response') {
+                    console.log("Games.tsx: Recebeu lista de lobbies inicial:", data.payload);
+                    setLobbys(data.payload || []);
+                  } else if (data.subtype === 'list_update') {
+                    console.log("Games.tsx: Recebeu atualização de lobby:", data.payload);
+                    setLobbys(prevLobbys => {
+                      const existingIds = new Set(prevLobbys.map(l => l.id));
+                      // Adicionando tipo explícito para 'p' para corrigir o erro de 'any' implícito.
+                      const newLobbys = data.payload.filter((p: { id: number }) => !existingIds.has(p.id));
+                      return [...prevLobbys, ...newLobbys];
+                    });
+                  }
                 }
+              } catch (error) {
+                console.error('Erro ao processar mensagem:', error);
+              }
             };
         }
+    }, [socket]);
 
+    // Verifica autenticação
     useEffect(() => {
         const user = localStorage.getItem('currentPlayer');
         if (!user) {

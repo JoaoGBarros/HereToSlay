@@ -1,5 +1,4 @@
-import React, { createContext, useRef, useEffect } from "react"
-import type { MutableRefObject } from "react"
+import React, { useRef, useEffect } from "react"
 import WebSocketContext from "./WebSocketContext"
 
 
@@ -7,9 +6,15 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const wsRef = useRef<WebSocket | null>(null)
 
     useEffect(() => {
-        wsRef.current = new WebSocket("ws://localhost:8887")
+        const ws = new WebSocket("ws://localhost:8887");
+        wsRef.current = ws;
+
         return () => {
-            wsRef.current?.close()
+            if (ws.readyState === 1) { // OPEN
+                ws.close();
+            } else if (ws.readyState === 0) { // CONNECTING
+                ws.onopen = () => ws.close();
+            }
         }
     }, [])
 
