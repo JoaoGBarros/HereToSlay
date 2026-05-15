@@ -31,7 +31,6 @@ public class LobbyService {
 
     private LobbyService() {
         initKafka();
-        restoreStateFromKafka();
     }
 
     private void initKafka() {
@@ -46,6 +45,7 @@ public class LobbyService {
         this.kafkaProducer = new KafkaProducer<>(producerProps);
 
         new Thread(this::startKafkaConsumer).start();
+        new Thread(this::startStateStoreConsumer).start();
     }
 
     private void startKafkaConsumer() {
@@ -380,5 +380,38 @@ public class LobbyService {
             }
         }
         System.out.println("Restauração concluída! " + lobbies.size() + " lobbies ativos na memória.");
+    }
+
+    private void startStateStoreConsumer() {
+        System.out.println("Iniciando sincronização contínua de Lobbies (Replica Sync)...");
+        Properties props = new Properties();
+        String kafkaServer = System.getenv("KAFKA_BOOTSTRAP_SERVERS");
+        if (kafkaServer == null) kafkaServer = "localhost:9092";
+
+        props.put("bootstrap.servers", kafkaServer);
+        props.put("group.id", "lobby-state-restorer-" + UUID.randomUUID());
+        props.put("auto.offset.reset", "earliest");
+        props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+
+        KafkaConsumer<String, String> restorer = new KafkaConsumer<>(props);
+        restorer.subscribe(Collections.singletonList("lobby-state-store"));
+
+        while (true) {
+            ConsumerRecords<String, String> records = restorer.poll(Duration.ofMillis(200));
+            for (ConsumerRecord<String, String> record : records) {
+                try {
+                    Long lobbyId = Long.parseLong(record.key());
+                    if (record.value() == null) {
+                        lobbies.remove(lobbyId);
+                    } else {
+                        Lobby lobby = mapper.readValue(record.value(), Lobby.class);
+                        lobbies.put(lobby.getId(), lobby);
+                    }
+                } catch (Exception e) {
+                    System.err.println("Erro ao sincronizar lobby: " + e.getMessage());
+                }
+            }
+        }
     }
 }

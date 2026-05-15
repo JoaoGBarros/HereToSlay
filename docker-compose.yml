@@ -141,7 +141,7 @@ services:
     depends_on:
       - kafka-init
     deploy:
-      replicas: 1
+      replicas: 2
     networks:
       - kafka-network
 
