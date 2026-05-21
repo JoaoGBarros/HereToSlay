@@ -9,52 +9,55 @@ function Lobby() {
     const [usernames, setUsernames] = useState<string[]>([]);
     const [lobbyName, setLobbyName] = useState<string>("");
     const [countdown, setCountdown] = useState<number | null>(null);
-        const [minPlayers, setMinPlayers] = useState<number | null>(null);
+    const [minPlayers, setMinPlayers] = useState<number | null>(null);
     const [playerAmount, setPlayerAmount] = useState<number | null>(null);
     const navigate = useNavigate();
     const { id } = useParams();
     const socket = useContext(WebSocketContext);
 
-    if (socket && socket.current) {
-        socket.current.onmessage = (event: MessageEvent) => {
-            try {
-                const data = JSON.parse(event.data);
-                if (data.type === 'lobby' && data.subtype === 'lobby_update') {
-                    setUsernames(data.payload.username);
-                    setLobbyName(data.payload.name);
-                }
-
-                if (data.type === 'lobby' && data.subtype === 'leave_response') {
-                    navigate('/games');
-                }
-                if (data.type === 'lobby' && data.subtype === 'countdown_update') {
-                    setCountdown(data.payload.timeLeft);
-                    setPlayerAmount(data.payload.playerAmount);
-                    setMinPlayers(data.payload.minPlayers);
-                }
-
-                if(data.type === 'lobby' && data.subtype === 'countdown_finished') {
-                    navigate(`/match/${id}`);
-                }
-            } catch (e) {
-                console.error('Erro ao processar mensagem:', e);
-            }
-        };
-    }
-
     useEffect(() => {
-        if (socket && socket.current) {
+        if (socket && socket.current && id) {
+
+            // 1. Registra o listener PRIMEIRO para não perder nenhuma mensagem
+            socket.current.onmessage = (event: MessageEvent) => {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.type === 'lobby') {
+                        if (data.subtype === 'lobby_update') {
+                            setUsernames(data.payload.username);
+                            setLobbyName(data.payload.name);
+                        }
+
+                        if (data.subtype === 'leave_response') {
+                            navigate('/games');
+                        }
+
+                        if (data.subtype === 'countdown_update') {
+                            setCountdown(data.payload.timeLeft);
+                            setPlayerAmount(data.payload.playerAmount);
+                            setMinPlayers(data.payload.minPlayers);
+                        }
+
+                        if (data.subtype === 'countdown_finished') {
+                            navigate(`/match/${id}`);
+                        }
+                    }
+                } catch (e) {
+                    console.error('Erro ao processar mensagem no Lobby:', e);
+                }
+            };
+
+            // 2. DEPOIS de estar escutando, avisa o backend que entrou/precisa dos dados
             socket.current.send(JSON.stringify({
                 type: 'lobby',
                 subtype: 'join',
                 payload: {
-                    lobbyId: id
+                    lobbyId: Number(id) // Convertido para Number para bater com o getLong() do backend
                 }
             }));
-
         }
-
-    }, [id, socket]);
+    }, [id, socket, navigate]);
 
 
     function handleLeaveLobby() {
@@ -63,12 +66,11 @@ function Lobby() {
                 type: 'lobby',
                 subtype: 'leave',
                 payload: {
-                    lobbyId: id
+                    lobbyId: Number(id)
                 }
             }));
         }
     }
-
 
     return (
         <div className="games-container">

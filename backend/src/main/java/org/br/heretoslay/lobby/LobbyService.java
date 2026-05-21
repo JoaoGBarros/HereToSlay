@@ -70,9 +70,9 @@ public class LobbyService {
     }
 
     public Long createLobby(int maxPlayers, int minPlayers, String name) {
-        Lobby lobby = new Lobby((long)(lobbies.size() + 1), name, maxPlayers, minPlayers);
+        Long uniqueId = System.currentTimeMillis();
+        Lobby lobby = new Lobby(uniqueId, name, maxPlayers, minPlayers);
         lobbies.put(lobby.getId(), lobby);
-        persistStateToKafka(lobby);
         System.out.println("Lobby criado");
         return lobby.getId();
     }
@@ -149,15 +149,18 @@ public class LobbyService {
 
                             lobbies.remove(lobby.getId());
                             deleteStateFromKafka(lobby.getId());
+                            broadcastLobbies();
                         },
                         () -> sendCountdownUpdate(lobby)
                 );
                 sendCountdownUpdate(lobby);
+                broadcastLobbies();
             }
         } else {
             if (lobby.getCountdownTimeLeft() != -1) {
                 lobby.resetCountdown();
                 sendCountdownUpdate(lobby);
+                broadcastLobbies();
             }
         }
     }
@@ -193,7 +196,6 @@ public class LobbyService {
                 // Adiciona criador como player do lobby
                 Lobby createdLobby = lobbies.get(lobbyId);
                 if (createdLobby != null) {
-                    createdLobby.addPlayer(playerId);
                     createdLobby.setStatus(LobbyStatus.WAITING_FOR_PLAYERS);
                 }
 
@@ -228,6 +230,7 @@ public class LobbyService {
 
                 // Notifica todos sobre a nova lobby na lista
                 broadcastLobbies();
+                persistStateToKafka(createdLobby);
                 break;
 
             case "join":
@@ -235,7 +238,7 @@ public class LobbyService {
                 Lobby lobbyToJoin = lobbies.get(joinLobbyId);
 
                 if (lobbyToJoin != null) {
-                    if(lobbyToJoin.getPlayers().size() >= lobbyToJoin.getMaxPlayers()) {
+                    if(lobbyToJoin.getPlayers().size() >= lobbyToJoin.getMaxPlayers() && !lobbyToJoin.getPlayers().contains(playerId)) {
                         JSONObject fullResponse = new JSONObject();
                         fullResponse.put("type", "lobby");
                         fullResponse.put("subtype", "join_fail");
@@ -270,6 +273,7 @@ public class LobbyService {
 
                     broadcastToLobby(joinLobbyId, joinResponse);
                     checkAndHandleCountdown(lobbyToJoin);
+                    persistStateToKafka(lobbyToJoin);
                 }
                 break;
 
@@ -302,8 +306,8 @@ public class LobbyService {
                     leaveResponse.put("subtype", "leave_response");
                     leaveResponse.remove("payload");
                     sendToPlayer(playerId, leaveResponse);
-
                     checkAndHandleCountdown(lobbyToLeave);
+                    persistStateToKafka(lobbyToLeave);
                 }
                 break;
 
@@ -405,8 +409,18 @@ public class LobbyService {
                     if (record.value() == null) {
                         lobbies.remove(lobbyId);
                     } else {
-                        Lobby lobby = mapper.readValue(record.value(), Lobby.class);
-                        lobbies.put(lobby.getId(), lobby);
+                        Lobby parsedLobby = mapper.readValue(record.value(), Lobby.class);
+                        Lobby existingLobby = lobbies.get(parsedLobby.getId());
+
+                        if (existingLobby != null) {
+                            existingLobby.setName(parsedLobby.getName());
+                            existingLobby.setMaxPlayers(parsedLobby.getMaxPlayers());
+                            existingLobby.setMinPlayers(parsedLobby.getMinPlayers());
+                            existingLobby.setPlayers(parsedLobby.getPlayers());
+                            existingLobby.setStatus(parsedLobby.getStatus());
+                        } else {
+                            lobbies.put(parsedLobby.getId(), parsedLobby);
+                        }
                     }
                 } catch (Exception e) {
                     System.err.println("Erro ao sincronizar lobby: " + e.getMessage());

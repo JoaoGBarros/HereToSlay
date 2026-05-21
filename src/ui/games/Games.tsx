@@ -45,12 +45,9 @@ function Games() {
                     setLobbys(data.payload || []);
                   } else if (data.subtype === 'list_update') {
                     console.log("Games.tsx: Recebeu atualização de lobby:", data.payload);
-                    setLobbys(prevLobbys => {
-                      const existingIds = new Set(prevLobbys.map(l => l.id));
-                      // Adicionando tipo explícito para 'p' para corrigir o erro de 'any' implícito.
-                      const newLobbys = data.payload.filter((p: { id: number }) => !existingIds.has(p.id));
-                      return [...prevLobbys, ...newLobbys];
-                    });
+                    setLobbys(data.payload || []);
+                  }else if (data.subtype === 'create_success') {
+                      console.log("Games.tsx: Lobby criado com sucesso, redirecionando...", data.payload);
                   }
                 }
               } catch (error) {
@@ -58,7 +55,7 @@ function Games() {
               }
             };
         }
-    }, [socket]);
+    }, [socket, navigate]);
 
     // Verifica autenticação
     useEffect(() => {

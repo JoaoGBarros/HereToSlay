@@ -1,5 +1,7 @@
 package org.br.heretoslay.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import org.java_websocket.WebSocket;
 
 import java.util.HashSet;
@@ -7,6 +9,7 @@ import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Lobby {
 
     private Long id;
@@ -15,10 +18,16 @@ public class Lobby {
     private int minPlayers;
     private LobbyStatus status;
     private Set<String> players;
+    @JsonIgnore
     private transient Timer countdownTimer;
+    @JsonIgnore
     private transient int countdownTimeLeft = -1;
 
     public static final int COUNTDOWN_SECONDS = 5;
+
+
+    public Lobby() {
+    }
 
     public Lobby (Long id, String name, int maxPlayers, int minPlayers) {
         this.id = id;
@@ -35,7 +44,7 @@ public class Lobby {
 
     public void addPlayer(String id){
 
-        if(players.size() >= maxPlayers) {
+        if(players.size() >= maxPlayers && !players.contains(id)) {
             throw new IllegalStateException("Lobby is full");
         }
 
@@ -66,6 +75,27 @@ public class Lobby {
         return players;
     }
 
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public void setMaxPlayers(int maxPlayers) {
+        this.maxPlayers = maxPlayers;
+    }
+
+    public void setMinPlayers(int minPlayers) {
+        this.minPlayers = minPlayers;
+    }
+
+    public void setPlayers(Set<String> players) {
+        this.players = players;
+    }
+
+    @JsonIgnore
     public int getCountdownTimeLeft() {
         return countdownTimeLeft;
     }
@@ -79,12 +109,18 @@ public class Lobby {
         countdownTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
+                if (players.size() < minPlayers) {
+                    resetCountdown();
+                    if (onTick != null) onTick.run();
+                    return;
+                }
+
                 countdownTimeLeft--;
+
                 if (onTick != null) onTick.run();
+
                 if (countdownTimeLeft <= 0) {
-                    countdownTimer.cancel();
-                    countdownTimer = null;
-                    countdownTimeLeft = -1;
+                    resetCountdown();
                     if (onFinish != null) onFinish.run();
                 }
             }
