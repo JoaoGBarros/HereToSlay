@@ -56,6 +56,10 @@ public class HereToSlay extends WebSocketServer {
 
     @Override
     public void onMessage(WebSocket conn, String message) {
+
+        // TODO: para debugar retirar depois
+        System.out.println(" VVV [WebSocket] Recebi do navegador: " + message);
+
         JSONObject obj = new JSONObject(message);
         String type = obj.getString("type");
         switch (type) {
@@ -119,6 +123,10 @@ public class HereToSlay extends WebSocketServer {
     }
 
     private void startKafkaConsumer() {
+
+        // TODO: para debugar retirar depois
+        System.out.println(" ^^^ [WebSocket] Devolvendo novo estado para os jogadores via WebSocket!");
+
         Properties consumerProps = new Properties();
         String kafkaServer = System.getenv("KAFKA_BOOTSTRAP_SERVERS");
         if (kafkaServer == null) {
