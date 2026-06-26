@@ -27,6 +27,12 @@ public class GameRulesStreamsProcessor {
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
 
+        // Diminuindo a latencia para usar a tabela
+        config.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10);
+
+        // TODO: criar uma KTable para armazenar as infos de rolldice e chelleges
+
+
         StreamsBuilder builder = new StreamsBuilder();
 
         // Cria a Stream de entrada lendo o que o WebSocket postou
