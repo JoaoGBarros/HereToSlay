@@ -23,7 +23,7 @@ public class GameRulesStreamsProcessor {
         String kafkaServer = System.getenv("KAFKA_BOOTSTRAP_SERVERS");
         config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaServer != null ? kafkaServer : "localhost:9092");
 
-        // Define que chaves e valores trafegam como String (JSON) por padrão
+        // Configurando para que as chaves e valores trafegem como String (JSON) por padrão
         config.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
 
@@ -32,9 +32,14 @@ public class GameRulesStreamsProcessor {
         // Cria a Stream de entrada lendo o que o WebSocket postou
         KStream<String, String> inputActions = builder.stream("game-actions-in");
 
-        // Aplicação do Processamento Declarativo com as FUNÇÕES LAMBDA
+        // TODO: Debug, remover depois
+        inputActions.peek((key, value) -> {
+            // mensagem para debug
+            System.out.println(" ** [Kafka Streams] Recebendo ação do player: " + value);
+        });
+
         KStream<String, String> outputStates = inputActions
-                // LAMBDA 1: Filtra apenas mensagens válidas para evitar quebras, se a msg quebrar o jogo não para, só ignora a msg quebrada
+                // Filtra apenas mensagens válidas para evitar quebras, se a msg quebrar o jogo não para, só ignora a msg quebrada
                 .filter((key, value) -> {
                     try {
                         JSONObject obj = new JSONObject(value);
@@ -75,6 +80,11 @@ public class GameRulesStreamsProcessor {
 
         // Direciona o fluxo processado para o tópico de saída que o Gateway escuta
         outputStates.to("game-state-out");
+        // TODO: Debug, remover depois
+        outputStates.peek((key, value) -> {
+            // mensagem para debug
+            System.out.println(" ** [Kafka Streams] Enviando estado do jogo para o tópico 'game-state-out': " + value);
+        });
 
         // Inicia o motor de execução do Kafka Streams
         Topology topology = builder.build();
