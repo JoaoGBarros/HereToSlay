@@ -190,6 +190,9 @@ public class MatchService {
                 roll = json.getJSONObject("payload").getInt("roll");
                 match.processDuelRoll(playerId, roll);
                 break;
+            case "modifier":
+                Match matchModifier = matches.get(id);
+
 
             default:
                 System.out.println("Unknown match subtype: " + type);

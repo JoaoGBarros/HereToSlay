@@ -1,6 +1,7 @@
 package org.br.heretoslay.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import org.apache.kafka.common.protocol.types.Field;
 import org.br.heretoslay.entity.Card.*;
 import org.br.heretoslay.entity.Card.CardEffects.CompositeCardEffect;
 import org.br.heretoslay.entity.Card.CardEffects.DestroyCardEffect;
@@ -461,6 +462,11 @@ public class Match {
         broadcast(duelMsg.toString());
     }
 
+    private void applyModefier(String targetPlayer, Integer modifer){
+        GameState targetedPlayer = players.get(targetPlayer);
+        Integer lastRoll = targetedPlayer.getLastRoll();
+        targetedPlayer.setLastRoll(targetedPlayer.getLastRoll() != null ? lastRoll + modifer : null);
+    }
 
     private void closeChallengeWindow() {
         challengeWindowOpen = false;
