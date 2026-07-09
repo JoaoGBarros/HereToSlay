@@ -22,6 +22,7 @@ import crownImg from '../assets/crown.png'
 import { classAvatars } from '@/utils/ClassImages';
 import { addToast } from '@heroui/toast';
 import ModifierPicker, { type ModifierWindowState } from './components/ModifierPicker';
+import ActionHistoryPanel, { type ActionHistoryEntry } from './components/ActionHistoryPanel';
 
 function InGame() {
 
@@ -77,6 +78,7 @@ function InGame() {
     const [modifierWindow, setModifierWindow] = useState<ModifierWindowState | null>(null);
     const [pendingMonsterAttack, setPendingMonsterAttack] = useState<{ monsterId: number; playerId: string } | null>(null);
     const [playerTags, setPlayerTags] = useState<Record<string, { key: string; label: string }[]>>({});
+    const [actionHistory, setActionHistory] = useState<ActionHistoryEntry[]>([]);
 
     useEffect(() => {
         playBackgroundMusic();
@@ -197,7 +199,11 @@ function InGame() {
                     });
                 }
 
-                if (data.type === 'monitoring_alert') {
+                if (data.type === 'monitoring_alert' && data.situation === 'ACTION_HISTORY') {
+                    setActionHistory(data.extra?.history || []);
+                }
+
+                if (data.type === 'monitoring_alert' && data.situation !== 'ACTION_HISTORY') {
                     console.log(data)
                     addToast({
                         title: data.message,
@@ -216,6 +222,9 @@ function InGame() {
                             FOCUSING: `Focusing on ${playersData[data.extra.targetId]?.username || data.extra.targetId}`,
                             FOCUSED: 'Focused',
                             RNG_DIFF: 'RNG Diff',
+                            FIRST_BLOOD: 'First Blood',
+                            COMBO: 'Combo',
+                            GENEROUS_SOUL: 'Generous Soul',
                         };
                         const label = tagLabels[tagType] || tagType;
                         const tagKey = `${tagType}-${Date.now()}`;
@@ -620,6 +629,8 @@ function InGame() {
                     onPlay={() => setModifierWindow(null)}
                 />
             )}
+
+            <ActionHistoryPanel history={actionHistory} playersData={playersData} />
 
         </div>
     );
