@@ -3,13 +3,14 @@ import { PartyLeader } from "@/ui/games/common/cards/partyLeader/PartyLeader";
 import { useEffect, useRef, useState } from "react";
 import { useDrop } from "react-dnd";
 import { CARD_TYPE } from "@/ui/games/common/cards/handCards/HandCards";
+import MonsterComponent, { type MonsterData } from "./MonsterComponent";
 import './css/PartyComponent.css'
 
 interface PartyComponentProps {
     isPlayerTurn: boolean;
     currentPlayerData: any;
     partyLeaderSelection: boolean;
-    monsterCard: Array<any>;
+    monsters: Array<MonsterData>;
     availablePartyLeaders: Array<string>;
     socket: React.MutableRefObject<WebSocket | null> | null;
     id: string | undefined;
@@ -20,17 +21,18 @@ interface PartyComponentProps {
     cardIds?: Array<number>;
 }
 
-function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection, monsterCard,
+function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection, monsters,
     availablePartyLeaders, socket, id, currentPlayerIdx, matchState, loggedUserId, turn, cardIds }: PartyComponentProps) {
 
     const [heroPage, setHeroPage] = useState(0);
     const [currentHeroCards, setCurrentHeroCards] = useState<Array<any>>([]);
     const [heroPages, setHeroPages] = useState(0);
-    const heroesPerPage = 6;
+    const heroesPerPage = 3;
     const [selectedTargetCard, setSelectedTargetCard] = useState<number[] | null>(null);
     const [showTargetSign, setShowTargetSign] = useState(false);
     const [destroyedCardId, setDestroyedCardId] = useState<number | null>(null);
     const [isDestroying, setIsDestroying] = useState(false);
+    const [removalAnimation, setRemovalAnimation] = useState<"destroy-animation" | "steal-animation">("destroy-animation");
     const [locallyUsedCardIds, setLocallyUsedCardIds] = useState<number[]>([]);
     const destructionTimeout = useRef<NodeJS.Timeout | null>(null);
 
@@ -56,6 +58,7 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                     console.log("Destroying card animation for cardId:", data.payload.cardId);
                     setSelectedTargetCard(null);
                     setDestroyedCardId(data.payload.cardId);
+                    setRemovalAnimation(data.subtype === "steal_card" ? "steal-animation" : "destroy-animation");
                     setIsDestroying(true);
 
                     destructionTimeout.current = setTimeout(() => {
@@ -63,7 +66,7 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                         setDestroyedCardId(null);
                     }, 800);
                 }
-            } catch { }
+            } catch { /* empty */ }
         };
 
         ws.addEventListener("message", handleMessage);
@@ -214,124 +217,118 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
                     zIndex: 1000
                 }}>
                     {loggedUserId === turn ? (
-                        <span>Selecione cartas de outros jogadores</span>
+                        <span>Select cards from other players</span>
                     ) : (
-                        <span>{currentPlayerData?.username} está selecionando alvos...</span>
+                        <span>{currentPlayerData?.username} is selecting targets...</span>
                     )}
                 </div>
             )}
 
-            <div
-                className='ml-4 flex party-leader items-center gap-4'
-                style={{
-                    width: `${!partyLeaderSelection ? 30 + monsterCard.length * 60 : 20 + 5 * 15}%`,
-                    transition: 'width 0.3s'
-                }}
-            >
-
-                {partyLeaderSelection ? (
-                    <>
-                        {classes.map((leaderClass, index) => {
-                            const isSelectable = availablePartyLeaders.includes(leaderClass);
-                            return (
-                                <div
-                                    key={leaderClass}
-                                    style={{ animationDelay: `${index * 150}ms` }}
-                                    className={`card-appear ${!isSelectable ? 'grayscale' : ''}`}
-                                >
-                                    <PartyLeader
-                                        leader={leaderClass}
-                                        isSelectionStage={partyLeaderSelection}
-                                        isPlayerTurn={isPlayerTurn}
-                                        chooseLeader={isSelectable ? handleChoosePartyLeader : () => { }}
-                                    />
-                                </div>
-                            );
-                        })}
-                    </>
-
-                ) : (
-                    <>
-                        <div className={parseInt(currentPlayerIdx!) % 2 === 0 ? "leader-appear-animation-A" : "leader-appear-animation-B"}>
-                            {currentPlayerData?.leader && (
-                                <PartyLeader leader={currentPlayerData.leader} isSelectionStage={partyLeaderSelection} isPlayerTurn={isPlayerTurn} chooseLeader={handleChoosePartyLeader} />
-                            )}
-                            {monsterCard.map((card) => (
-                                <PartyLeader key={card.id} leader='BARD' isSelectionStage={partyLeaderSelection} isPlayerTurn={isPlayerTurn} chooseLeader={handleChoosePartyLeader} />
-                            ))}
-                        </div>
-                    </>
-
-                )}
-            </div>
-
-            {heroPages > 1 && heroPage > 0 && (
-                <button
-                    onClick={() => setHeroPage(heroPage - 1)}
-                    className="mx-2 px-2 py-1 bg-gray-200 rounded disabled:opacity-50 self-center"
-                >
-                    &lt;
-                </button>
-            )}
-
-            <div ref={dropRef} style={{
-                minHeight: "180px",
-                border: isOver && canDrop ? "2px solid #4ade80" : "2px dashed #aaa",
-                background: isOver && canDrop ? "#bbf7d0" : "transparent",
-                borderRadius: "12px",
-                transition: "all 0.2s",
-                padding: "16px",
-                width: "100%",
-            }}>
-                <div
-                    className='heroCard-area grid grid-cols-3 items-center'
-                    style={{
-                        width: `100%`,
-                        transition: 'width 0.3s'
-                    }}
-                >
-                    {currentHeroCards?.length > 0 && currentHeroCards?.map((card, index) => {
-                        const isSelectable = (
-                            matchState === "SELECTING_CARDS" &&
-                            isPlayerTurn &&
-                            currentPlayerIdx !== loggedUserId
-                        );
-                        const isSelected = selectedTargetCard?.includes(card.cardId) ?? false;
-                        const isDestroyed = destroyedCardId === card.cardId && isDestroying;
-                        const isUsed = (currentPlayerData?.usedCardIds?.includes(card.cardId) || locallyUsedCardIds.includes(card.cardId));
+            {partyLeaderSelection ? (
+                <div className="leader-picker-grid">
+                    {classes.map((leaderClass, index) => {
+                        const isSelectable = availablePartyLeaders.includes(leaderClass);
                         return (
                             <div
-                                key={card.cardId}
-                                className={`card-appear ${isDestroyed ? "destroy-animation" : ""} ${isUsed ? "grayscale" : ""}`}
-                                style={{
-                                    animationDelay: `${index * 100}ms`,
-                                    position: "relative"
-                                }}
+                                key={leaderClass}
+                                style={{ animationDelay: `${index * 150}ms` }}
+                                className={`card-appear ${!isSelectable ? 'grayscale' : ''}`}
                             >
-                                <PartyHero
-                                    id={card.cardId}
-                                    handleCardUse={useHeroCard}
+                                <PartyLeader
+                                    leader={leaderClass}
+                                    isSelectionStage={partyLeaderSelection}
                                     isPlayerTurn={isPlayerTurn}
-                                    isSelectable={isSelectable}
-                                    isSelected={isSelected}
-                                    onSelect={() => handleSelectPartyHeroTarget(card.cardId)}
-                                    onDeselect={() => handleDeselectPartyHeroTarget(card.cardId)}
-
+                                    chooseLeader={isSelectable ? handleChoosePartyLeader : () => { }}
                                 />
                             </div>
                         );
                     })}
                 </div>
-            </div>
+            ) : (
+                <div className="battlefield">
+                    <div className="monster-lane">
+                        <span className="monster-lane-label">Monsters</span>
+                        <div className="monster-lane-cards">
+                            {monsters.slice(0, 3).map((monster) => (
+                                <MonsterComponent key={monster.id} monster={monster} socket={socket} id={id} isPlayerTurn={isPlayerTurn} matchState={matchState} />
+                            ))}
+                        </div>
+                    </div>
 
-            {heroPages > 1 && (
-                <button
-                    disabled={heroPage === heroPages - 1}
-                    onClick={() => setHeroPage(heroPage + 1)}
-                    className="mx-2 px-2 py-1 bg-gray-200 rounded disabled:opacity-50 self-center"
-                >
-                    &gt;
-                </button>
+                    <div className="battlefield-row">
+                        <div className={`leader-frame battlefield-card-slot ${parseInt(currentPlayerIdx!) % 2 === 0 ? "leader-appear-animation-A" : "leader-appear-animation-B"}`}>
+                            <span className="leader-frame-ring" />
+                            {currentPlayerData?.leader && (
+                                <PartyLeader leader={currentPlayerData.leader} isSelectionStage={partyLeaderSelection} isPlayerTurn={isPlayerTurn} chooseLeader={handleChoosePartyLeader} className="leader-frame-card" />
+                            )}
+                        </div>
+
+                        <div
+                            ref={dropRef}
+                            className={`hero-drop-zone ${isOver && canDrop ? "hero-drop-zone-active" : ""}`}
+                        >
+                            {heroPages > 1 && heroPage > 0 && (
+                                <button
+                                    onClick={() => setHeroPage(heroPage - 1)}
+                                    className="hero-page-nav hero-page-nav-prev"
+                                >
+                                    &lt;
+                                </button>
+                            )}
+
+                            <div className='heroCard-area'>
+                                {currentHeroCards?.length > 0 ? currentHeroCards?.map((card, index) => {
+                                    const isSelectable = (
+                                        matchState === "SELECTING_CARDS" &&
+                                        isPlayerTurn &&
+                                        currentPlayerIdx !== loggedUserId
+                                    );
+                                    const isSelected = selectedTargetCard?.includes(card.cardId) ?? false;
+                                    const isDestroyed = destroyedCardId === card.cardId && isDestroying;
+                                    const isUsed = (currentPlayerData?.usedCardIds?.includes(card.cardId) || locallyUsedCardIds.includes(card.cardId));
+                                    return (
+                                        <div
+                                            key={card.cardId}
+                                            className={`card-appear ${isDestroyed ? removalAnimation : ""} ${isUsed ? "grayscale" : ""}`}
+                                            style={{
+                                                animationDelay: `${index * 100}ms`,
+                                                position: "relative"
+                                            }}
+                                        >
+                                            <PartyHero
+                                                id={card.cardId}
+                                                cardName={card.cardName}
+                                                heroClass={card.heroClass}
+                                                diceValue={card.diceValue}
+                                                width={170}
+                                                height={238}
+                                                handleCardUse={useHeroCard}
+                                                isPlayerTurn={isPlayerTurn}
+                                                isSelectable={isSelectable}
+                                                isSelected={isSelected}
+                                                onSelect={() => handleSelectPartyHeroTarget(card.cardId)}
+                                                onDeselect={() => handleDeselectPartyHeroTarget(card.cardId)}
+
+                                            />
+                                        </div>
+                                    );
+                                }) : (
+                                    <div className="hero-drop-zone-empty">Drag a hero from your hand here</div>
+                                )}
+                            </div>
+
+                            {heroPages > 1 && (
+                                <button
+                                    disabled={heroPage === heroPages - 1}
+                                    onClick={() => setHeroPage(heroPage + 1)}
+                                    className="hero-page-nav hero-page-nav-next"
+                                >
+                                    &gt;
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
             )}
         </>
     );

@@ -1,0 +1,25 @@
+[
+  {
+    "id": "cmt_484facf938fa21f3",
+    "planId": "local-here-to-slay-etapa2",
+    "parentCommentId": null,
+    "sectionId": null,
+    "kind": "comment",
+    "status": "open",
+    "anchor": null,
+    "message": "Use these question answers to revise the plan:\nQuestion block: hts-open-questions\n- O \"evento composto\" da Etapa 1 é mesmo a resolução de desafio/duelo (play_card → challenge window → duelo → resultado)?: Other: É o conjunto do processamento dos dados. Exemplo, o usuario tomar uma ação e o server responder com um novo estado\n- As 9 recompensas reativas de monstro (que exigem um sistema de hooks em Match.java) entram no MVP ou ficam para depois do prazo?: Precisam entrar no MVP\n- A direção visual de carta 100% CSS (sem ilustração própria) está de acordo, ou tem arte/referência específica para seguir?: As artes serão colacadas no assets/heroes/*class*/*class*-(1/2/3/4...)",
+    "createdBy": "human",
+    "authorEmail": "jgabrieldebarro@gmail.com",
+    "authorName": "Jgabrieldebarro",
+    "resolutionTarget": "agent",
+    "mentions": [],
+    "mentionsJson": null,
+    "resolvedBy": null,
+    "resolvedAt": null,
+    "consumedAt": null,
+    "deletedAt": null,
+    "deletedBy": null,
+    "createdAt": "2026-07-08T17:00:36.917Z",
+    "updatedAt": "2026-07-08T17:00:36.917Z"
+  }
+]

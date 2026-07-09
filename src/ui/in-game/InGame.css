@@ -1,7 +1,12 @@
 .ingame-background {
-    background-image: url('../assets/ingame.png');
-    background-size: cover;
+    background-image:
+        radial-gradient(ellipse at 50% 0%, rgba(91, 67, 144, 0.16), transparent 55%),
+        linear-gradient(180deg, var(--gm-void) 0%, var(--gm-void-soft) 55%, var(--gm-void) 100%),
+        url('../assets/ingame.png');
+    background-size: cover, cover, cover;
+    background-blend-mode: normal, multiply, luminosity;
     background-repeat: no-repeat;
+    font-family: var(--gm-font-body);
     width: 100vw;
     height: 100vh;
     align-items: flex-start;
@@ -9,20 +14,54 @@
     justify-content: center;
     display: flex;
     flex-direction: column;
-    gap: 30px;
+    gap: 14px;
     overflow: hidden;
     position: relative;
 }
 
+.ingame-background::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background: radial-gradient(ellipse at center, transparent 40%, rgba(0, 0, 0, 0.6) 100%);
+    box-shadow: inset 0 0 0 6px rgba(209, 164, 65, 0.06);
+    animation: torchFlicker 6s ease-in-out infinite;
+}
+
+@keyframes torchFlicker {
+    0%, 100% { opacity: 1; }
+    45% { opacity: 0.92; }
+    50% { opacity: 1; }
+    72% { opacity: 0.96; }
+}
+
+.ingame-background > * {
+    position: relative;
+    z-index: 1;
+}
+
 .enemy-area {
-    background: rgba(165, 42, 42, 0.432);
+    background: rgba(140, 42, 58, 0.35);
     width: 100%;
     height: 50%;
 }
 
 .hand-area {
     width: 100%;
-    height: 25%;
+    height: 28%;
+    position: relative;
+}
+
+.hand-area::before {
+    content: "";
+    position: absolute;
+    top: -8px;
+    left: 6%;
+    right: 6%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(209, 164, 65, 0.5), transparent);
 }
 
 .stats-area {
@@ -40,18 +79,30 @@
 }
 
 .party-area {
-    background: repeating-linear-gradient(135deg,
-            #e2c290 0px,
-            #e2c290 40px,
-            #d1b07a 40px,
-            #d1b07a 80px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(80, 50, 20, 0.12);
-    border: 6px solid #b48a5a;
+    background:
+        repeating-linear-gradient(135deg,
+            rgba(255, 255, 255, 0.015) 0px,
+            rgba(255, 255, 255, 0.015) 2px,
+            transparent 2px,
+            transparent 40px),
+        radial-gradient(ellipse at 50% 30%, #2c2015 0%, #17110b 70%);
+    box-shadow: var(--gm-shadow-deep), inset 0 0 60px rgba(0, 0, 0, 0.5);
+    border: 1px solid rgba(209, 164, 65, 0.4);
+    border-radius: 14px;
     width: 100%;
-    height: 50%;
+    height: 60%;
     position: relative;
     overflow: hidden;
     perspective: 800px;
+}
+
+.party-area::after {
+    content: "";
+    position: absolute;
+    inset: 6px;
+    border: 1px solid rgba(209, 164, 65, 0.18);
+    border-radius: 10px;
+    pointer-events: none;
 }
 
 .action-area {
@@ -69,6 +120,9 @@
 
 .versus {
     font-size: xx-large;
+    font-family: var(--gm-font-display);
+    color: var(--gm-gold-bright);
+    text-shadow: 0 0 18px rgba(209, 164, 65, 0.7), 0 2px 4px rgba(0, 0, 0, 0.8);
 }
 
 /* Animações */
@@ -201,6 +255,80 @@
   animation: slideInLeft 0.7s cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }
 
+.monster-roll-banner {
+  padding: 18px 28px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, rgba(74, 22, 22, 0.85), rgba(20, 8, 8, 0.9));
+  border: 2px solid var(--gm-garnet-bright);
+  box-shadow: var(--gm-shadow-deep);
+  font-family: var(--gm-font-ui);
+}
+
+.monster-roll-banner-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--gm-parchment-dim);
+}
+
+.monster-roll-banner-name {
+  font-family: var(--gm-font-display);
+  font-size: 1.6rem;
+  color: var(--gm-gold-bright);
+  text-shadow: 0 0 12px rgba(243, 212, 136, 0.4);
+}
+
+.monster-roll-banner-threshold {
+  font-size: 0.8rem;
+  color: #e2acac;
+}
+
+.roll-breakdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-top: 18px;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 16px;
+  background: linear-gradient(160deg, rgba(36, 26, 18, 0.95), rgba(18, 13, 10, 0.97));
+  border: 1px solid rgba(209, 164, 65, 0.4);
+  border-radius: 10px;
+  box-shadow: var(--gm-shadow-deep);
+  font-family: var(--gm-font-ui);
+  z-index: 15;
+}
+
+.roll-breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.78rem;
+  color: var(--gm-parchment-dim);
+}
+
+.roll-breakdown-base {
+  color: var(--gm-parchment);
+  font-weight: 700;
+}
+
+.roll-breakdown-modifier {
+  color: var(--gm-violet-bright);
+}
+
+.roll-breakdown-total {
+  margin-top: 4px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(209, 164, 65, 0.3);
+  color: var(--gm-gold-bright);
+  font-family: var(--gm-font-display);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
 @keyframes slideInUp {
   from {
     opacity: 0;
@@ -267,6 +395,20 @@
     transform: translateY(0) scale(1);
     opacity: 1;
   }
+}
+
+.duel-panel {
+  border-radius: 14px;
+  box-shadow: var(--gm-shadow-deep);
+  border: 1px solid rgba(209, 164, 65, 0.3);
+}
+
+.duel-panel-hero {
+  background: linear-gradient(160deg, rgba(47, 125, 99, 0.55), rgba(18, 13, 10, 0.9));
+}
+
+.duel-panel-challenger {
+  background: linear-gradient(200deg, rgba(140, 42, 58, 0.55), rgba(18, 13, 10, 0.9));
 }
 
 .challenge-roll .hero {

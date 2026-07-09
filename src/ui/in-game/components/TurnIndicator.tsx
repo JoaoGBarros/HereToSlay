@@ -14,22 +14,19 @@ function TurnIndicator({ playerName, leader }: TurnIndicatorProps) {
     return (
         <div className="turn-indicator-container" onAnimationEnd={() => setSlideIn(false)}>
             <div className='turn-indicator-background'>
+                <span className="turn-indicator-rule turn-indicator-rule-top" />
                 <div className='turn-indicator-glow flex-row'>
                     <div className='turn-indicator-class mr-20'>
                         <img
                             src={classAvatars[leader]}
-                            style={{
-                                width: "200px",
-                                height: "200px",
-                                borderRadius: "50%",
-                                objectFit: "cover"
-                            }}
+                            className="turn-indicator-avatar"
                         />
                     </div>
                     <h1 className="turn-indicator-text">
-                        Turno de {playerName}
+                        {playerName}'s Turn
                     </h1>
                 </div>
+                <span className="turn-indicator-rule turn-indicator-rule-bottom" />
             </div>
         </div>
     );

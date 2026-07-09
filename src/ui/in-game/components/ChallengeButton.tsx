@@ -12,7 +12,7 @@ interface ChallengeButtonProps {
 }
 
 function ChallengeButton({ socket, id, progress, timeRemaining, canUse }: ChallengeButtonProps) {
-    const conicGradient = `conic-gradient( #1100ffff ${progress * 3.6}deg, transparent ${progress * 3.6}deg)`;
+    const conicGradient = `conic-gradient( #d1a441 ${progress * 3.6}deg, transparent ${progress * 3.6}deg)`;
     if (timeRemaining <= 0.1) {
         timeRemaining = 0;
     }
@@ -36,7 +36,7 @@ function ChallengeButton({ socket, id, progress, timeRemaining, canUse }: Challe
 
             <button onClick={handleChallengeClick}>
                 <ElectricBorder
-                    color="#035bffd8"
+                    color="#d1a441d8"
                     speed={0.7}
                     chaos={1.5}
                     thickness={7}
@@ -77,30 +77,12 @@ function ChallengeButton({ socket, id, progress, timeRemaining, canUse }: Challe
             </button>
 
             {showTooltip && (
-                <div
-                    style={{
-                        position: "absolute",
-                        bottom: "100%",
-                        left: "50%",
-                        transform: "translateX(-50%)",
-                        marginBottom: "8px",
-                        background: "#fffbe6",
-                        color: "#b48a5a",
-                        border: "1px solid #e2b007",
-                        borderRadius: "8px",
-                        padding: "6px 16px",
-                        boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                        fontWeight: "bold",
-                        fontSize: "16px",
-                        whiteSpace: "nowrap",
-                        zIndex: 100,
-                    }}
-                >
-                    Required 1 Challenge card
+                <div className="gm-tooltip" style={{ position: "absolute", bottom: "100%", marginBottom: "8px" }}>
+                    {canUse ? "Challenge this hero" : "You already challenged this window"}
                 </div>
             )}
             {timeRemaining > 0 && (
-                <p className="text-center mt-2 text-white">{`Tempo restante: ${timeRemaining.toFixed(1)}s`}</p>
+                <p className="text-center mt-2" style={{ color: 'var(--gm-parchment)', fontFamily: 'var(--gm-font-ui)' }}>{`Time left: ${timeRemaining.toFixed(1)}s`}</p>
             )}
         </div>
     );

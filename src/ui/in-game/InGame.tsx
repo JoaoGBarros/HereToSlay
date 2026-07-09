@@ -1,3 +1,4 @@
+import './theme.css';
 import './InGame.css';
 import deckImg from '../assets/deck.png';
 import { useContext, useEffect, useState } from 'react';
@@ -19,6 +20,8 @@ import TurnIndicator from './components/TurnIndicator';
 import OrderSelectionScoreboard from './components/OrderSelectionScoreboard';
 import crownImg from '../assets/crown.png'
 import { classAvatars } from '@/utils/ClassImages';
+import { addToast } from '@heroui/toast';
+import ModifierPicker, { type ModifierWindowState } from './components/ModifierPicker';
 
 function InGame() {
 
@@ -70,11 +73,11 @@ function InGame() {
 
     const { id } = useParams();
 
-    const monsterCard = [
-        { id: 1, name: "Goblin" },
-        // { id: 2, name: "Orc" },
-        // { id: 3, name: "Dragon" },
-    ]
+    const [monsters, setMonsters] = useState<any[]>([]);
+    const [modifierWindow, setModifierWindow] = useState<ModifierWindowState | null>(null);
+    const [pendingMonsterAttack, setPendingMonsterAttack] = useState<{ monsterId: number; playerId: string } | null>(null);
+    const [playerTags, setPlayerTags] = useState<Record<string, { key: string; label: string }[]>>({});
+
     useEffect(() => {
         playBackgroundMusic();
     }, []);
@@ -97,6 +100,8 @@ function InGame() {
                         setAvailablePartyLeaders(data.payload.availablePartyLeaders || []);
                         setChallengeWindowTime(data.payload.challengeWindowTime || 0);
                         setHasPlayerChallenged((data.payload.challengerSet || []).includes(loggedUserId));
+                        setMonsters(data.payload.monsters || []);
+                        setPendingMonsterAttack(data.payload.pendingMonsterAttack || null);
                     } else if (data.subtype === 'order_selection_tie') {
                         setPlayersData(data.payload.players);
                     } else if (data.subtype === 'challenge_window_open') {
@@ -110,6 +115,10 @@ function InGame() {
                     } else if (data.subtype === 'duel_result') {
                         console.log("Duel Result: ", data.winner);
                         setWinnerId(data.winner);
+                    } else if (data.subtype === 'modifier_window_open') {
+                        setModifierWindow(data.payload);
+                    } else if (data.subtype === 'modifier_window_closed') {
+                        setModifierWindow(null);
                     }
                 }
 
@@ -143,6 +152,67 @@ function InGame() {
                     setMaxSelectableCards(data.payload.maxTargets || 1);
                 }
 
+                if (data.type === 'match' && data.subtype === 'modifier_played') {
+                    const casterName = playersData[data.payload.playerId]?.username || data.payload.playerId;
+                    const targetName = playersData[data.payload.targetPlayerId]?.username || data.payload.targetPlayerId;
+                    const value = data.payload.value;
+                    addToast({
+                        title: `${casterName} played a Modifier (${value > 0 ? '+' : ''}${value}) on ${targetName}`,
+                        color: value > 0 ? 'success' : 'danger',
+                        timeout: 4000,
+                    });
+                }
+
+                if (data.type === 'animation' && (data.subtype === 'monster_slain' || data.subtype === 'monster_fight_back' || data.subtype === 'monster_survives')) {
+                    const attackerName = playersData[data.payload.playerId]?.username || data.payload.playerId;
+                    const monsterName = data.payload.monsterName;
+                    const roll = data.payload.roll;
+                    const messages: Record<string, string> = {
+                        monster_slain: `${attackerName} defeated ${monsterName}! (Roll: ${roll})`,
+                        monster_fight_back: `${monsterName} fought back against ${attackerName}! (Roll: ${roll})`,
+                        monster_survives: `${monsterName} survived ${attackerName}'s attack. (Roll: ${roll})`,
+                    };
+                    addToast({
+                        title: messages[data.subtype],
+                        color: data.subtype === 'monster_slain' ? 'success' : data.subtype === 'monster_fight_back' ? 'danger' : 'warning',
+                        timeout: 4000,
+                    });
+                }
+
+                if (data.type === 'monitoring_alert') {
+                    addToast({
+                        title: data.message,
+                        description: data.situation === 'TURNING_POINT' || data.situation === 'CHAIN_REACTION'
+                            ? 'Detected by the monitoring service (Kafka Streams)'
+                            : undefined,
+                        color: 'primary',
+                        timeout: 5000,
+                    });
+
+                    const taggedPlayerId = data.extra?.taggedPlayerId;
+                    const tagType = data.extra?.tagType;
+                    if (taggedPlayerId && tagType) {
+                        const tagLabels: Record<string, string> = {
+                            FREQUENT_BUYER: 'Frequent Buyer',
+                            FOCUSING: `Focusing on ${playersData[data.extra.targetId]?.username || data.extra.targetId}`,
+                            FOCUSED: 'Focused',
+                            RNG_DIFF: 'RNG Diff',
+                        };
+                        const label = tagLabels[tagType] || tagType;
+                        const tagKey = `${tagType}-${Date.now()}`;
+                        setPlayerTags((prev) => ({
+                            ...prev,
+                            [taggedPlayerId]: [...(prev[taggedPlayerId] || []), { key: tagKey, label }],
+                        }));
+                        setTimeout(() => {
+                            setPlayerTags((prev) => ({
+                                ...prev,
+                                [taggedPlayerId]: (prev[taggedPlayerId] || []).filter((t) => t.key !== tagKey),
+                            }));
+                        }, 20000);
+                    }
+                }
+
             } catch (error) {
                 console.error("Error parsing WebSocket message:", error);
             }
@@ -163,13 +233,14 @@ function InGame() {
         const needsToRollForOrder = matchState === "ORDER_SELECTION" && player.lastRoll === null;
         const needsToRollForHero = player.pendingHeroCard != null;
         const needsToRollForChallenge = matchState === "CHALLENGE_ROLL" && (currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent);
+        const needsToRollForMonster = matchState === "WAITING_MONSTER_ROLL" && pendingMonsterAttack?.playerId === currentPlayerIdx;
 
-        if (needsToRollForOrder || needsToRollForHero || needsToRollForChallenge) {
+        if (needsToRollForOrder || needsToRollForHero || needsToRollForChallenge || needsToRollForMonster) {
             setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: false }));
         } else {
             setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
         }
-    }, [currentPlayerIdx, playersData, matchState, challengeHero, challengeOpponent]);
+    }, [currentPlayerIdx, playersData, matchState, challengeHero, challengeOpponent, pendingMonsterAttack]);
 
 
     useEffect(() => {
@@ -317,6 +388,7 @@ function InGame() {
 
                     <GameHeader
                         playersData={playersData}
+                        playerTags={playerTags}
                         partyLeaderSelection={partyLeaderSelection}
                         isPlayerTurn={isPlayerTurn}
                         diceRolled={diceRolled[currentPlayerIdx]}
@@ -351,7 +423,7 @@ function InGame() {
                                     // Challenge view
                                     <>
                                         <div className="challenge-roll w-full flex items-center h-full relative">
-                                            <div className="hero bg-blue-600 p-4 rounded-lg flex flex-col items-center w-[50%] h-full z-10">
+                                            <div className="hero duel-panel duel-panel-hero p-4 flex flex-col items-center w-[50%] h-full z-10">
                                                 <div className='player-info flex items-center flex-col'>
                                                     <img
                                                         src={classAvatars[playersData[challengeHero]?.leader]}
@@ -398,7 +470,7 @@ function InGame() {
                                                 )}
 
                                             </div>
-                                            <div className="challenger w-[50%] bg-red-600 p-4 rounded-lg flex flex-col items-center h-full z-10">
+                                            <div className="challenger duel-panel duel-panel-challenger p-4 flex flex-col items-center w-[50%] h-full z-10">
                                                 <div className='player-info flex items-center flex-col'>
                                                     <img
                                                         src={classAvatars[playersData[challengeOpponent]?.leader]}
@@ -467,6 +539,9 @@ function InGame() {
                                             isPlayerChallenger={isPlayerChallenger}
                                             challengeWindowDuration={challengeWindowTime}
                                             isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
+                                            isMonsterRoll={matchState === "WAITING_MONSTER_ROLL" && pendingMonsterAttack?.playerId === currentPlayerIdx}
+                                            monster={monsters.find((m) => m.id === pendingMonsterAttack?.monsterId) ?? null}
+                                            playersData={playersData}
                                         />
 
                                         {isDiceRollVisible && matchState === "ORDER_SELECTION" && (
@@ -479,7 +554,7 @@ function InGame() {
                                     isPlayerTurn={isPlayerTurn}
                                     currentPlayerData={playersData[currentPlayerIdx]}
                                     partyLeaderSelection={partyLeaderSelection}
-                                    monsterCard={monsterCard}
+                                    monsters={monsters}
                                     availablePartyLeaders={availablePartyLeaders}
                                     socket={socket}
                                     id={id}
@@ -494,7 +569,7 @@ function InGame() {
                     </div>
 
                     {!isTransitioning &&
-                        <div className='hand-area flex relative row mt-10'>
+                        <div className='hand-area flex relative row mt-2'>
                             <PlayerInfoComponent currentPlayerData={playersData[currentPlayerIdx]} />
                             <HandComponent
                                 currentPlayerData={playersData[currentPlayerIdx]}
@@ -516,6 +591,16 @@ function InGame() {
                         <TurnIndicator playerName={playersData[turn]?.username || "Player"} key={turn} leader={playersData[turn]?.leader || "BARD"} />
                     )}</>)}
 
+            {modifierWindow && (
+                <ModifierPicker
+                    window={modifierWindow}
+                    hand={playersData[loggedUserId]?.hand || []}
+                    playersData={playersData}
+                    socket={socket}
+                    id={id}
+                    onPlay={() => setModifierWindow(null)}
+                />
+            )}
 
         </div>
     );

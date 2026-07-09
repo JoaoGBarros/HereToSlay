@@ -1,9 +1,9 @@
 import { PartyHero } from "@/ui/games/common/cards/partyHero/PartyHero";
-import { Card } from "@heroui/card";
-import { use, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Die, useDie } from "react-dice-3d";
 import { playSound } from '@/utils/SoundManager/SoundManager';
 import ChallengeButton from "./ChallengeButton";
+import type { MonsterData } from "./MonsterComponent";
 
 interface DiceComponentProps {
     currentPlayerIdx: string;
@@ -17,10 +17,13 @@ interface DiceComponentProps {
     isDuel: boolean;
     canUse: boolean;
     isDiceRollVisible: boolean;
+    isMonsterRoll?: boolean;
+    monster?: MonsterData | null;
+    playersData?: Record<string, any>;
 }
 
 
-function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerData, pendingHeroCard, id, isPlayerChallenger, challengeWindowDuration, isDuel, canUse, isDiceRollVisible }: DiceComponentProps) {
+function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerData, pendingHeroCard, id, isPlayerChallenger, challengeWindowDuration, isDuel, canUse, isDiceRollVisible, isMonsterRoll, monster, playersData }: DiceComponentProps) {
     const [dice1Result, setDice1ResultState] = useState<number | null>(null);
     const [dice2Result, setDice2ResultState] = useState<number | null>(null);
     const [isDiceDisabled, setIsDiceDisabled] = useState(false);
@@ -29,6 +32,34 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
     const [showResult, setShowResult] = useState(false);
     const [rolledValue, setRolledValue] = useState<number | null>(null);
     const [minValue, setMinValue] = useState<number | null>(null);
+    const [lastPendingHeroCard, setLastPendingHeroCard] = useState<any>(null);
+    const [collectedModifiers, setCollectedModifiers] = useState<{ label: string; value: number }[]>([]);
+
+    useEffect(() => {
+        if (currentPlayerData?.pendingHeroCard) {
+            setLastPendingHeroCard(currentPlayerData.pendingHeroCard);
+        }
+    }, [currentPlayerData?.pendingHeroCard]);
+
+    useEffect(() => {
+        setCollectedModifiers([]);
+    }, [currentPlayerIdx, pendingHeroCard, isPlayerChallenger, isMonsterRoll]);
+
+    useEffect(() => {
+        if (!socket || !socket.current) return;
+        const ws = socket.current;
+        const handleModifier = (event: MessageEvent) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'match' && data.subtype === 'modifier_played' && data.payload.targetPlayerId === currentPlayerIdx) {
+                    const casterName = playersData?.[data.payload.playerId]?.username || 'Someone';
+                    setCollectedModifiers((prev) => [...prev, { label: `Modifier by ${casterName}`, value: data.payload.value }]);
+                }
+            } catch { }
+        };
+        ws.addEventListener('message', handleModifier);
+        return () => ws.removeEventListener('message', handleModifier);
+    }, [socket, currentPlayerIdx, playersData]);
 
     useEffect(() => {
         if (socket && socket.current) {
@@ -107,6 +138,18 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
                     return;
                 }
 
+                if (isMonsterRoll) {
+                    socket.current.send(JSON.stringify({
+                        type: 'match',
+                        subtype: 'process_monster_roll',
+                        id: id,
+                        payload: {
+                            roll: dice1Result + dice2Result,
+                        }
+                    }));
+                    setIsDiceDisabled(true);
+                    return;
+                }
 
             }
         }
@@ -120,12 +163,35 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
     const dice1 = useDie("dice-1");
     const dice2 = useDie("dice-2");
 
+    const showBreakdown = (pendingHeroCard || isPlayerChallenger || isMonsterRoll) && dice1Result !== null && dice2Result !== null;
+    const baseRoll = (dice1Result ?? 0) + (dice2Result ?? 0);
+    const passiveSources = [...(currentPlayerData?.rollBonusSources || []), ...(currentPlayerData?.permanentRollBonusSources || [])];
+    const passiveSum = (currentPlayerData?.rollBonusUntilEndOfTurn || 0) + (currentPlayerData?.permanentRollBonus || 0);
+    const modifierSum = collectedModifiers.reduce((sum, m) => sum + m.value, 0);
+    const totalRoll = baseRoll + passiveSum + modifierSum;
+
 
     return (
         <div className="dice-selection-container justify-center items-center flex" style={{ width: isDiceRollVisible ? '70%' : '100%' }}>
-            {(pendingHeroCard || showResult) && (
+            {(pendingHeroCard || showResult) && lastPendingHeroCard && (
                 <div className="hero-card-container mr-[200px] mb-[100px] party-hero-slide-in flex flex-col items-center">
-                    <PartyHero id={currentPlayerData?.pendingHeroCard} height={350} width={350} />
+                    <PartyHero
+                        id={lastPendingHeroCard.cardId}
+                        cardName={lastPendingHeroCard.cardName}
+                        heroClass={lastPendingHeroCard.heroClass}
+                        diceValue={lastPendingHeroCard.diceValue}
+                        height={350}
+                        width={350}
+                        handleCardUse={() => {}}
+                        isPlayerTurn={false}
+                    />
+                </div>
+            )}
+            {isMonsterRoll && monster && (
+                <div className="monster-roll-banner mr-[200px] mb-[100px] party-hero-slide-in flex flex-col items-center">
+                    <span className="monster-roll-banner-label">Attacking</span>
+                    <strong className="monster-roll-banner-name">{monster.name}</strong>
+                    <span className="monster-roll-banner-threshold">Slay: {monster.slayThreshold}+</span>
                 </div>
             )}
             <div className={
@@ -186,6 +252,30 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
                     }
 
                 </div>
+
+                {showBreakdown && (
+                    <div className="roll-breakdown">
+                        <div className="roll-breakdown-row roll-breakdown-base">
+                            <span>Dice roll</span>
+                            <span>{baseRoll}</span>
+                        </div>
+                        {passiveSources.map((label, idx) => (
+                            <div className="roll-breakdown-row" key={`passive-${idx}`}>
+                                <span>{label}</span>
+                            </div>
+                        ))}
+                        {collectedModifiers.map((mod, idx) => (
+                            <div className="roll-breakdown-row roll-breakdown-modifier" key={`mod-${idx}`}>
+                                <span>{mod.label}</span>
+                                <span>{mod.value > 0 ? `+${mod.value}` : mod.value}</span>
+                            </div>
+                        ))}
+                        <div className="roll-breakdown-row roll-breakdown-total">
+                            <span>Total</span>
+                            <span>{totalRoll}</span>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

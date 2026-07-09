@@ -1,3 +1,96 @@
 .card-container img {
     left: -40px;
 }
+
+.card-container {
+    transition: transform 0.18s ease-out, filter 0.18s ease-out;
+}
+
+.card-container:hover {
+    transform: translateY(-16px);
+    filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.5));
+}
+
+.card-name-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 10px;
+    background: linear-gradient(to top, rgba(8, 4, 4, 0.92), rgba(8, 4, 4, 0));
+    color: var(--gm-parchment, #fff);
+    border-radius: 0 0 8px 8px;
+    pointer-events: none;
+}
+
+.card-name-overlay strong {
+    font-family: var(--gm-font-display, serif);
+    font-size: 0.85rem;
+    line-height: 1.1;
+}
+
+.card-name-overlay small {
+    font-family: var(--gm-font-ui, sans-serif);
+    font-size: 0.7rem;
+    opacity: 0.85;
+}
+
+.card-class-pill {
+    align-self: flex-start;
+    font-family: var(--gm-font-ui, sans-serif);
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    background: rgba(209, 164, 65, 0.28);
+    color: var(--gm-gold-bright, #f3d488);
+    padding: 1px 6px;
+    border-radius: 999px;
+}
+
+.hand-card-stolen {
+    animation: handCardStolen 0.9s forwards;
+    filter: drop-shadow(0 0 12px var(--gm-gold-bright, #f3d488));
+    pointer-events: none;
+}
+
+@keyframes handCardStolen {
+    0% { opacity: 1; transform: scale(1) translateY(0) rotate(0deg); }
+    35% { opacity: 1; transform: scale(1.1) translateY(-24px) rotate(-4deg); }
+    100% { opacity: 0; transform: scale(0.3) translateY(-120px) rotate(-25deg); }
+}
+
+.card-modifier-locked {
+    outline: 2px dashed var(--gm-violet-bright, #8a6fc9);
+    outline-offset: 2px;
+    border-radius: 8px;
+}
+
+.card-modifier-hint {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 5px 8px;
+    background: rgba(91, 67, 144, 0.85);
+    color: var(--gm-parchment, #fff);
+    font-family: var(--gm-font-ui, sans-serif);
+    font-size: 0.62rem;
+    text-align: center;
+    font-weight: 700;
+    border-radius: 0 0 8px 8px;
+    pointer-events: none;
+}
+
+.hand-card-discarded {
+    animation: handCardDiscarded 0.9s forwards;
+    pointer-events: none;
+}
+
+@keyframes handCardDiscarded {
+    0% { opacity: 1; transform: scale(1) translateY(0) rotate(0deg); filter: grayscale(0); }
+    40% { opacity: 0.85; transform: scale(0.95) translateY(20px) rotate(8deg); filter: grayscale(0.6); }
+    100% { opacity: 0; transform: scale(0.6) translateY(90px) rotate(20deg); filter: grayscale(1); }
+}

@@ -3,13 +3,17 @@ import heroImg from "../../../../assets/hero.png";
 import { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import { Divider } from "@heroui/divider";
+import { getHeroArt } from "@/utils/HeroArt";
 import './PartyHero.css';
 
 export function PartyHero({
-    id, height, width, handleCardUse, isPlayerTurn,
+    id, cardName, heroClass, diceValue, height, width, handleCardUse, isPlayerTurn,
     isSelectable = false, isSelected = false, onSelect, onDeselect
 }: {
     id: number,
+    cardName?: string,
+    heroClass?: string,
+    diceValue?: number,
     height?: number,
     width?: number,
     handleCardUse: (id: number) => void,
@@ -21,6 +25,7 @@ export function PartyHero({
 }) {
 
     const [expanded, setExpanded] = useState(false);
+    const art = getHeroArt(heroClass, cardName) || heroImg;
     const [menuOpen, setMenuOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -87,20 +92,21 @@ export function PartyHero({
                     width: width ? `${width}px` : "200px",
                     height: height ? `${height}px` : "280px",
                     boxShadow: isSelected
-                        ? "0 0 16px 6px #42a5f5, 0 0 32px 12px #90caf9"
+                        ? "0 0 16px 6px #8a6fc9, 0 0 32px 12px rgba(138, 111, 201, 0.55)"
                         : isSelectable
-                            ? "0 0 8px 2px #e53935"
+                            ? "0 0 8px 2px #c0455a"
                             : undefined,
                     boxSizing: "border-box",
                     position: "relative",
                     padding: 0,
                     margin: 0,
-                    transition: "box-shadow 0.2s"
+                    transition: "box-shadow 0.2s",
+                    top: "50px",
                 }}
                 className="relative"
             >
                 <TiltedCard
-                    imageSrc={heroImg}
+                    imageSrc={art}
                     containerHeight="fit-content"
                     containerWidth="fit-content"
                     imageHeight={`${height || 280}px`}
@@ -141,7 +147,7 @@ export function PartyHero({
                             }}
                             onClick={handleView}
                         >
-                            Visualizar
+                            View
                         </button>
                         <Divider />
                         {isSelectable ? (
@@ -159,7 +165,7 @@ export function PartyHero({
                                     }}
                                     onClick={handleDeselect}
                                 >
-                                    Remover seleção
+                                    Remove selection
                                 </button>
                             ) : (
                                 <button
@@ -175,7 +181,7 @@ export function PartyHero({
                                     }}
                                     onClick={handleSelect}
                                 >
-                                    Escolher
+                                    Choose
                                 </button>
                             )
                         ) : (
@@ -193,7 +199,7 @@ export function PartyHero({
                                 disabled={!isPlayerTurn}
                                 onClick={handleUse}
                             >
-                                Utilizar
+                                Use
                             </button>
                         )}
                     </div>
@@ -218,10 +224,10 @@ export function PartyHero({
                         }}
                     >
                         <TiltedCard
-                            imageSrc={heroImg}
+                            imageSrc={art}
                             containerHeight="80vh"
                             containerWidth="40vw"
-                            imageHeight="80vh"
+                            imageHeight="60vh"
                             imageWidth="40vw"
                             rotateAmplitude={0}
                             scaleOnHover={1}

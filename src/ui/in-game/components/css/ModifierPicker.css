@@ -1,0 +1,169 @@
+.modifier-picker {
+    position: fixed;
+    bottom: 26vh;
+    right: 24px;
+    z-index: 1200;
+    display: flex;
+    flex-direction: column;
+    width: 300px;
+    max-height: 55vh;
+    font-family: var(--gm-font-ui);
+    background: linear-gradient(160deg, #241a36, #140e1f);
+    border: 2px solid var(--gm-violet);
+    border-radius: 12px;
+    color: var(--gm-parchment);
+    box-shadow: var(--gm-shadow-deep), 0 0 0 1px rgba(138, 111, 201, 0.25) inset;
+    overflow: hidden;
+    animation: modifierPickerIn 0.35s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+}
+
+@keyframes modifierPickerIn {
+    from { opacity: 0; transform: translateX(40px) scale(0.95); }
+    to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+.modifier-picker-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    background: rgba(138, 111, 201, 0.15);
+    border-bottom: 1px solid rgba(138, 111, 201, 0.3);
+    font-family: var(--gm-font-display);
+}
+
+.modifier-picker-icon {
+    font-size: 1.3rem;
+}
+
+.modifier-picker-header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    flex: 1;
+}
+
+.modifier-picker-title {
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 0.02em;
+}
+
+.modifier-picker-subtitle {
+    font-family: var(--gm-font-ui);
+    font-size: 0.62rem;
+    color: var(--gm-parchment-dim, #c9bfe8);
+    line-height: 1.2;
+}
+
+.modifier-picker-countdown {
+    font-family: var(--gm-font-display);
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--gm-gold-bright);
+    flex-shrink: 0;
+}
+
+.modifier-picker-timer-track {
+    height: 3px;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.modifier-picker-timer-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gm-violet-bright), var(--gm-gold-bright));
+    animation-name: modifierTimerShrink;
+    animation-timing-function: linear;
+    animation-fill-mode: forwards;
+    transform-origin: left;
+}
+
+@keyframes modifierTimerShrink {
+    from { transform: scaleX(1); }
+    to { transform: scaleX(0); }
+}
+
+.modifier-picker-cards {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 12px 12px;
+    overflow-y: auto;
+}
+
+.modifier-picker-card {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    border-top: 1px solid rgba(154, 122, 255, 0.25);
+    padding-top: 8px;
+}
+
+.modifier-picker-card:first-child {
+    border-top: none;
+    padding-top: 0;
+}
+
+.modifier-picker-card-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.modifier-picker-card-art {
+    width: 32px;
+    height: 32px;
+    object-fit: contain;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.modifier-picker-card-name {
+    font-family: var(--gm-font-display);
+    font-weight: 700;
+    font-size: 0.78rem;
+    color: var(--gm-gold-bright);
+}
+
+.modifier-picker-target-group {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin-bottom: 4px;
+}
+
+.modifier-picker-target-group small {
+    color: var(--gm-violet-bright);
+    font-size: 0.68rem;
+}
+
+.modifier-picker-values {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.modifier-picker-values button {
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: none;
+    font-size: 0.78rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.modifier-picker-values button:hover {
+    transform: translateY(-2px);
+}
+
+.modifier-value-positive {
+    background: linear-gradient(180deg, var(--gm-emerald-bright), var(--gm-emerald));
+    color: white;
+}
+
+.modifier-value-negative {
+    background: linear-gradient(180deg, var(--gm-garnet-bright), var(--gm-garnet));
+    color: white;
+}

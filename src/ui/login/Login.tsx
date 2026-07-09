@@ -22,7 +22,7 @@ function Login() {
                 const data = JSON.parse(event.data);
                 console.log('Mensagem recebida do servidor (parsed):', data);
                 if (data.type === 'auth' && data.subtype === 'login_success') {
-                    alert('Login bem-sucedido!');
+                    alert('Login successful!');
                     localStorage.setItem('currentPlayer', JSON.stringify(data.payload));
                     console.log('Login bem-sucedido:', data.payload);
                     navigate('/games');
@@ -57,7 +57,7 @@ function Login() {
                                     <Input
                                         id="username"
                                         type="text"
-                                        placeholder="Informe seu nome de usuário"
+                                        placeholder="Enter your username"
                                         required
                                         value={username}
                                         onChange={e => setUsername(e.target.value)}
