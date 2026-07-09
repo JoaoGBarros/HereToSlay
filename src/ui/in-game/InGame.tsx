@@ -90,7 +90,7 @@ function InGame() {
         const handleMessage = (event: MessageEvent) => {
             try {
                 const data = JSON.parse(event.data);
-
+                console.log(data)
                 if (data.type === 'match') {
                     if (data.subtype === 'match_state' || data.subtype === 'order_finalized') {
                         console.log("Match state received:", data.payload);
@@ -152,6 +152,24 @@ function InGame() {
                     setMaxSelectableCards(data.payload.maxTargets || 1);
                 }
 
+                if (data.type === 'match' && data.subtype === 'hand_revealed') {
+                    if (data.payload.viewerPlayerId === loggedUserId) {
+                        const revealedUsername = data.payload.revealedPlayerUsername;
+                        const revealedEntry = Object.values(playersData).find((p: any) => p.username === revealedUsername) as any;
+                        const cardIds: number[] = data.payload.cardIds || [];
+                        const cardNames = cardIds.map((cid) => {
+                            const card = revealedEntry?.hand?.find((c: any) => c.cardId === cid);
+                            return card?.cardName || `#${cid}`;
+                        });
+                        addToast({
+                            title: `You saw ${revealedUsername}'s hand`,
+                            description: cardNames.length > 0 ? cardNames.join(', ') : 'Empty hand',
+                            color: 'primary',
+                            timeout: 8000,
+                        });
+                    }
+                }
+
                 if (data.type === 'match' && data.subtype === 'modifier_played') {
                     const casterName = playersData[data.payload.playerId]?.username || data.payload.playerId;
                     const targetName = playersData[data.payload.targetPlayerId]?.username || data.payload.targetPlayerId;
@@ -180,6 +198,7 @@ function InGame() {
                 }
 
                 if (data.type === 'monitoring_alert') {
+                    console.log(data)
                     addToast({
                         title: data.message,
                         description: data.situation === 'TURNING_POINT' || data.situation === 'CHAIN_REACTION'

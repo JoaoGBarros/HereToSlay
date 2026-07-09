@@ -284,12 +284,10 @@
 }
 
 .roll-breakdown {
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: 18px;
+  position: relative;
+  margin: 0 auto;
   min-width: 220px;
+  max-width: 260px;
   display: flex;
   flex-direction: column;
   gap: 4px;

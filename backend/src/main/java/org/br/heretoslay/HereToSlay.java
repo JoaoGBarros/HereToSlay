@@ -22,6 +22,7 @@ public class HereToSlay extends WebSocketServer {
 
     private final AuthService authService = AuthService.getInstance();
     private final Map<String, java.util.Set<String>> matchRosterCache = new ConcurrentHashMap<>();
+    private final Map<String, List<String>> pendingAlerts = new ConcurrentHashMap<>();
     private KafkaProducer<String, String> producer;
     private static HereToSlay instance;
 
@@ -144,6 +145,17 @@ public class HereToSlay extends WebSocketServer {
 
         while (true) {
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
+
+            for (ConsumerRecord<String, String> record : records) {
+                if (record.topic().equals("match-state-store")) {
+                    updateMatchRosterCache(record.key(), record.value());
+                }
+            }
+
+            if (!pendingAlerts.isEmpty()) {
+                retryPendingAlerts();
+            }
+
             for (ConsumerRecord<String, String> record : records) {
                 String topic = record.topic();
                 String message = record.value();
@@ -161,8 +173,6 @@ public class HereToSlay extends WebSocketServer {
 
                 } else if (topic.equals("lobby-state-out")) {
                     handleLobbyStateOut(message);
-                } else if (topic.equals("match-state-store")) {
-                    updateMatchRosterCache(record.key(), message);
                 } else if (topic.equals("game-monitoring-alerts")) {
                     handleMonitoringAlert(record.key(), message);
                 }
@@ -191,6 +201,10 @@ public class HereToSlay extends WebSocketServer {
         java.util.Set<String> resolvedTargets;
         if (targetPlayers.length() == 1 && "MATCH_ALL".equals(targetPlayers.getString(0))) {
             resolvedTargets = matchRosterCache.getOrDefault(matchId, java.util.Collections.emptySet());
+            if (resolvedTargets.isEmpty()) {
+                pendingAlerts.computeIfAbsent(matchId, k -> new ArrayList<>()).add(message);
+                return;
+            }
         } else {
             resolvedTargets = new java.util.HashSet<>();
             for (int i = 0; i < targetPlayers.length(); i++) {
@@ -198,10 +212,27 @@ public class HereToSlay extends WebSocketServer {
             }
         }
 
+        System.out.println(" ^^^ [WebSocket] Enviando alerta de monitoramento para os jogadores via WebSocket: " + payload);
+
         for (String playerId : resolvedTargets) {
             WebSocket conn = authService.getConnectionByPlayerId(playerId);
+            System.out.println(" ^^^ [WebSocket] Tentando enviar alerta para jogador " + playerId);
             if (conn != null && conn.isOpen()) {
                 conn.send(payload);
+                System.out.println(" ^^^ [WebSocket] Alerta enviado para jogador " + playerId);
+            }
+        }
+    }
+
+    private void retryPendingAlerts() {
+        Iterator<Map.Entry<String, List<String>>> iter = pendingAlerts.entrySet().iterator();
+        while (iter.hasNext()) {
+            Map.Entry<String, List<String>> entry = iter.next();
+            if (matchRosterCache.containsKey(entry.getKey())) {
+                for (String message : entry.getValue()) {
+                    handleMonitoringAlert(entry.getKey(), message);
+                }
+                iter.remove();
             }
         }
     }

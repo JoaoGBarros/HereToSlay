@@ -1,12 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import ReactDOM from "react-dom";
 import TiltedCard from "@/components/TiltedCard";
-import bardImg from "../../assets/party-leader/bard.png";
-import fighterImg from "../../assets/party-leader/fighter.png";
-import guardianImg from "../../assets/party-leader/guardian.png";
-import rangerImg from "../../assets/party-leader/ranger.png";
-import thiefImg from "../../assets/party-leader/thief.png";
-import wizImg from "../../assets/party-leader/wizard.png";
+import heroImg from "../../assets/hero.png";
+import { getMonsterArt } from "@/utils/CardArt";
 import './css/MonsterComponent.css';
 
 export interface MonsterData {
@@ -16,8 +12,6 @@ export interface MonsterData {
     fightBackThreshold: number;
     slayThreshold: number;
 }
-
-const placeholderArt = [bardImg, fighterImg, guardianImg, rangerImg, thiefImg, wizImg];
 
 function MonsterComponent({ monster, socket, id, isPlayerTurn, matchState }: {
     monster: MonsterData;
@@ -32,7 +26,7 @@ function MonsterComponent({ monster, socket, id, isPlayerTurn, matchState }: {
     const [expanded, setExpanded] = useState(false);
     const flashTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    const art = placeholderArt[monster.id % placeholderArt.length];
+    const art = getMonsterArt(monster.name) || heroImg;
 
     useEffect(() => {
         if (!socket || !socket.current) return;

@@ -1,13 +1,10 @@
-import { useEffect, useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import { useEffect } from 'react'
 import './App.css'
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import Login from './login/Login';
 import Games from './games/Games';
 import Lobby from './games/lobby-page/Lobby';
 import InGame from './in-game/InGame';
-import { HeroUIProvider, ToastProvider } from '@heroui/react';
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 

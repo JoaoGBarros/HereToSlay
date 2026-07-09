@@ -15,7 +15,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
-
 public class Match {
 
     private final Map<String, GameState> players = new ConcurrentHashMap<>();
@@ -34,6 +33,7 @@ public class Match {
     private Card currentHeroCard = null;
     private String currentHeroPlayer = null;
     private Set<String> challengers = new HashSet<>();
+    @JsonIgnore
     private Timer challengeTimer = new Timer();
     private Map<String, Integer> duelRolls = new HashMap<>();
     private String duelChallenger = null;
@@ -45,9 +45,14 @@ public class Match {
             Arrays.asList(MatchState.CHALLENGE_WINDOW, MatchState.CHALLENGE_ROLL, MatchState.SELECTING_CARDS, MatchState.SELECTING_HAND_CARDS, MatchState.SELECTING_PLAYER)
     );
 
+    @JsonIgnore
     private final GameEventBus eventBus = new GameEventBus();
     // MVP simplification: all 15 base monsters sit face-up on the board for the
     // whole match, instead of a shuffled monster deck revealing a few at a time.
+    // Not Jackson-serializable (MonsterCard carries CardEffect strategy objects with
+    // no data properties) - excluded from match-state-store snapshots. Harmless: the
+    // board is deterministically rebuilt by this same field initializer either way.
+    @JsonIgnore
     private final List<MonsterCard> monsterBoard = createMonsterBoard();
 
     private boolean modifierWindowOpen = false;
@@ -86,6 +91,7 @@ public class Match {
         ));
     }
 
+    @JsonIgnore
     public GameEventBus getEventBus() {
         return eventBus;
     }
@@ -167,8 +173,15 @@ public class Match {
                 Card pendingHero = gameState.getPendingHeroCard();
                 gameState.clearLastDrawnCards();
                 pendingHero.getEffect().applyEffect(this, gameState);
-                gameState.setPendingHeroCard(null);
-                matchState = MatchState.GAMEPLAY;
+                if (gameState.getPendingHeroCard() != null && gameState.getPendingHeroCard() != pendingHero) {
+                    // A nested effect (e.g. Wiggles stealing-and-using a hero) queued up a
+                    // freshly-acquired hero to roll for - let it play through the normal
+                    // WAITING_HERO_ROLL flow instead of clearing it below.
+                    matchState = MatchState.WAITING_HERO_ROLL;
+                } else {
+                    gameState.setPendingHeroCard(null);
+                    matchState = MatchState.GAMEPLAY;
+                }
                 JSONObject matchUpdate = new JSONObject();
                 matchUpdate.put("type", "match");
                 matchUpdate.put("subtype", "match_state");
@@ -192,7 +205,6 @@ public class Match {
                     broadcast(effectMsg.toString());
                 }
                 break;
-
 
             case "deselect_effect_target":
                 Long deselectCardId = json.getJSONObject("payload").getLong("card_id");
@@ -252,17 +264,12 @@ public class Match {
             gameState.getUsedCardIds().clear();
         }
 
-
-
         JSONObject drawResponse = new JSONObject();
         drawResponse.put("type", "match");
         drawResponse.put("subtype", "match_state");
         drawResponse.put("payload", getMatchState());
         gameState.setLastRoll(0);
         broadcast(drawResponse.toString());
-
-
-
 
     }
 
@@ -344,7 +351,6 @@ public class Match {
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
 
-
         System.out.println("Final turn order determined:");
         int i = 1;
         for (String playerId : turnOrder) {
@@ -363,8 +369,6 @@ public class Match {
         MatchService.getInstance().publishToKafka(this.matchId, message);
     }
 
-
-
     public JSONObject getMatchState() {
         JSONObject playersJson = new JSONObject();
         for (Map.Entry<String, GameState> entry : players.entrySet()) {
@@ -378,7 +382,7 @@ public class Match {
                     .put("maxAP", player.getMaxAP())
                     .put("currentAP", player.getCurrentAP())
                     .put("username", player.getUsername())
-                    .put("pendingHeroCard", player.getPendingHeroCard() == null ? JSONObject.NULL : player.getPendingHeroCard())
+                    .put("pendingHeroCard", player.getPendingHeroCard() == null ? JSONObject.NULL : new JSONObject(player.getPendingHeroCard()))
                     .put("usedCardIds", player.getUsedCardIds())
                     .put("orderRoll", player.getOrderRoll() == null ? JSONObject.NULL : player.getOrderRoll())
                     .put("rollBonusUntilEndOfTurn", player.getRollBonusUntilEndOfTurn())
@@ -387,7 +391,6 @@ public class Match {
                     .put("permanentRollBonusSources", player.getPermanentRollBonusSources());
             playersJson.put(playerId, playerJson);
         }
-
 
         JSONArray monstersJson = new JSONArray();
         for (MonsterCard monster : monsterBoard) {
@@ -559,7 +562,6 @@ public class Match {
 
         players.get(playerId).getHand().remove(heroCard);
         players.get(playerId).getParty().add(currentHeroCard);
-
 
         JSONObject challengeMsg = new JSONObject();
         challengeMsg.put("type", "match");
@@ -787,6 +789,7 @@ public class Match {
         }
     }
 
+    @JsonIgnore
     public List<MonsterCard> getMonsterBoard() {
         return Collections.unmodifiableList(monsterBoard);
     }
@@ -835,8 +838,6 @@ public class Match {
         return false;
     }
 
-
-
     public void processHeroDiceRoll(GameState gameState, int diceValue) {
         Card pendingHero = gameState.getPendingHeroCard();
         gameState.setLastRoll(diceValue);
@@ -862,6 +863,7 @@ public class Match {
                 if(card.checkForSelectablePartyEffect() && isSelectableHeroAvailable(gameState)){
                     gameState.setPendingHeroCard(card);
                     matchState = MatchState.SELECTING_CARDS;
+                    gameState.getUsedCardIds().add(card.getCardId());
                     JSONObject effectMsg = new JSONObject();
                     effectMsg.put("type", "match");
                     effectMsg.put("subtype", "match_state");
@@ -907,9 +909,10 @@ public class Match {
                     broadcast(effectMsg.toString());
 
                     effectMsg.put("type", "match");
-                    effectMsg.put("subtype", "select_effect_target");
+                    effectMsg.put("subtype", "select_player_target");
                     effectMsg.put("payload", new JSONObject()
-                            .put("target", Collections.emptyMap()));
+                            .put("target", JSONObject.NULL)
+                            .put("maxTargets", 1));
                     broadcast(effectMsg.toString());
                     return;
                 }
@@ -925,8 +928,6 @@ public class Match {
         }
 
         matchState = MatchState.GAMEPLAY;
-
-
 
     }
 
@@ -1009,7 +1010,4 @@ public class Match {
             return matchId;
         }
     }
-
-
-
 
