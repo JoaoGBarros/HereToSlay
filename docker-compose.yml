@@ -93,7 +93,8 @@ services:
       kafka-topics.sh --bootstrap-server kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092 --create --if-not-exists --topic lobby-state-out --partitions 3 --replication-factor 3
       kafka-topics.sh --bootstrap-server kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092 --create --if-not-exists --topic game-actions-in --partitions 3 --replication-factor 3
       kafka-topics.sh --bootstrap-server kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092 --create --if-not-exists --topic game-state-out --partitions 3 --replication-factor 3
-      
+      kafka-topics.sh --bootstrap-server kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092 --create --if-not-exists --topic game-monitoring-alerts --partitions 3 --replication-factor 3
+
       kafka-topics.sh --bootstrap-server kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092 --create --if-not-exists --topic lobby-state-store --partitions 3 --replication-factor 3 --config cleanup.policy=compact
       kafka-topics.sh --bootstrap-server kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092 --create --if-not-exists --topic match-state-store --partitions 3 --replication-factor 3 --config cleanup.policy=compact
       
@@ -170,6 +171,20 @@ services:
       - kafka-init
     deploy:
       replicas: 2
+    networks:
+      - kafka-network
+
+  monitoring:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.monitoring
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092
+    depends_on:
+      - kafka-broker-1
+      - kafka-broker-2
+      - kafka-broker-3
+      - kafka-init
     networks:
       - kafka-network
 
