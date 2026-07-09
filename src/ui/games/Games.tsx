@@ -91,7 +91,7 @@ function Games() {
                 <Card className="lobbys-container">
                     <CardHeader>
                         <div className="games-header">
-                            <h2>Lobbys</h2>
+                            <h2>Lobbies</h2>
                         </div>
                     </CardHeader>
                     <div className="lobbys-grid">
@@ -115,10 +115,10 @@ function Games() {
                     {(onClose) => (
                         <>
                             <Card className="modal-card w-[50%] h-[50%] content-evenly">
-                                <ModalHeader className="flex flex-col gap-1">Novo Lobby</ModalHeader>
+                                <ModalHeader className="flex flex-col gap-1">New Lobby</ModalHeader>
                                 <ModalBody>
                                     <Input
-                                        placeholder="Informe o nome do lobby"
+                                        placeholder="Enter the lobby name"
                                         variant="bordered"
                                         type="text"
                                         required
@@ -126,7 +126,7 @@ function Games() {
                                         onChange={e => setLobbyName(e.target.value)}
                                     />
                                     <Input
-                                        placeholder="Minimo de Jogadores"
+                                        placeholder="Minimum Players"
                                         variant="bordered"
                                         type="number"
                                         required
@@ -136,7 +136,7 @@ function Games() {
                                         onChange={e => setMinPlayers(Number(e.target.value))}
                                     />
                                     <Input
-                                        placeholder="Maximo de Jogadores"
+                                        placeholder="Maximum Players"
                                         variant="bordered"
                                         type="number"
                                         required
@@ -168,7 +168,7 @@ function Games() {
                                         Close
                                     </Button>
                                     <Button color="primary" onPress={() => handleCreateLobby(onClose)}>
-                                        Criar Lobby
+                                        Create Lobby
                                     </Button>
                                 </ModalFooter>
                             </Card>

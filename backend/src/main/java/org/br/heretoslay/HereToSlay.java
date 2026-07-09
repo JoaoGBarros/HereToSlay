@@ -21,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class HereToSlay extends WebSocketServer {
 
     private final AuthService authService = AuthService.getInstance();
+    private final Map<String, java.util.Set<String>> matchRosterCache = new ConcurrentHashMap<>();
     private KafkaProducer<String, String> producer;
     private static HereToSlay instance;
 
@@ -134,11 +135,12 @@ public class HereToSlay extends WebSocketServer {
         }
         consumerProps.put("bootstrap.servers", kafkaServer);
         consumerProps.put("group.id", "heretoslay-gateway-" + java.util.UUID.randomUUID().toString());
+        consumerProps.put("auto.offset.reset", "earliest");
         consumerProps.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
         consumerProps.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
 
         KafkaConsumer<String, String> consumer = new KafkaConsumer<>(consumerProps);
-        consumer.subscribe(Arrays.asList("game-state-out", "lobby-state-out"));
+        consumer.subscribe(Arrays.asList("game-state-out", "lobby-state-out", "game-monitoring-alerts", "match-state-store"));
 
         while (true) {
             ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(100));
@@ -159,7 +161,47 @@ public class HereToSlay extends WebSocketServer {
 
                 } else if (topic.equals("lobby-state-out")) {
                     handleLobbyStateOut(message);
+                } else if (topic.equals("match-state-store")) {
+                    updateMatchRosterCache(record.key(), message);
+                } else if (topic.equals("game-monitoring-alerts")) {
+                    handleMonitoringAlert(record.key(), message);
                 }
+            }
+        }
+    }
+
+    private void updateMatchRosterCache(String matchId, String matchJson) {
+        if (matchId == null || matchJson == null) return;
+        try {
+            JSONObject match = new JSONObject(matchJson);
+            JSONObject players = match.optJSONObject("players");
+            if (players != null) {
+                matchRosterCache.put(matchId, new java.util.HashSet<>(players.keySet()));
+            }
+        } catch (Exception e) {
+            System.err.println("Erro ao atualizar cache de roster da partida " + matchId + ": " + e.getMessage());
+        }
+    }
+
+    private void handleMonitoringAlert(String matchId, String message) {
+        JSONObject msgJson = new JSONObject(message);
+        JSONArray targetPlayers = msgJson.getJSONArray("targetPlayers");
+        String payload = msgJson.getJSONObject("payload").toString();
+
+        java.util.Set<String> resolvedTargets;
+        if (targetPlayers.length() == 1 && "MATCH_ALL".equals(targetPlayers.getString(0))) {
+            resolvedTargets = matchRosterCache.getOrDefault(matchId, java.util.Collections.emptySet());
+        } else {
+            resolvedTargets = new java.util.HashSet<>();
+            for (int i = 0; i < targetPlayers.length(); i++) {
+                resolvedTargets.add(targetPlayers.getString(i));
+            }
+        }
+
+        for (String playerId : resolvedTargets) {
+            WebSocket conn = authService.getConnectionByPlayerId(playerId);
+            if (conn != null && conn.isOpen()) {
+                conn.send(payload);
             }
         }
     }
