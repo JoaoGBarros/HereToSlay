@@ -6,6 +6,7 @@ import { classAvatars } from "@/utils/ClassImages";
 
 interface GameHeaderProps {
     playersData: { [id: string]: any };
+    playerTags?: Record<string, { key: string; label: string }[]>;
     turn: string | null;
     loggedUserId: string;
     currentPlayerIdx: string;
@@ -28,7 +29,7 @@ interface GameHeaderProps {
 
 
 
-function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolled, socket, id, turn,
+function GameHeader({ playersData, playerTags, partyLeaderSelection, isPlayerTurn, diceRolled, socket, id, turn,
     currentPlayerIdx, deckImg, loggedUserId, setCurrentPlayerIdx, setCurrentPlayerData, autoSwitchView,
     setAutoSwitchView, matchState, maxSelectableCards, selectedCardsCount, selectedPlayerId}: GameHeaderProps) {
 
@@ -39,16 +40,16 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
     const playerIds = Object.keys(playersData);
 
     const deck = [
-        { id: 1, name: "Carta 1" },
-        { id: 2, name: "Carta 2" },
-        { id: 3, name: "Carta 3" },
-        { id: 4, name: "Carta 4" },
-        { id: 5, name: "Carta 5" },
+        { id: 1, name: "Card 1" },
+        { id: 2, name: "Card 2" },
+        { id: 3, name: "Card 3" },
+        { id: 4, name: "Card 4" },
+        { id: 5, name: "Card 5" },
     ];
 
     const discard = [
-        { id: 6, name: "Carta 6" },
-        { id: 7, name: "Carta 7" },
+        { id: 6, name: "Card 6" },
+        { id: 7, name: "Card 7" },
     ];
 
     function handleDeckClick() {
@@ -185,17 +186,18 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                     />
                 </div>
             )}
-            <div className="deck-discard-row flex flex-row gap-8 mb-5 justify-around items-center">
+            <div className="deck-discard-row ledger-bar flex flex-row gap-8 mb-1 justify-around items-center">
                 <div
-                    className={`deck-area deck-stack relative w-32 h-44`}
+                    className={`deck-area deck-stack relative w-44 h-32 ${isPlayerTurn && diceRolled && !partyLeaderSelection ? 'deck-area-active' : ''}`}
                     onClick={handleDeckClick}
                     aria-disabled={!isPlayerTurn}
                 >
+                    <span className="ledger-pile-label">Deck</span>
                     {matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" || matchState === "SELECTING_PLAYER" ? (
-                        <div className={`selection-counter w-[90%] h-[50%] mt-[5vh] flex flex-col items-center justify-center bg-gray-800 rounded-lg border-2 border-dashed border-yellow-500 text-white p-2 enter ${matchState === "SELECTING_CARDS" ? "enter" : "exit-left"
+                        <div className={`selection-counter selection-counter-panel w-[90%] h-[80%] flex flex-col items-center justify-center p-2 enter ${matchState === "SELECTING_CARDS" ? "enter" : "exit-left"
                             }`}>
                             <div className="text-2xl mt-2">
-                                <span>{selectedCardsCount ? maxSelectableCards : selectedPlayerId ? 1 : 0}</span>
+                                <span>{selectedCardsCount || (selectedPlayerId ? 1 : 0)}</span>
                                 <span className="text-base"> / {maxSelectableCards ?? '...'}</span>
                             </div>
                         </div>
@@ -206,12 +208,12 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                             {deck.map((card, idx) => (
                                 <Card
                                     key={card.id}
-                                    className="deck-card absolute w-24 h-36 flex items-center justify-center bg-white shadow"
+                                    className="deck-card deck-card-face absolute w-24 h-36 flex items-center justify-center"
                                     style={{
-                                        left: `${idx * 2}px`,
-                                        top: `${idx * 3}px`,
+                                        top: '50%',
+                                        left: '50%',
                                         zIndex: deck.length - idx,
-                                        transform: `rotate(90deg) translateY(-30px) translateX(30px)`,
+                                        transform: `translate(-50%, -50%) rotate(90deg) translate(${(idx - (deck.length - 1) / 2) * 2}px, ${(idx - (deck.length - 1) / 2) * 3}px)`,
                                         backgroundImage: `url(${deckImg})`,
                                         backgroundSize: 'cover',
                                         backgroundPosition: 'center',
@@ -221,12 +223,11 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                         </div>
                     )}
                 </div>
-                <div className='player-turn-indicator text-center flex flex-row justify-center items-center gap-2'>
+                <div className='player-turn-indicator turn-banner text-center flex flex-row justify-center items-center gap-2'>
                     {turn && turn.length > 0 && (
                         <>
-                            <span className='font-bold' style={{ color: '#b48a5a' }}>Turno do jogador:</span>
-                            <br />
-                            <strong style={{ color: 'white' }}>{playersData[turn]?.username}</strong>
+                            <span className='turn-banner-label'>Turn:</span>
+                            <strong className='turn-banner-name'>{playersData[turn]?.username}</strong>
                         </>
                     )}
                 </div>
@@ -235,19 +236,19 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                         const isTurn = turn?.toString() === id;
                         const isLogged = loggedUserId?.toString() === id;
                         let boxShadow = "";
-                        if (isLogged) boxShadow += "0 0 0 4px #e2b007,";
-                        if (currentPlayerIdx === id && currentPlayerIdx != loggedUserId) boxShadow += `0 0 0 4px #ff00d4ff,`;
-                        if (isTurn) boxShadow += "0 0 0 8px #4fc3f7,";
+                        if (isLogged) boxShadow += "0 0 0 3px #d1a441,";
+                        if (currentPlayerIdx === id && currentPlayerIdx != loggedUserId) boxShadow += `0 0 0 3px #8a6fc9,`;
+                        if (isTurn) boxShadow += "0 0 0 6px #f3d488, 0 0 18px 2px rgba(243, 212, 136, 0.65),";
                         if (
                             (matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" || matchState === "SELECTING_PLAYER") &&
                             turn?.toString() === loggedUserId?.toString() &&
                             id !== loggedUserId?.toString()
                         ) {
-                            boxShadow += "0 0 0 6px #e53935,";
+                            boxShadow += "0 0 0 5px #c0455a,";
                         }
 
                         if(id === selectedPlayerId) {
-                            boxShadow += "0 0 0 10px #43a047,";
+                            boxShadow += "0 0 0 8px #4fb98d,";
                         }
                         if (boxShadow.endsWith(",")) boxShadow = boxShadow.slice(0, -1);
 
@@ -258,11 +259,10 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                                 onMouseEnter={() => setHoveredPlayerId(id)}
                                 onMouseLeave={() => setHoveredPlayerId(null)}
                                 onClick={() => matchState === "SELECTING_PLAYER" && turn != loggedUserId ? handlePlayerChange(player, id) : openMenu(id)}
+                                className={isTurn ? "player-medallion player-medallion-turn" : "player-medallion"}
                                 style={{
                                     padding: 0,
                                     borderRadius: "50%",
-                                    border: "1px solid #ccc",
-                                    background: "#fff",
                                     cursor: "pointer",
                                     width: "60px",
                                     height: "60px",
@@ -284,80 +284,36 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                                         objectFit: "cover"
                                     }}
                                 />
+                                {isLogged && (
+                                    <span className="player-medallion-you-badge">YOU</span>
+                                )}
+                                {playerTags?.[id] && playerTags[id].length > 0 && (
+                                    <div className="player-medallion-tags">
+                                        {playerTags[id].map((tag) => (
+                                            <span key={tag.key} className="player-medallion-tag">{tag.label}</span>
+                                        ))}
+                                    </div>
+                                )}
                                 {hoveredPlayerId === id && (
-                                    <div
-                                        style={{
-                                            position: "absolute",
-                                            top: "100%",
-                                            left: "50%",
-                                            transform: "translateX(-50%)",
-                                            marginBottom: "8px",
-                                            background: "#fffbe6",
-                                            color: "#b48a5a",
-                                            border: "1px solid #e2b007",
-                                            borderRadius: "8px",
-                                            padding: "6px 16px",
-                                            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                                            fontWeight: "bold",
-                                            fontSize: "16px",
-                                            whiteSpace: "nowrap",
-                                            zIndex: 100,
-                                        }}
-                                    >
+                                    <div className="gm-tooltip">
                                         {player.username}
                                     </div>
                                 )}
                                 {menuOpen === id && (
-                                    <div
-                                        ref={menuRef}
-                                        style={{
-                                            position: "absolute",
-                                            top: "100%",
-                                            left: "50%",
-                                            transform: "translateX(-50%)",
-                                            marginTop: "8px",
-                                            background: "#fff",
-                                            border: "1px solid #b48a5a",
-                                            borderRadius: "8px",
-                                            boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-                                            padding: "8px 0",
-                                            zIndex: 100,
-                                            minWidth: "120px"
-                                        }}
-                                    >
+                                    <div ref={menuRef} className="gm-dropdown">
                                         <button
-                                            style={{
-                                                display: "block",
-                                                width: "100%",
-                                                background: "none",
-                                                border: "none",
-                                                padding: "8px 16px",
-                                                textAlign: "left",
-                                                cursor: "pointer",
-                                                fontSize: "16px",
-                                                color: "#333"
-                                            }}
+                                            className="gm-dropdown-item"
                                             onClick={() => handleView(id)}
                                         >
-                                            Visualizar
+                                            View
                                         </button>
-                                        <hr style={{ margin: "4px 0", border: "none", borderTop: "1px solid #e0e0e0" }} />
+                                        <hr className="gm-dropdown-divider" />
                                         {matchState === "SELECTING_PLAYER" && id !== loggedUserId ? (
                                             <button
-                                                style={{
-                                                    display: "block",
-                                                    width: "100%",
-                                                    background: "none",
-                                                    border: "none",
-                                                    padding: "8px 16px",
-                                                    textAlign: "left",
-                                                    cursor: "pointer",
-                                                    fontSize: "16px",
-                                                    color: "#333"
-                                                }}
+                                                className="gm-dropdown-item"
                                                 onClick={() => handleSelect(id)}
                                             >
-                                                {id == selectedPlayerId ? "Remover Seleção" : "Selecionar"}
+                                                {id == selectedPlayerId ? "Remove Selection" : "Select"}
                                             </button>
                                         ) : null}
                                     </div>
@@ -368,32 +324,29 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                     })}
                     <button
                         onClick={() => setAutoSwitchView(!autoSwitchView)}
-                        style={{
-                            marginLeft: 12,
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            fontSize: 28,
-                            color: autoSwitchView ? '#4fc3f7' : '#b48a5a'
-                        }}
-                        title={autoSwitchView ? "Troca automática ativada" : "Troca automática desativada"}
+                        className="auto-switch-toggle"
+                        title={autoSwitchView ? "Auto-follow turn: on" : "Auto-follow turn: off (pinned)"}
                     >
-                        {autoSwitchView ? '▶️' : '⏸️'}
+                        <span className={`auto-switch-track ${autoSwitchView ? "auto-switch-track-on" : ""}`}>
+                            <span className="auto-switch-knob" />
+                        </span>
+                        <span className="auto-switch-label">{autoSwitchView ? "AUTO" : "PINNED"}</span>
                     </button>
 
                 </div>
                 <div
-                    className={`discard-area deck-stack relative w-32 h-44 `}
+                    className={`discard-area deck-stack relative w-44 h-32 `}
                 >
+                    <span className="ledger-pile-label">Discard</span>
                     {matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" || matchState === "SELECTING_PLAYER" || matchState === "SELECTING_PLAYER" ? (
                         <div className="w-full h-full flex items-center justify-center">
                             <button
                                 onClick={onConfirmSelection}
                                 disabled={!isPlayerTurn || (selectedCardsCount! == 0 && matchState !== "SELECTING_PLAYER") || (!selectedPlayerId && matchState === "SELECTING_PLAYER")}
-                                className={`selection-confirm px-4 py-2 bg-green-600 text-white font-bold rounded-lg shadow-md hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed transition-colors ${matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" || matchState === "SELECTING_PLAYER" ? "enter" : "exit-right"
+                                className={`selection-confirm ledger-confirm-btn ${matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" || matchState === "SELECTING_PLAYER" ? "enter" : "exit-right"
                                     }`}
                             >
-                                Concluir Ação
+                                Confirm Action
                             </button>
                         </div>
                     ) : (
@@ -402,12 +355,12 @@ function GameHeader({ playersData, partyLeaderSelection, isPlayerTurn, diceRolle
                                 discard.map((card, idx) => (
                                     <Card
                                         key={card.id}
-                                        className="deck-card absolute w-24 h-36 flex items-center justify-center bg-white shadow"
+                                        className="deck-card deck-card-face discard-card-face absolute w-24 h-36 flex items-center justify-center"
                                         style={{
-                                            left: `${idx * 2}px`,
-                                            top: `${idx * 3}px`,
+                                            top: '50%',
+                                            left: '50%',
                                             zIndex: discard.length - idx,
-                                            transform: `rotate(90deg) translateY(-30px) translateX(30px)`,
+                                            transform: `translate(-50%, -50%) rotate(90deg) translate(${(idx - (discard.length - 1) / 2) * 2}px, ${(idx - (discard.length - 1) / 2) * 3}px)`,
                                             backgroundImage: `url(${deckImg})`,
                                             backgroundSize: 'cover',
                                             backgroundPosition: 'center',

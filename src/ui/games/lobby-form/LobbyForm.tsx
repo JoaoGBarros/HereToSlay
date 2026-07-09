@@ -19,13 +19,13 @@ function LobbyForm({ onClose }: { onClose?: () => void }) {
             <ModalContent>
                 {(onClose) => (
                     <>
-                        <ModalHeader className="flex flex-col gap-1">Criar Lobby</ModalHeader>
+                        <ModalHeader className="flex flex-col gap-1">Create Lobby</ModalHeader>
                         <ModalBody>
-                            <Label htmlFor="lobby-name">Nome do Lobby</Label>
+                            <Label htmlFor="lobby-name">Lobby Name</Label>
                             <Input
                                 id="lobby-name"
                                 type="text"
-                                placeholder="Informe o nome do lobby"
+                                placeholder="Enter the lobby name"
                                 required
                             />
                             <div className="flex py-2 px-1 justify-between">

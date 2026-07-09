@@ -1,0 +1,67 @@
+.player-info-card {
+    background: linear-gradient(160deg, rgba(36, 26, 18, 0.92), rgba(18, 13, 10, 0.95)) !important;
+    border: 1px solid rgba(209, 164, 65, 0.35) !important;
+    box-shadow: var(--gm-shadow-deep);
+}
+
+.player-info-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--gm-gold);
+    background: var(--gm-void);
+    box-shadow: 0 0 14px rgba(209, 164, 65, 0.35);
+    margin-bottom: 8px;
+}
+
+.player-info-discard-btn {
+    font-family: var(--gm-font-ui);
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 4px 12px;
+    border-radius: 6px;
+    color: var(--gm-parchment);
+    background: linear-gradient(180deg, var(--gm-garnet-bright), var(--gm-garnet));
+    border: none;
+    cursor: pointer;
+}
+
+.ap-indicator {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    font-family: var(--gm-font-ui);
+}
+
+.ap-indicator-label {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--gm-parchment-dim);
+}
+
+.ap-indicator-gems {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.ap-gem {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    transform: rotate(45deg);
+    border: 2px solid rgba(0, 0, 0, 0.4);
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+.ap-gem-full {
+    background: radial-gradient(circle at 35% 30%, var(--gm-emerald-bright), var(--gm-emerald));
+    box-shadow: 0 0 8px rgba(79, 185, 141, 0.7);
+}
+
+.ap-gem-empty {
+    background: #3a352c;
+}

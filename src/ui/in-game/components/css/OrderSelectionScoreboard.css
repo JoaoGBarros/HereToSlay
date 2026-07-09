@@ -1,17 +1,33 @@
 .order-selection-scoreboard {
-    background: rgba(0,0,0,0.8);
-    color: #fff;
-    padding: 16px;
-    border-radius: 8px;
+    background: linear-gradient(160deg, rgba(36, 26, 18, 0.92), rgba(18, 13, 10, 0.95));
+    color: var(--gm-parchment);
+    font-family: var(--gm-font-ui);
+    padding: 16px 20px;
+    border-radius: 10px;
+    border: 1px solid rgba(209, 164, 65, 0.4);
     margin: 0 auto 16px auto;
     width: fit-content;
-    box-shadow: 0 2px 8px #0005;
+    box-shadow: var(--gm-shadow-deep);
+}
+.order-selection-scoreboard h3 {
+    font-family: var(--gm-font-display);
+    color: var(--gm-gold-bright);
+    margin-bottom: 8px;
+    text-align: center;
+    letter-spacing: 0.03em;
 }
 .order-selection-scoreboard table {
     width: 100%;
     border-collapse: collapse;
 }
+.order-selection-scoreboard th {
+    color: var(--gm-parchment-dim);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+}
 .order-selection-scoreboard th, .order-selection-scoreboard td {
-    padding: 6px 12px;
-    border-bottom: 1px solid #444;
+    padding: 6px 14px;
+    border-bottom: 1px solid rgba(209, 164, 65, 0.2);
 }

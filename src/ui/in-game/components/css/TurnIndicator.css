@@ -4,17 +4,19 @@
     display: flex;
     justify-content: center;
     align-items: center;
+    background:
+        radial-gradient(ellipse at 50% 50%, rgba(91, 67, 144, 0.18), transparent 60%),
+        linear-gradient(180deg, var(--gm-void) 0%, var(--gm-void-soft) 100%);
     animation: text-slide-in 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
 .turn-indicator-text {
-    font-size: 4rem;
-    /* 64px */
-    font-weight: bold;
-    color: white;
-    text-shadow: 0 0 15px rgba(0, 0, 0, 0.8), 0 2px 4px rgba(0, 0, 0, 0.5);
+    font-family: var(--gm-font-display);
+    font-size: 3.4rem;
+    font-weight: 700;
+    color: var(--gm-gold-bright);
+    text-shadow: 0 0 24px rgba(243, 212, 136, 0.55), 0 2px 4px rgba(0, 0, 0, 0.8);
     white-space: nowrap;
-    /* A animação agora é mais curta, apenas para a entrada */
 }
 
 .turn-indicator-glow {
@@ -23,18 +25,40 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    border-width: 10px;
-    border-color: #e6a600;
 }
 
 .turn-indicator-background {
-    background: #800000;
+    position: relative;
+    background: linear-gradient(180deg, rgba(36, 26, 18, 0.88), rgba(18, 13, 10, 0.92));
+    border-top: 1px solid rgba(209, 164, 65, 0.5);
+    border-bottom: 1px solid rgba(209, 164, 65, 0.5);
     height: 300px;
     display: flex;
     align-items: center;
     width: 100%;
     justify-content: center;
     padding: 10px;
+    box-shadow: 0 0 60px rgba(0, 0, 0, 0.6) inset;
+}
+
+.turn-indicator-rule {
+    position: absolute;
+    left: 8%;
+    right: 8%;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gm-gold), transparent);
+}
+
+.turn-indicator-rule-top { top: 18px; }
+.turn-indicator-rule-bottom { bottom: 18px; }
+
+.turn-indicator-avatar {
+    width: 180px;
+    height: 180px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 3px solid var(--gm-gold);
+    box-shadow: 0 0 28px rgba(209, 164, 65, 0.55);
 }
 
 .turn-indicator-animation-in {
@@ -45,7 +69,6 @@
     animation: text-slide-out 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 
-/* Animação simplificada apenas para a entrada do texto */
 @keyframes text-slide-in {
     from {
         opacity: 0;

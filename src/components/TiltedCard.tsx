@@ -110,10 +110,10 @@ export default function TiltedCard({
         className="relative [transform-style:preserve-3d]"
         style={{
           width: imageWidth,
-          height: imageHeight,
+          height: "380px",
           rotateX,
           rotateY,
-          scale
+          scale,
         }}
       >
         <motion.img
@@ -122,7 +122,7 @@ export default function TiltedCard({
           className="absolute top-0 left-0 object-contain will-change-transform [transform:translateZ(0)]"
           style={{
             width: imageWidth,
-            height: imageHeight
+            height: imageHeight,
           }}
         />
 

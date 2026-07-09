@@ -1,0 +1,44 @@
+:root {
+    --gm-void: #120d0a;
+    --gm-void-soft: #1e1611;
+    --gm-panel: #241a12;
+    --gm-parchment: #ece0c2;
+    --gm-parchment-dim: #c9bb96;
+    --gm-gold: #d1a441;
+    --gm-gold-bright: #f3d488;
+    --gm-emerald: #2f7d63;
+    --gm-emerald-bright: #4fb98d;
+    --gm-garnet: #8c2a3a;
+    --gm-garnet-bright: #c0455a;
+    --gm-violet: #5b4390;
+    --gm-violet-bright: #8a6fc9;
+
+    --gm-font-display: "Constantia", "Cambria", Georgia, serif;
+    --gm-font-body: "Cambria", Georgia, serif;
+    --gm-font-ui: "Segoe UI", system-ui, sans-serif;
+
+    --gm-radius: 10px;
+    --gm-shadow-deep: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+
+.gm-divider-gold {
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gm-gold), transparent);
+    opacity: 0.7;
+}
+
+.battlefield-card-slot {
+    width: 210px;
+    height: 266px;
+    flex-shrink: 0;
+}
+
+@keyframes gmPulseRing {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(209, 164, 65, 0.55); }
+    50% { box-shadow: 0 0 0 6px rgba(209, 164, 65, 0); }
+}
+
+@keyframes gmEmberFloat {
+    0% { transform: translateY(0) scale(1); opacity: 0.55; }
+    100% { transform: translateY(-140px) scale(0.4); opacity: 0; }
+}

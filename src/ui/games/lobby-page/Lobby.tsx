@@ -82,8 +82,8 @@ function Lobby() {
                 </CardHeader>
                 {countdown !== null && countdown !== -1 && (
                     <div className="countdown-info">
-                        <h3>Partida começando em: {countdown}s</h3>
-                        <p>Jogadores: {playerAmount} / {minPlayers}</p>
+                        <h3>Match starting in: {countdown}s</h3>
+                        <p>Players: {playerAmount} / {minPlayers}</p>
                     </div>
                 )}
                 <div className="lobbys-grid">
@@ -96,7 +96,7 @@ function Lobby() {
                     ))}
                 </div>
 
-                <Button onPress={() => handleLeaveLobby()}>Sair do lobby</Button>
+                <Button onPress={() => handleLeaveLobby()}>Leave lobby</Button>
             </Card>
         </div>
     );

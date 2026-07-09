@@ -1,6 +1,4 @@
-import { Card } from "@heroui/card";
 import { Divider } from "@heroui/divider";
-import { Image } from "@heroui/image";
 import ReactDOM from "react-dom";
 import bardImg from "../../../../assets/party-leader/bard.png";
 import fighterImg from "../../../../assets/party-leader/fighter.png";
@@ -10,7 +8,7 @@ import thiefImg from "../../../../assets/party-leader/thief.png";
 import wizImg from "../../../../assets/party-leader/wizard.png";
 import TiltedCard from "@/components/TiltedCard";
 import { useEffect, useRef, useState } from "react";
-import { playClassSound, playSound } from "@/utils/SoundManager/SoundManager";
+import { playClassSound } from "@/utils/SoundManager/SoundManager";
 
 export function PartyLeader({ leader, isSelectionStage, isPlayerTurn, chooseLeader, className }: { leader: string, isSelectionStage: boolean, isPlayerTurn: boolean, chooseLeader: (leader: string) => void, className?: string }) {
     const [expanded, setExpanded] = useState(false);
@@ -38,7 +36,7 @@ export function PartyLeader({ leader, isSelectionStage, isPlayerTurn, chooseLead
 
     const handleUse = () => {
         setMenuOpen(false);
-        alert("Utilizar ação!");
+        alert("Use action!");
 
     };
 
@@ -73,9 +71,9 @@ export function PartyLeader({ leader, isSelectionStage, isPlayerTurn, chooseLead
             <div onClick={handleCardClick} style={{ display: "inline-block", cursor: "pointer", position: "relative" }} className={className}>
                 <TiltedCard
                     imageSrc={heroCards[leader]}
-                    containerHeight="380px"
-                    containerWidth="300px"
-                    imageHeight="380px"
+                    containerHeight="fit-content"
+                    containerWidth="fit-content"
+                    imageHeight="auto"
                     imageWidth="300px"
                     rotateAmplitude={12}
                     scaleOnHover={1.2}
@@ -96,6 +94,7 @@ export function PartyLeader({ leader, isSelectionStage, isPlayerTurn, chooseLead
                             boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
                             padding: "8px 0",
                             zIndex: 10,
+                            minWidth: "120px"
                         }}
                     >
                         <button
@@ -111,7 +110,7 @@ export function PartyLeader({ leader, isSelectionStage, isPlayerTurn, chooseLead
                             }}
                             onClick={() => handleView(leader)}
                         >
-                            Visualizar
+                            View
                         </button>
                         <Divider />
                         <button
@@ -129,7 +128,7 @@ export function PartyLeader({ leader, isSelectionStage, isPlayerTurn, chooseLead
                             disabled={!isPlayerTurn}
                             onClick={isSelectionStage ? handleChooseLeader : handleUse}
                         >
-                            {isSelectionStage ? "Escolher" : "Utilizar"}
+                            {isSelectionStage ? "Choose" : "Use"}
                         </button>
                     </div>
                 )}
@@ -156,7 +155,7 @@ export function PartyLeader({ leader, isSelectionStage, isPlayerTurn, chooseLead
                             imageSrc={heroCards[leader]}
                             containerHeight="80vh"
                             containerWidth="40vw"
-                            imageHeight="80vh"
+                            imageHeight="60vh"
                             imageWidth="40vw"
                             rotateAmplitude={0}
                             scaleOnHover={1}

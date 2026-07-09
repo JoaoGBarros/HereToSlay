@@ -6,7 +6,7 @@ export const WebSocketProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     const wsRef = useRef<WebSocket | null>(null)
 
     useEffect(() => {
-        const ws = new WebSocket("ws://localhost:8887");
+        const ws = new WebSocket("ws://localhost:8889");
         wsRef.current = ws;
 
         return () => {

@@ -1,19 +1,32 @@
 import TiltedCard from "@/components/TiltedCard";
-import heroCard from "../../../../assets/hero.png";
 import deckCard from "../../../../assets/deck.png";
+import heroImg from "../../../../assets/hero.png";
 import ReactDOM from "react-dom";
 import { useEffect, useState } from "react";
 import { useDrag } from "react-dnd";
+import { getCardArt } from "@/utils/CardArt";
 import './HandCards.css';
 
 export const CARD_TYPE = "TILTED_CARD";
 
-function HandCards({ card, isUserCard, isSelectable, isSelected, onSelect, onDeselect}: { card: { id: number }; isUserCard: boolean; isSelectable: boolean; isSelected: boolean; onSelect: () => void; onDeselect: () => void; })  {
+export interface HandCardData {
+    id: number;
+    cardName?: string;
+    heroClass?: string;
+    diceValue?: number;
+    type?: string;
+}
+
+function HandCards({ card, isUserCard, isSelectable, isSelected, onSelect, onDeselect, removalKind}: { card: HandCardData; isUserCard: boolean; isSelectable: boolean; isSelected: boolean; onSelect: () => void; onDeselect: () => void; removalKind?: "stolen" | "discarded" | null; })  {
     const [expanded, setExpanded] = useState(false);
+    const art = isUserCard ? (getCardArt(card) || heroImg) : deckCard;
+
+    const isDraggable = card.type !== "MODIFIER";
 
     const [{ isDragging }, dragRef] = useDrag({
         type: CARD_TYPE,
         item: { id: card.id, isUserCard },
+        canDrag: isDraggable,
         collect: (monitor) => ({
             isDragging: monitor.isDragging(),
         }),
@@ -38,14 +51,14 @@ function HandCards({ card, isUserCard, isSelectable, isSelected, onSelect, onDes
                 onClick={!isSelectable ? handleClick : (isSelected ? onDeselect : onSelect)}
                 style={{
                     display: "inline-block",
-                    cursor: isDragging ? "grabbing" : "grab",
+                    cursor: isDragging ? "grabbing" : (isDraggable ? "grab" : "pointer"),
                     opacity: isDragging ? 0.5 : 1,
                     width: "200px",
                     height: "fit-content",
                     boxShadow: isSelected
-                        ? "0 0 16px 6px #42a5f5, 0 0 32px 12px #90caf9"
+                        ? "0 0 16px 6px #8a6fc9, 0 0 32px 12px rgba(138, 111, 201, 0.55)"
                         : isSelectable
-                            ? "0 0 8px 2px #e53935"
+                            ? "0 0 8px 2px #c0455a"
                             : undefined,
                     boxSizing: "border-box",
                     position: "relative",
@@ -53,12 +66,12 @@ function HandCards({ card, isUserCard, isSelectable, isSelected, onSelect, onDes
                     margin: 0,
                     transition: "box-shadow 0.2s"
                 }}
-                className="card-container"
+                className={`card-container ${removalKind === "stolen" ? "hand-card-stolen" : ""} ${removalKind === "discarded" ? "hand-card-discarded" : ""} ${!isDraggable ? "card-modifier-locked" : ""}`}
                 id={card.id.toString()}
-                
+
             >
                 <TiltedCard
-                    imageSrc={isUserCard ? heroCard : deckCard}
+                    imageSrc={art}
                     containerHeight="280px"
                     containerWidth="280px"
                     imageHeight="280px"
@@ -68,6 +81,9 @@ function HandCards({ card, isUserCard, isSelectable, isSelected, onSelect, onDes
                     showMobileWarning={false}
                     showTooltip={true}
                 />
+                {!isDraggable && isUserCard && (
+                    <div className="card-modifier-hint">Play during a Modifier window</div>
+                )}
             </div>
 
             {expanded && isUserCard &&
@@ -89,10 +105,10 @@ function HandCards({ card, isUserCard, isSelectable, isSelected, onSelect, onDes
                         }}
                     >
                         <TiltedCard
-                            imageSrc={heroCard}
+                            imageSrc={art}
                             containerHeight="80vh"
                             containerWidth="40vw"
-                            imageHeight="80vh"
+                            imageHeight="60vh"
                             imageWidth="40vw"
                             rotateAmplitude={0}
                             scaleOnHover={1}

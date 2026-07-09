@@ -17,6 +17,30 @@ interface HandComponentProps {
 function HandComponent({ currentPlayerData, currentPlayerIdx, loggedUserId, socket, matchState, isPlayerTurn, id,
     selectedCards, setMaxSelectableCards, setSelectedCards }: HandComponentProps) {
     const [selectedCardsState, setSelectedCardsState] = useState<number[]>(selectedCards || []);
+    const [removedCard, setRemovedCard] = useState<{ cardId: number; kind: "stolen" | "discarded" } | null>(null);
+
+    useEffect(() => {
+        if (!socket || !socket.current) return;
+
+        const ws = socket.current;
+        const handleMessage = (event: MessageEvent) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data?.type !== "animation") return;
+                if (data.payload?.targetPlayerId !== currentPlayerIdx) return;
+
+                if (data.subtype === "steal_hand_card") {
+                    setRemovedCard({ cardId: data.payload.cardId, kind: "stolen" });
+                    setTimeout(() => setRemovedCard(null), 900);
+                } else if (data.subtype === "discard_card") {
+                    setRemovedCard({ cardId: data.payload.cardId, kind: "discarded" });
+                    setTimeout(() => setRemovedCard(null), 900);
+                }
+            } catch { /* empty */ }
+        };
+        ws.addEventListener("message", handleMessage);
+        return () => ws.removeEventListener("message", handleMessage);
+    }, [socket, currentPlayerIdx]);
 
     useEffect(() => {
         if (!socket || !socket.current) return;
@@ -113,8 +137,9 @@ function HandComponent({ currentPlayerData, currentPlayerIdx, loggedUserId, sock
                                 transition: "transform 0.2s",
                             }}
                         >
-                            <HandCards card={{ id: card.cardId }} isUserCard={currentPlayerIdx === loggedUserId} isSelectable={isSelectable!}
-                                isSelected={selectedCardsState.includes(card.cardId)} onSelect={() => handleSelectHandTarget(card.cardId)} onDeselect={() => handleDeselectHandTarget(card.cardId)} />
+                            <HandCards card={{ id: card.cardId, cardName: card.cardName, heroClass: card.heroClass, diceValue: card.diceValue, type: card.type }} isUserCard={currentPlayerIdx === loggedUserId} isSelectable={isSelectable!}
+                                isSelected={selectedCardsState.includes(card.cardId)} onSelect={() => handleSelectHandTarget(card.cardId)} onDeselect={() => handleDeselectHandTarget(card.cardId)}
+                                removalKind={removedCard && removedCard.cardId === card.cardId ? removedCard.kind : null} />
                         </div>
                     );
                 })
@@ -129,7 +154,7 @@ function HandComponent({ currentPlayerData, currentPlayerIdx, loggedUserId, sock
                         zIndex: 20,
                     }}
                 >
-                    Mostrar minhas cartas
+                    Show my cards
                 </button>
             )}
         </div>

@@ -2,12 +2,12 @@
 function ChallengeResult(playersData: any) {
      return (
         <div className="order-selection-scoreboard">
-            <h3>Placar de Ordem</h3>
+            <h3>Turn Order</h3>
             <table>
                 <thead>
                     <tr>
-                        <th>Jogador</th>
-                        <th>Rolagem</th>
+                        <th>Player</th>
+                        <th>Roll</th>
                     </tr>
                 </thead>
                 <tbody>
