@@ -9,16 +9,21 @@ import java.util.List;
 import java.util.Map;
 
 public class HeroCard extends Card {
-    private int diceValue;
+    private final int diceValue;
+    private final HeroClass heroClass;
 
-    public HeroCard(Long cardId, String cardName, CardType type, CompositeCardEffect effect) {
+    public HeroCard(Long cardId, String cardName, CardType type, HeroClass heroClass, int diceValue, CompositeCardEffect effect) {
         super(cardId, cardName, type, effect);
-        this.diceValue = 2;
+        this.heroClass = heroClass;
+        this.diceValue = diceValue;
     }
-
 
     public int getDiceValue() {
         return diceValue;
+    }
+
+    public HeroClass getHeroClass() {
+        return heroClass;
     }
 
     public void applyEffect(Match match, GameState gameState) {
@@ -79,6 +84,7 @@ public class HeroCard extends Card {
                 if(subEffect instanceof StealHandEffect) {
                     targets = ((StealHandEffect) subEffect).addTarget(userId, cardId);
                 }
+
             }
         }
 
@@ -129,6 +135,7 @@ public class HeroCard extends Card {
                 if(subEffect instanceof StealHandEffect) {
                     return ((StealHandEffect) subEffect).removeTarget(userId, cardId);
                 }
+
             }
         }
         return Collections.emptyMap();
@@ -149,6 +156,7 @@ public class HeroCard extends Card {
                 if(subEffect instanceof StealHandEffect) {
                     return ((StealHandEffect) subEffect).getMaxCardsToSteal();
                 }
+
             }
         }
         return null;

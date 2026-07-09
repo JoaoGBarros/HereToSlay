@@ -23,6 +23,10 @@ public class DestroyCardEffect implements CardEffect {
         return maxDestroy;
     }
 
+    public void setMaxDestroy(Integer maxDestroy) {
+        this.maxDestroy = maxDestroy;
+    }
+
     public Map<String, List<Long>> getPlayerIdToCardId() {
         return playerIdToCardId;
     }
@@ -76,7 +80,7 @@ public class DestroyCardEffect implements CardEffect {
                     .filter(gs -> UUID.nameUUIDFromBytes(gs.getUsername().getBytes()).toString().equals(playerId))
                     .findFirst()
                     .orElse(null);
-            if (targetState != null) {
+            if (targetState != null && !targetState.isHeroesProtectedFromDestroy()) {
                 for (Long cardId : cardsId) {
                     Optional<Card> cardOpt = targetState.getParty().stream()
                             .filter(c -> c.getCardId().equals(cardId))
