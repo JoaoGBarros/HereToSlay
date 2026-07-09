@@ -78,6 +78,14 @@ public class StealHandEffect implements CardEffect {
                             .filter(c -> c.getCardId().equals(cardId))
                             .findFirst();
                     cardOpt.ifPresent(card -> {
+                        JSONObject animation = new JSONObject();
+                        animation.put("type", "animation");
+                        animation.put("subtype", "steal_hand_card");
+                        animation.put("payload", new JSONObject()
+                                .put("targetPlayerId", playerId)
+                                .put("cardId", cardId)
+                        );
+                        match.broadcast(animation.toString());
                         targetState.getHand().remove(card);
                         gameState.getHand().add(card);
                     });

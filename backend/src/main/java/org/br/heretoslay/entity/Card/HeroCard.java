@@ -9,16 +9,21 @@ import java.util.List;
 import java.util.Map;
 
 public class HeroCard extends Card {
-    private int diceValue;
+    private final int diceValue;
+    private final HeroClass heroClass;
 
-    public HeroCard(Long cardId, String cardName, CardType type, CompositeCardEffect effect) {
+    public HeroCard(Long cardId, String cardName, CardType type, HeroClass heroClass, int diceValue, CompositeCardEffect effect) {
         super(cardId, cardName, type, effect);
-        this.diceValue = 2;
+        this.heroClass = heroClass;
+        this.diceValue = diceValue;
     }
-
 
     public int getDiceValue() {
         return diceValue;
+    }
+
+    public HeroClass getHeroClass() {
+        return heroClass;
     }
 
     public void applyEffect(Match match, GameState gameState) {
@@ -27,11 +32,24 @@ public class HeroCard extends Card {
         }
     }
 
+    public DiscardForEffect getDiscardForEffect() {
+        CompositeCardEffect effect = this.getEffect();
+        if (effect != null) {
+            for (CardEffect subEffect : effect.getEffects()) {
+                if (subEffect instanceof DiscardForEffect) {
+                    return (DiscardForEffect) subEffect;
+                }
+            }
+        }
+        return null;
+    }
+
     public boolean checkForSelectablePartyEffect() {
         CompositeCardEffect effect = this.getEffect();
         if (effect != null) {
             for (CardEffect subEffect : effect.getEffects()) {
-                if (subEffect instanceof DestroyCardEffect || subEffect instanceof StealCardEffect) {
+                if (subEffect instanceof DestroyCardEffect || subEffect instanceof StealCardEffect
+                        || subEffect instanceof SwapSelfForStolenHeroEffect || subEffect instanceof StealAndUseEffectImmediatelyEffect) {
                     return true;
                 }
             }
@@ -43,7 +61,7 @@ public class HeroCard extends Card {
         CompositeCardEffect effect = this.getEffect();
         if (effect != null) {
             for (CardEffect subEffect : effect.getEffects()) {
-                if (subEffect instanceof StealHandEffect) {
+                if (subEffect instanceof StealHandEffect || subEffect instanceof StealHandWithBonusIfTypeEffect) {
                     return true;
                 }
             }
@@ -55,7 +73,7 @@ public class HeroCard extends Card {
         CompositeCardEffect effect = this.getEffect();
         if (effect != null) {
             for (CardEffect subEffect : effect.getEffects()) {
-                if (subEffect instanceof TradeHandEffect) {
+                if (subEffect instanceof TradeHandEffect || subEffect instanceof ChosenPlayerEffect || subEffect instanceof LookAtHandEffect) {
                     return true;
                 }
             }
@@ -79,6 +97,18 @@ public class HeroCard extends Card {
                 if(subEffect instanceof StealHandEffect) {
                     targets = ((StealHandEffect) subEffect).addTarget(userId, cardId);
                 }
+
+                if (subEffect instanceof StealHandWithBonusIfTypeEffect) {
+                    targets = ((StealHandWithBonusIfTypeEffect) subEffect).getPrimary().addTarget(userId, cardId);
+                }
+
+                if (subEffect instanceof SwapSelfForStolenHeroEffect) {
+                    targets = ((SwapSelfForStolenHeroEffect) subEffect).getPrimary().addTarget(userId, cardId);
+                }
+
+                if (subEffect instanceof StealAndUseEffectImmediatelyEffect) {
+                    targets = ((StealAndUseEffectImmediatelyEffect) subEffect).getPrimary().addTarget(userId, cardId);
+                }
             }
         }
 
@@ -94,6 +124,14 @@ public class HeroCard extends Card {
                     ((TradeHandEffect) subEffect).setPlayerSelected(userId);
                     targetPlayerId = ((TradeHandEffect) subEffect).getPlayerSelected();
                 }
+                if (subEffect instanceof ChosenPlayerEffect) {
+                    ((ChosenPlayerEffect) subEffect).setPlayerSelected(userId);
+                    targetPlayerId = ((ChosenPlayerEffect) subEffect).getPlayerSelected();
+                }
+                if (subEffect instanceof LookAtHandEffect) {
+                    ((LookAtHandEffect) subEffect).setPlayerSelected(userId);
+                    targetPlayerId = ((LookAtHandEffect) subEffect).getPlayerSelected();
+                }
             }
         }
 
@@ -108,6 +146,14 @@ public class HeroCard extends Card {
                 if (subEffect instanceof TradeHandEffect) {
                     ((TradeHandEffect) subEffect).setPlayerSelected(null);
                     targetPlayerId = ((TradeHandEffect) subEffect).getPlayerSelected();
+                }
+                if (subEffect instanceof ChosenPlayerEffect) {
+                    ((ChosenPlayerEffect) subEffect).setPlayerSelected(null);
+                    targetPlayerId = ((ChosenPlayerEffect) subEffect).getPlayerSelected();
+                }
+                if (subEffect instanceof LookAtHandEffect) {
+                    ((LookAtHandEffect) subEffect).setPlayerSelected(null);
+                    targetPlayerId = ((LookAtHandEffect) subEffect).getPlayerSelected();
                 }
             }
         }
@@ -129,6 +175,18 @@ public class HeroCard extends Card {
                 if(subEffect instanceof StealHandEffect) {
                     return ((StealHandEffect) subEffect).removeTarget(userId, cardId);
                 }
+
+                if (subEffect instanceof StealHandWithBonusIfTypeEffect) {
+                    return ((StealHandWithBonusIfTypeEffect) subEffect).getPrimary().removeTarget(userId, cardId);
+                }
+
+                if (subEffect instanceof SwapSelfForStolenHeroEffect) {
+                    return ((SwapSelfForStolenHeroEffect) subEffect).getPrimary().removeTarget(userId, cardId);
+                }
+
+                if (subEffect instanceof StealAndUseEffectImmediatelyEffect) {
+                    return ((StealAndUseEffectImmediatelyEffect) subEffect).getPrimary().removeTarget(userId, cardId);
+                }
             }
         }
         return Collections.emptyMap();
@@ -148,6 +206,18 @@ public class HeroCard extends Card {
 
                 if(subEffect instanceof StealHandEffect) {
                     return ((StealHandEffect) subEffect).getMaxCardsToSteal();
+                }
+
+                if (subEffect instanceof StealHandWithBonusIfTypeEffect) {
+                    return ((StealHandWithBonusIfTypeEffect) subEffect).getPrimary().getMaxCardsToSteal();
+                }
+
+                if (subEffect instanceof SwapSelfForStolenHeroEffect) {
+                    return ((SwapSelfForStolenHeroEffect) subEffect).getPrimary().getMaxSteal();
+                }
+
+                if (subEffect instanceof StealAndUseEffectImmediatelyEffect) {
+                    return ((StealAndUseEffectImmediatelyEffect) subEffect).getPrimary().getMaxSteal();
                 }
             }
         }

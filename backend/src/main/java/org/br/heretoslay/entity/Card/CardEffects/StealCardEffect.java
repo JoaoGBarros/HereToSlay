@@ -76,7 +76,7 @@ public class StealCardEffect implements CardEffect {
                     .filter(gs -> UUID.nameUUIDFromBytes(gs.getUsername().getBytes()).toString().equals(playerId))
                     .findFirst()
                     .orElse(null);
-            if (targetState != null) {
+            if (targetState != null && !targetState.isHeroesProtectedFromSteal()) {
                 for (Long cardId : cardsId) {
                     Optional<Card> cardOpt = targetState.getParty().stream()
                             .filter(c -> c.getCardId().equals(cardId))
