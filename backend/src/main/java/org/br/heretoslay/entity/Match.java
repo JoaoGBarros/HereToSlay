@@ -8,6 +8,9 @@ import org.br.heretoslay.entity.Card.CardEffects.DestroyCardEffect;
 import org.br.heretoslay.entity.Card.CardEffects.DiscardForEffect;
 import org.br.heretoslay.entity.Card.CardEffects.StealCardEffect;
 import org.br.heretoslay.entity.Card.CardEffects.StealHandEffect;
+import org.br.heretoslay.entity.Card.CardEffects.StealHandWithBonusIfTypeEffect;
+import org.br.heretoslay.entity.Card.CardEffects.SwapSelfForStolenHeroEffect;
+import org.br.heretoslay.entity.Card.CardEffects.StealAndUseEffectImmediatelyEffect;
 import org.br.heretoslay.match.MatchService;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -35,6 +38,7 @@ public class Match {
     private Card currentHeroCard = null;
     private String currentHeroPlayer = null;
     private Set<String> challengers = new HashSet<>();
+    @JsonIgnore
     private Timer challengeTimer = new Timer();
     private Map<String, Integer> duelRolls = new HashMap<>();
     private String duelChallenger = null;
@@ -46,9 +50,14 @@ public class Match {
             Arrays.asList(MatchState.CHALLENGE_WINDOW, MatchState.CHALLENGE_ROLL, MatchState.SELECTING_CARDS, MatchState.SELECTING_HAND_CARDS, MatchState.SELECTING_PLAYER)
     );
 
+    @JsonIgnore
     private final GameEventBus eventBus = new GameEventBus();
     // MVP simplification: all 15 base monsters sit face-up on the board for the
     // whole match, instead of a shuffled monster deck revealing a few at a time.
+    // Not Jackson-serializable (MonsterCard carries CardEffect strategy objects with
+    // no data properties) - excluded from match-state-store snapshots. Harmless: the
+    // board is deterministically rebuilt by this same field initializer either way.
+    @JsonIgnore
     private final List<MonsterCard> monsterBoard = createMonsterBoard();
 
     private boolean modifierWindowOpen = false;
@@ -87,6 +96,7 @@ public class Match {
         ));
     }
 
+    @JsonIgnore
     public GameEventBus getEventBus() {
         return eventBus;
     }
@@ -168,8 +178,15 @@ public class Match {
                 Card pendingHero = gameState.getPendingHeroCard();
                 gameState.clearLastDrawnCards();
                 pendingHero.getEffect().applyEffect(this, gameState);
-                gameState.setPendingHeroCard(null);
-                matchState = MatchState.GAMEPLAY;
+                if (gameState.getPendingHeroCard() != null && gameState.getPendingHeroCard() != pendingHero) {
+                    // A nested effect (e.g. Wiggles stealing-and-using a hero) queued up a
+                    // freshly-acquired hero to roll for - let it play through the normal
+                    // WAITING_HERO_ROLL flow instead of clearing it below.
+                    matchState = MatchState.WAITING_HERO_ROLL;
+                } else {
+                    gameState.setPendingHeroCard(null);
+                    matchState = MatchState.GAMEPLAY;
+                }
                 JSONObject matchUpdate = new JSONObject();
                 matchUpdate.put("type", "match");
                 matchUpdate.put("subtype", "match_state");
@@ -287,6 +304,18 @@ public class Match {
                         return ((StealCardEffect) subEffect).getPlayerIdToCardId();
                     }
 
+                    if (subEffect instanceof StealHandWithBonusIfTypeEffect) {
+                        return ((StealHandWithBonusIfTypeEffect) subEffect).getPrimary().getPlayerIdToCardId();
+                    }
+
+                    if (subEffect instanceof SwapSelfForStolenHeroEffect) {
+                        return ((SwapSelfForStolenHeroEffect) subEffect).getPrimary().getPlayerIdToCardId();
+                    }
+
+                    if (subEffect instanceof StealAndUseEffectImmediatelyEffect) {
+                        return ((StealAndUseEffectImmediatelyEffect) subEffect).getPrimary().getPlayerIdToCardId();
+                    }
+
                 }
             }
         }
@@ -379,7 +408,7 @@ public class Match {
                     .put("maxAP", player.getMaxAP())
                     .put("currentAP", player.getCurrentAP())
                     .put("username", player.getUsername())
-                    .put("pendingHeroCard", player.getPendingHeroCard() == null ? JSONObject.NULL : player.getPendingHeroCard())
+                    .put("pendingHeroCard", player.getPendingHeroCard() == null ? JSONObject.NULL : new JSONObject(player.getPendingHeroCard()))
                     .put("usedCardIds", player.getUsedCardIds())
                     .put("orderRoll", player.getOrderRoll() == null ? JSONObject.NULL : player.getOrderRoll())
                     .put("rollBonusUntilEndOfTurn", player.getRollBonusUntilEndOfTurn())
@@ -788,6 +817,7 @@ public class Match {
         }
     }
 
+    @JsonIgnore
     public List<MonsterCard> getMonsterBoard() {
         return Collections.unmodifiableList(monsterBoard);
     }
@@ -867,6 +897,7 @@ public class Match {
                 if(card.checkForSelectablePartyEffect() && isSelectableHeroAvailable(gameState)){
                     gameState.setPendingHeroCard(card);
                     matchState = MatchState.SELECTING_CARDS;
+                    gameState.getUsedCardIds().add(card.getCardId());
                     JSONObject effectMsg = new JSONObject();
                     effectMsg.put("type", "match");
                     effectMsg.put("subtype", "match_state");
@@ -912,9 +943,10 @@ public class Match {
                     broadcast(effectMsg.toString());
 
                     effectMsg.put("type", "match");
-                    effectMsg.put("subtype", "select_effect_target");
+                    effectMsg.put("subtype", "select_player_target");
                     effectMsg.put("payload", new JSONObject()
-                            .put("target", Collections.emptyMap()));
+                            .put("target", JSONObject.NULL)
+                            .put("maxTargets", 1));
                     broadcast(effectMsg.toString());
                     return;
                 }

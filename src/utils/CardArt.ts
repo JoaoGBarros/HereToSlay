@@ -15,6 +15,22 @@ import forcedExchange from '../ui/assets/cards/magic/forced exchange.png';
 import forcefulWinds from '../ui/assets/cards/magic/forceful winds.png';
 import windsOfChange from '../ui/assets/cards/magic/winds of change.png';
 
+import abyssQueen from '../ui/assets/monster/abyss queen.png';
+import anuranCauldron from '../ui/assets/monster/anuran cauldron.png';
+import articAries from '../ui/assets/monster/artic aries.png';
+import bloodwing from '../ui/assets/monster/bloodwing.png';
+import corruptedSabretooth from '../ui/assets/monster/corrupted sabretooth.png';
+import crownedSerpent from '../ui/assets/monster/crowned serpent.png';
+import darkDragonKing from '../ui/assets/monster/dark dragon king.png';
+import dracos from '../ui/assets/monster/dracos.png';
+import malamammoth from '../ui/assets/monster/malamammoth.png';
+import megaSlime from '../ui/assets/monster/mega slime.png';
+import orthus from '../ui/assets/monster/orthus.png';
+import rexMajor from '../ui/assets/monster/rex major.png';
+import terratuga from '../ui/assets/monster/terratuga.png';
+import titanWyvern from '../ui/assets/monster/titan wyvern.png';
+import warwornOwlbear from '../ui/assets/monster/warworn owlbear.png';
+
 const MODIFIER_ART: Record<string, string> = {
     'Modifier +1/-3': modifierPlus1,
     'Modifier +2/-2': modifierPlus2,
@@ -33,6 +49,29 @@ const MAGIC_ART: Record<string, string> = {
     'Forceful Winds': forcefulWinds,
     'Winds of Change': windsOfChange,
 };
+
+const MONSTER_ART: Record<string, string> = {
+    'Abyss Queen': abyssQueen,
+    'Anuran Cauldron': anuranCauldron,
+    'Artic Aries': articAries,
+    'Bloodwing': bloodwing,
+    'Corrupted Sabretooth': corruptedSabretooth,
+    'Crowned Serpent': crownedSerpent,
+    'Dark Dragon King': darkDragonKing,
+    'Dracos': dracos,
+    'Malamammoth': malamammoth,
+    'Mega Slime': megaSlime,
+    'Orthus': orthus,
+    'Rex Major': rexMajor,
+    'Terratuga': terratuga,
+    'Titan Wyvern': titanWyvern,
+    'Warworn Owlbear': warwornOwlbear,
+};
+
+export function getMonsterArt(monsterName?: string): string | undefined {
+    if (!monsterName) return undefined;
+    return MONSTER_ART[monsterName];
+}
 
 export function getModifierArt(cardName?: string): string | undefined {
     if (!cardName) return undefined;

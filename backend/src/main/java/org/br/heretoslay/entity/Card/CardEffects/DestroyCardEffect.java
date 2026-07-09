@@ -83,7 +83,7 @@ public class DestroyCardEffect implements CardEffect {
             if (targetState != null && !targetState.isHeroesProtectedFromDestroy()) {
                 for (Long cardId : cardsId) {
                     Optional<Card> cardOpt = targetState.getParty().stream()
-                            .filter(c -> c.getCardId().equals(cardId))
+                            .filter(c -> c.getCardId().equals(cardId) && c.getType() == org.br.heretoslay.entity.Card.CardType.HERO)
                             .findFirst();
                     cardOpt.ifPresent(card -> {
                         JSONObject animaton = new JSONObject();

@@ -51,6 +51,22 @@ public class GameMonitoringStreamsProcessor {
         // changelog topics Kafka Streams backs these with are enough fault tolerance.
         config.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.IN_MEMORY);
 
+        Topology topology = buildTopology();
+        try {
+            KafkaStreams streams = new KafkaStreams(topology, config);
+            streams.start();
+            System.out.println("Serviço de Monitoramento (Kafka Streams / CEP) do Here To Slay iniciado!");
+            Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
+        } catch (Exception e) {
+            System.err.println("Erro ao iniciar o serviço de monitoramento: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Builds the topology without starting it - split out from main() so tests can
+     * drive it with TopologyTestDriver (no live Kafka broker needed).
+     */
+    public static Topology buildTopology() {
         StreamsBuilder builder = new StreamsBuilder();
 
         // In-memory, not RocksDB: the jre-alpine (musl) runtime image used by this
@@ -86,7 +102,7 @@ public class GameMonitoringStreamsProcessor {
                 .filter((key, value) -> value != null)
                 .to("game-monitoring-alerts");
 
-        // Situação 2 (nova): foco de ataques - 2+ jogadores atacando o mesmo alvo
+        // Situação 2: foco de ataques - 2+ jogadores atacando o mesmo alvo
         // numa janela deslizante de 30s. Chave composta "matchId|targetPlayerId"
         // preserva o matchId (perdido ao reagrupar por alvo) para a saída.
         actionsIn
@@ -105,7 +121,7 @@ public class GameMonitoringStreamsProcessor {
                 })
                 .to("game-monitoring-alerts");
 
-        // Situação 3 (nova, álgebra de Allen): Processor API + state store -
+        // Situação 3: Processor API + state store -
         // ver LuckStreakProcessor. Statefull, mas não usa windowedBy do DSL: os
         // próprios streaks (intervalos de estado) fazem o papel da "janela".
         actionsIn
@@ -113,7 +129,7 @@ public class GameMonitoringStreamsProcessor {
                 .process(LuckStreakProcessor::new, STREAK_STORE_NAME)
                 .to("game-monitoring-alerts");
 
-        // Situação 4 (nova): partida travada - session window com gap de
+        // Situação 4: partida travada - session window com gap de
         // inatividade; quando uma sessão de atividade se fecha, o ritmo caiu.
         actionsIn
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
@@ -125,18 +141,18 @@ public class GameMonitoringStreamsProcessor {
                         MonitoringAlert.matchStalled(windowedKey.window().end() - windowedKey.window().start())))
                 .to("game-monitoring-alerts");
 
-        // Situação 5 (bônus/criatividade): efeito em cadeia - 3+ ações na mesma
-        // partida resolvidas dentro de uma janela curta (tumbling, 5s).
+        // Situação 5: efeito em cadeia - 3+ ações na mesma
+        // partida resolvidas dentro de uma janela curta (tumbling, 35s).
         actionsIn
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(5), Duration.ZERO))
+                .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(35), Duration.ZERO))
                 .count()
                 .toStream()
                 .filter((windowedKey, count) -> count != null && count >= 3)
                 .map((windowedKey, count) -> KeyValue.pair(windowedKey.key(), MonitoringAlert.chainReaction(count)))
                 .to("game-monitoring-alerts");
 
-        // Item 9 (tags temporárias de comportamento, brincadeira): "Frequent Buyer" -
+        // Situação 6: "Frequent Buyer" -
         // Processor API + state store, streak de draw_card consecutivos por jogador
         // (qualquer outra ação do mesmo jogador zera o streak). Fácil de testar:
         // um jogador que só dá draw_card 6x seguidas sem fazer mais nada.
@@ -144,7 +160,7 @@ public class GameMonitoringStreamsProcessor {
                 .process(FrequentBuyerProcessor::new, BUYER_STREAK_STORE_NAME)
                 .to("game-monitoring-alerts");
 
-        // Item 9: "Focusing on X" / "Focused" - mesmo atacante mirando o mesmo alvo
+        // Situação 7: "Focusing on X" / "Focused" - mesmo atacante mirando o mesmo alvo
         // 3+ vezes numa janela de 2 minutos (proxy para "últimos 2 turnos", já que
         // o serviço de monitoramento não enxerga limites de turno). Gera duas tags:
         // uma para quem está focando, outra para quem está sendo focado.
@@ -167,7 +183,7 @@ public class GameMonitoringStreamsProcessor {
                 })
                 .to("game-monitoring-alerts");
 
-        // Item 9: "RNG Diff" - streak de ataques a monstro sem matar (fight-back
+        // Situação 8: "RNG Diff" - streak de ataques a monstro sem matar (fight-back
         // ou sobrevida) por jogador. Lê game-state-out (resultado já resolvido
         // pelo servidor em Match.resolveMonsterAttack), não a ação bruta do
         // cliente. Um monster_slain zera o streak.
@@ -175,15 +191,7 @@ public class GameMonitoringStreamsProcessor {
                 .process(RngDiffProcessor::new, RNG_STREAK_STORE_NAME)
                 .to("game-monitoring-alerts");
 
-        Topology topology = builder.build();
-        try {
-            KafkaStreams streams = new KafkaStreams(topology, config);
-            streams.start();
-            System.out.println("Serviço de Monitoramento (Kafka Streams / CEP) do Here To Slay iniciado!");
-            Runtime.getRuntime().addShutdownHook(new Thread(streams::close));
-        } catch (Exception e) {
-            System.err.println("Erro ao iniciar o serviço de monitoramento: " + e.getMessage());
-        }
+        return builder.build();
     }
 
     private static boolean isValidJson(String value) {

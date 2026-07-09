@@ -11,10 +11,11 @@ import java.util.Optional;
 
 /**
  * Steals a chosen hero (delegates target selection to a StealCardEffect) and
- * immediately applies its effect - the physical "roll to use it" step is
- * skipped (treated as an automatic success) as an MVP simplification, since
- * chaining a second real dice roll inside this effect resolution would need
- * new state-machine plumbing. See Wiggles.
+ * queues it up to be "used" right away, the same as if the player had
+ * dragged/clicked it themselves: Match's apply_card_effects handler notices
+ * gameState's pendingHeroCard changed to this freshly-stolen card and
+ * transitions to WAITING_HERO_ROLL for it, so the stolen hero gets the same
+ * real dice-roll UI as any other used hero. See Wiggles.
  */
 public class StealAndUseEffectImmediatelyEffect implements CardEffect {
 
@@ -36,6 +37,6 @@ public class StealAndUseEffectImmediatelyEffect implements CardEffect {
                 .filter(c -> c.getType() == CardType.HERO)
                 .reduce((first, second) -> second);
 
-        stolenHero.ifPresent(card -> ((HeroCard) card).applyEffect(match, gameState));
+        stolenHero.ifPresent(gameState::setPendingHeroCard);
     }
 }

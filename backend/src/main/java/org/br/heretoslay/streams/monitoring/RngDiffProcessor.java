@@ -36,10 +36,12 @@ public class RngDiffProcessor implements Processor<String, String, String, Strin
         } catch (Exception e) {
             return;
         }
-        if (!"animation".equals(event.optString("type"))) return;
+        JSONObject inner = event.optJSONObject("payload");
+        if (inner == null) return;
+        if (!"animation".equals(inner.optString("type"))) return;
 
-        String subtype = event.optString("subtype", null);
-        JSONObject payload = event.optJSONObject("payload");
+        String subtype = inner.optString("subtype", null);
+        JSONObject payload = inner.optJSONObject("payload");
         if (subtype == null || payload == null) return;
         if (!"monster_slain".equals(subtype) && !"monster_fight_back".equals(subtype) && !"monster_survives".equals(subtype)) return;
 
