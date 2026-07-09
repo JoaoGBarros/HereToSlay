@@ -4,6 +4,9 @@ import { Die, useDie } from "react-dice-3d";
 import { playSound } from '@/utils/SoundManager/SoundManager';
 import ChallengeButton from "./ChallengeButton";
 import type { MonsterData } from "./MonsterComponent";
+import TiltedCard from "@/components/TiltedCard";
+import heroImg from "../../assets/hero.png";
+import { getMonsterArt } from "@/utils/CardArt";
 
 interface DiceComponentProps {
     currentPlayerIdx: string;
@@ -77,9 +80,24 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
                     setTimeout(() => setShowResult(false), 2000);
                 }
 
+                // Broadcast-driven (not the local 3D dice animation state), so the
+                // roll and its breakdown are visible to every player watching this
+                // board - not just whoever physically clicked the dice.
+                if (data.type === 'roll_result' && data.subtype === 'monster_roll' && data.payload?.playerId === currentPlayerIdx) {
+                    setRolledValue(data.payload.roll);
+                    setMinValue(null);
+                    setShowResult(true);
+                    setTimeout(() => setShowResult(false), 2000);
+                }
+
+                if (data.type === 'roll_result' && data.subtype === 'duel_roll' && data.payload?.[currentPlayerIdx] != null) {
+                    setRolledValue(data.payload[currentPlayerIdx]);
+                    setMinValue(null);
+                }
+
             };
         }
-    }, [socket]);
+    }, [socket, currentPlayerIdx]);
 
 
     useEffect(() => {
@@ -163,8 +181,8 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
     const dice1 = useDie("dice-1");
     const dice2 = useDie("dice-2");
 
-    const showBreakdown = (pendingHeroCard || isPlayerChallenger || isMonsterRoll) && dice1Result !== null && dice2Result !== null;
-    const baseRoll = (dice1Result ?? 0) + (dice2Result ?? 0);
+    const showBreakdown = (pendingHeroCard || isPlayerChallenger || isMonsterRoll) && rolledValue !== null;
+    const baseRoll = rolledValue ?? 0;
     const passiveSources = [...(currentPlayerData?.rollBonusSources || []), ...(currentPlayerData?.permanentRollBonusSources || [])];
     const passiveSum = (currentPlayerData?.rollBonusUntilEndOfTurn || 0) + (currentPlayerData?.permanentRollBonus || 0);
     const modifierSum = collectedModifiers.reduce((sum, m) => sum + m.value, 0);
@@ -188,8 +206,19 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
                 </div>
             )}
             {isMonsterRoll && monster && (
-                <div className="monster-roll-banner mr-[200px] mb-[100px] party-hero-slide-in flex flex-col items-center">
+                <div className="hero-card-container mr-[200px] mb-[100px] party-hero-slide-in flex flex-col items-center">
                     <span className="monster-roll-banner-label">Attacking</span>
+                    <TiltedCard
+                        imageSrc={getMonsterArt(monster.name) || heroImg}
+                        containerHeight="350px"
+                        containerWidth="280px"
+                        imageHeight="350px"
+                        imageWidth="280px"
+                        rotateAmplitude={10}
+                        scaleOnHover={1}
+                        showMobileWarning={false}
+                        showTooltip={false}
+                    />
                     <strong className="monster-roll-banner-name">{monster.name}</strong>
                     <span className="monster-roll-banner-threshold">Slay: {monster.slayThreshold}+</span>
                 </div>

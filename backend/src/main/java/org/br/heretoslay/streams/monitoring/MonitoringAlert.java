@@ -25,9 +25,9 @@ public class MonitoringAlert {
         return wrapper.toString();
     }
 
-    public static String actionProcessed(JSONObject action, JSONObject state) {
-        JSONObject extra = new JSONObject().put("action", action.optString("action", action.optString("subtype", "")));
-        return wrap("ACTION_PROCESSED", "Action processed", extra);
+    public static String actionHistory(JSONArray history) {
+        JSONObject extra = new JSONObject().put("history", history);
+        return wrap("ACTION_HISTORY", "Action history updated", extra);
     }
 
     public static String focusedTarget(String targetPlayerId, long attackCount) {
@@ -38,11 +38,6 @@ public class MonitoringAlert {
     public static String turningPoint(String playerA, String playerB, String relation) {
         JSONObject extra = new JSONObject().put("playerA", playerA).put("playerB", playerB).put("relation", relation);
         return wrap("TURNING_POINT", "🔄 Luck just turned between two players!", extra);
-    }
-
-    public static String matchStalled(long inactiveMillis) {
-        JSONObject extra = new JSONObject().put("inactiveMillis", inactiveMillis);
-        return wrap("MATCH_STALLED", "🐢 The match has slowed down - nobody has acted in a while", extra);
     }
 
     public static String chainReaction(long actionCount) {
@@ -85,5 +80,27 @@ public class MonitoringAlert {
                 .put("tagType", "RNG_DIFF")
                 .put("failStreak", failStreak);
         return wrap("RNG_DIFF", "🎲 The dice have not been kind lately - tagged RNG Diff!", extra);
+    }
+
+    public static String firstBlood(String playerId) {
+        JSONObject extra = new JSONObject()
+                .put("taggedPlayerId", playerId)
+                .put("tagType", "FIRST_BLOOD");
+        return wrap("FIRST_BLOOD", "🩸 First blood! A monster has fallen - tagged First Blood!", extra);
+    }
+
+    public static String combo(String playerId, long actionCount) {
+        JSONObject extra = new JSONObject()
+                .put("taggedPlayerId", playerId)
+                .put("tagType", "COMBO")
+                .put("actionCount", actionCount);
+        return wrap("COMBO", "🔥 Quick hands! A player is on a combo - tagged Combo!", extra);
+    }
+
+    public static String generousSoul(String playerId) {
+        JSONObject extra = new JSONObject()
+                .put("taggedPlayerId", playerId)
+                .put("tagType", "GENEROUS_SOUL");
+        return wrap("GENEROUS_SOUL", "💝 What a generous soul - buffed a rival! Tagged Generous Soul!", extra);
     }
 }

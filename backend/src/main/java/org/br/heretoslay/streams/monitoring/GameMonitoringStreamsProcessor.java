@@ -8,10 +8,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
-import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.SessionWindows;
-import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -26,17 +23,19 @@ import java.util.Properties;
  * top of Here To Slay's existing Kafka topics. Reads game-actions-in and
  * game-state-out only - it never writes back into the imperative game
  * engine's topics, so it cannot affect real gameplay if something here is
- * wrong. Detects 5 situations, writing derived alerts to
+ * wrong. Detects 10 situations, writing derived alerts to
  * game-monitoring-alerts for the Gateway to fan out as in-game notifications.
  *
- * See plans/here-to-slay-etapa2 for the full design writeup and the PDF
- * requirement-to-situation mapping.
+ * See docs/kafka-streams.md for the full design writeup (Allen algebra,
+ * stateless/stateful op inventory, per-situation windowing strategy).
  */
 public class GameMonitoringStreamsProcessor {
 
     public static final String STREAK_STORE_NAME = "streak-store";
     public static final String BUYER_STREAK_STORE_NAME = "buyer-streak-store";
     public static final String RNG_STREAK_STORE_NAME = "rng-streak-store";
+    public static final String ACTION_HISTORY_STORE_NAME = "action-history-store";
+    public static final String FIRST_BLOOD_STORE_NAME = "first-blood-store";
 
     public static void main(String[] args) {
         Properties config = new Properties();
@@ -85,6 +84,14 @@ public class GameMonitoringStreamsProcessor {
                 Stores.inMemoryKeyValueStore(RNG_STREAK_STORE_NAME), Serdes.String(), Serdes.String());
         builder.addStateStore(rngStreakStore);
 
+        StoreBuilder<KeyValueStore<String, String>> actionHistoryStore = Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore(ACTION_HISTORY_STORE_NAME), Serdes.String(), Serdes.String());
+        builder.addStateStore(actionHistoryStore);
+
+        StoreBuilder<KeyValueStore<String, String>> firstBloodStore = Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore(FIRST_BLOOD_STORE_NAME), Serdes.String(), Serdes.String());
+        builder.addStateStore(firstBloodStore);
+
         // Stateless: parsing/validating the two raw topics this service observes.
         KStream<String, String> actionsIn = builder.stream("game-actions-in", Consumed.with(Serdes.String(), Serdes.String()))
                 .filter((key, value) -> isValidJson(value));
@@ -92,14 +99,13 @@ public class GameMonitoringStreamsProcessor {
         KStream<String, String> statesOut = builder.stream("game-state-out", Consumed.with(Serdes.String(), Serdes.String()))
                 .filter((key, value) -> isValidJson(value));
 
-        // Situação 1 (evento composto): join stream-stream por matchId - correlaciona
-        // a ação do jogador com o novo estado que o servidor produziu em resposta.
-        actionsIn.join(
-                        statesOut,
-                        ActionProcessedEvent::correlate,
-                        JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofSeconds(2)),
-                        StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String()))
-                .filter((key, value) -> value != null)
+        // Situação 1: histórico de ações - Processor API + state store
+        // (ver ActionHistoryProcessor). Cada ação nova é anexada a uma lista
+        // por partida (capada em 25 entradas) e a lista inteira é reenviada,
+        // para que quem (re)conectar no meio da partida veja o histórico
+        // completo, não só o que chegar dali em diante.
+        actionsIn
+                .process(ActionHistoryProcessor::new, ACTION_HISTORY_STORE_NAME)
                 .to("game-monitoring-alerts");
 
         // Situação 2: foco de ataques - 2+ jogadores atacando o mesmo alvo
@@ -129,19 +135,7 @@ public class GameMonitoringStreamsProcessor {
                 .process(LuckStreakProcessor::new, STREAK_STORE_NAME)
                 .to("game-monitoring-alerts");
 
-        // Situação 4: partida travada - session window com gap de
-        // inatividade; quando uma sessão de atividade se fecha, o ritmo caiu.
-        actionsIn
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(SessionWindows.ofInactivityGapWithNoGrace(Duration.ofSeconds(60)))
-                .count()
-                .toStream()
-                .filter((windowedKey, count) -> count != null)
-                .map((windowedKey, count) -> KeyValue.pair(windowedKey.key(),
-                        MonitoringAlert.matchStalled(windowedKey.window().end() - windowedKey.window().start())))
-                .to("game-monitoring-alerts");
-
-        // Situação 5: efeito em cadeia - 3+ ações na mesma
+        // Situação 4: efeito em cadeia - 3+ ações na mesma
         // partida resolvidas dentro de uma janela curta (tumbling, 35s).
         actionsIn
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
@@ -152,7 +146,7 @@ public class GameMonitoringStreamsProcessor {
                 .map((windowedKey, count) -> KeyValue.pair(windowedKey.key(), MonitoringAlert.chainReaction(count)))
                 .to("game-monitoring-alerts");
 
-        // Situação 6: "Frequent Buyer" -
+        // Situação 5: "Frequent Buyer" -
         // Processor API + state store, streak de draw_card consecutivos por jogador
         // (qualquer outra ação do mesmo jogador zera o streak). Fácil de testar:
         // um jogador que só dá draw_card 6x seguidas sem fazer mais nada.
@@ -160,7 +154,7 @@ public class GameMonitoringStreamsProcessor {
                 .process(FrequentBuyerProcessor::new, BUYER_STREAK_STORE_NAME)
                 .to("game-monitoring-alerts");
 
-        // Situação 7: "Focusing on X" / "Focused" - mesmo atacante mirando o mesmo alvo
+        // Situação 6: "Focusing on X" / "Focused" - mesmo atacante mirando o mesmo alvo
         // 3+ vezes numa janela de 2 minutos (proxy para "últimos 2 turnos", já que
         // o serviço de monitoramento não enxerga limites de turno). Gera duas tags:
         // uma para quem está focando, outra para quem está sendo focado.
@@ -183,12 +177,47 @@ public class GameMonitoringStreamsProcessor {
                 })
                 .to("game-monitoring-alerts");
 
-        // Situação 8: "RNG Diff" - streak de ataques a monstro sem matar (fight-back
+        // Situação 7: "RNG Diff" - streak de ataques a monstro sem matar (fight-back
         // ou sobrevida) por jogador. Lê game-state-out (resultado já resolvido
         // pelo servidor em Match.resolveMonsterAttack), não a ação bruta do
         // cliente. Um monster_slain zera o streak.
         statesOut
                 .process(RngDiffProcessor::new, RNG_STREAK_STORE_NAME)
+                .to("game-monitoring-alerts");
+
+        // Situação 8: "First Blood" - Processor API + state store (flag único por
+        // partida). Dispara uma única vez, na primeira vez que QUALQUER monstro é
+        // abatido na partida. Fácil de testar: uma única vitória contra um monstro.
+        statesOut
+                .process(FirstBloodProcessor::new, FIRST_BLOOD_STORE_NAME)
+                .to("game-monitoring-alerts");
+
+        // Situação 9: "Combo" - Statefull via DSL: mesmo jogador (não mesma partida
+        // inteira) realizando 3 ações em rajada dentro de uma janela curta (6s,
+        // tumbling). Chave composta "matchId|playerId". Fácil de testar: mandar 3
+        // ações seguidas rapidamente (ex: draw_card 3x em menos de 6s).
+        actionsIn
+                .filter((key, value) -> actorOf(value) != null)
+                .map((key, value) -> KeyValue.pair(key + "|" + actorOf(value), value))
+                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+                .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(6), Duration.ZERO))
+                .count()
+                .toStream()
+                .filter((windowedKey, count) -> count != null && count == 3)
+                .map((windowedKey, count) -> {
+                    String[] parts = windowedKey.key().split("\\|", 2);
+                    String matchId = parts[0];
+                    String playerId = parts.length > 1 ? parts[1] : "";
+                    return KeyValue.pair(matchId, MonitoringAlert.combo(playerId, count));
+                })
+                .to("game-monitoring-alerts");
+
+        // Situação 10: "Generous Soul" - totalmente stateless (filter + map): um
+        // jogador joga um Modifier positivo no roll de OUTRO jogador. Fácil de
+        // testar: jogar qualquer Modifier com valor positivo mirando um rival.
+        actionsIn
+                .filter((key, value) -> isGenerousModifier(value))
+                .map((key, value) -> KeyValue.pair(key, MonitoringAlert.generousSoul(actorOf(value))))
                 .to("game-monitoring-alerts");
 
         return builder.build();
@@ -206,6 +235,14 @@ public class GameMonitoringStreamsProcessor {
     private static String actionNameOf(String value) {
         try {
             return new JSONObject(value).optString("action", null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String actorOf(String value) {
+        try {
+            return new JSONObject(value).optString("playerId", null);
         } catch (Exception e) {
             return null;
         }
@@ -231,6 +268,21 @@ public class GameMonitoringStreamsProcessor {
             return attackerId + "|" + targetId;
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    private static boolean isGenerousModifier(String value) {
+        try {
+            JSONObject json = new JSONObject(value);
+            if (!"play_modifier".equals(json.optString("action"))) return false;
+            JSONObject payload = json.optJSONObject("payload");
+            if (payload == null) return false;
+            int chosenValue = payload.optInt("chosen_value", 0);
+            String targetPlayerId = payload.optString("target_player_id", null);
+            String playerId = json.optString("playerId", null);
+            return chosenValue > 0 && targetPlayerId != null && playerId != null && !targetPlayerId.equals(playerId);
+        } catch (Exception e) {
+            return false;
         }
     }
 }
