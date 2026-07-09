@@ -71,6 +71,9 @@ public class Match {
     private String pendingMonsterAttacker;
     private Integer pendingMonsterRoll;
 
+    private String pendingHeroRoller;
+    private Integer pendingHeroRollValue;
+
     public Match(Long matchId, List<Player> startingPlayers) {
         this.matchId = matchId;
         for (Player player : startingPlayers) {
@@ -871,30 +874,53 @@ public class Match {
     public void processHeroDiceRoll(GameState gameState, int diceValue) {
         Card pendingHero = gameState.getPendingHeroCard();
         gameState.setLastRoll(diceValue);
-        int minValue = 0;
-        if (pendingHero != null && pendingHero.getType() == CardType.HERO) {
+        if (pendingHero == null || pendingHero.getType() != CardType.HERO) {
+            matchState = MatchState.GAMEPLAY;
+            return;
+        }
+
+        HeroCard card = (HeroCard) pendingHero;
+        JSONObject rollResponse = new JSONObject();
+        rollResponse.put("type", "dice_roll");
+        rollResponse.put("subtype", "hero_roll");
+        rollResponse.put("diceRoll", diceValue);
+        rollResponse.put("minValue", card.getDiceValue());
+        broadcast(rollResponse.toString());
+
+        String rollerId = getPlayerId(gameState);
+        pendingHeroRoller = rollerId;
+        pendingHeroRollValue = diceValue;
+        openModifierWindow("HERO_ROLL", Set.of(rollerId), this::resolveHeroRoll);
+    }
+
+    private void resolveHeroRoll() {
+        synchronized (this) {
+            String rollerId = pendingHeroRoller;
+            int diceValue = pendingHeroRollValue;
+            pendingHeroRoller = null;
+            pendingHeroRollValue = null;
+
+            GameState gameState = players.get(rollerId);
+            Card pendingHero = gameState != null ? gameState.getPendingHeroCard() : null;
+            if (gameState == null || pendingHero == null || pendingHero.getType() != CardType.HERO) {
+                matchState = MatchState.GAMEPLAY;
+                return;
+            }
+
             HeroCard card = (HeroCard) pendingHero;
-            minValue = card.getDiceValue();
-            int effectiveDiceValue = diceValue + gameState.getRollBonusUntilEndOfTurn() + gameState.getPermanentRollBonus();
-            JSONObject rollResponse = new JSONObject();
-            rollResponse.put("type", "dice_roll");
-            rollResponse.put("subtype", "hero_roll");
-            rollResponse.put("diceRoll", diceValue);
-            rollResponse.put("minValue", minValue);
-            broadcast(rollResponse.toString());
+            int minValue = card.getDiceValue();
+            int effectiveDiceValue = diceValue + effectiveRollBonus(rollerId);
+
             if (effectiveDiceValue >= minValue) {
                 gameState.getUsedCardIds().add(card.getCardId());
-                String rollerId = getPlayerId(gameState);
-                if (rollerId != null) {
-                    eventBus.publish(GameEventBus.EventType.HERO_EFFECT_SUCCEEDED, rollerId, card.getCardName());
-                }
+                eventBus.publish(GameEventBus.EventType.HERO_EFFECT_SUCCEEDED, rollerId, card.getCardName());
 
                 DiscardForEffect discardFor = card.getDiscardForEffect();
                 if (discardFor != null) {
                     discardFor.resolveDiscard(this, gameState);
                 }
 
-                if(card.checkForSelectablePartyEffect() && isSelectableHeroAvailable(gameState)){
+                if (card.checkForSelectablePartyEffect() && isSelectableHeroAvailable(gameState)) {
                     gameState.setPendingHeroCard(card);
                     matchState = MatchState.SELECTING_CARDS;
                     gameState.getUsedCardIds().add(card.getCardId());
@@ -913,7 +939,7 @@ public class Match {
                     return;
                 }
 
-                if(card.checkForSelectableHandEffect() && isSelectableHandAvailable(gameState)){
+                if (card.checkForSelectableHandEffect() && isSelectableHandAvailable(gameState)) {
                     gameState.setPendingHeroCard(card);
                     matchState = MatchState.SELECTING_HAND_CARDS;
                     gameState.getUsedCardIds().add(card.getCardId());
@@ -932,9 +958,9 @@ public class Match {
                     return;
                 }
 
-                if(card.checkForSelectablePlayerEffect()){
+                if (card.checkForSelectablePlayerEffect()) {
                     gameState.setPendingHeroCard(card);
-                    matchState =  MatchState.SELECTING_PLAYER;
+                    matchState = MatchState.SELECTING_PLAYER;
                     gameState.getUsedCardIds().add(card.getCardId());
                     JSONObject effectMsg = new JSONObject();
                     effectMsg.put("type", "match");
@@ -951,20 +977,21 @@ public class Match {
                     return;
                 }
 
-                if(!card.checkForSelectablePartyEffect() && !card.checkForSelectableHandEffect()) {
+                if (!card.checkForSelectablePartyEffect() && !card.checkForSelectableHandEffect()) {
                     gameState.clearLastDrawnCards();
-                    ((HeroCard) pendingHero).applyEffect(this, gameState);
+                    card.applyEffect(this, gameState);
                 }
             }
             gameState.getUsedCardIds().add(card.getCardId());
             gameState.setPendingHeroCard(null);
+            matchState = MatchState.GAMEPLAY;
 
+            JSONObject stateMsg = new JSONObject();
+            stateMsg.put("type", "match");
+            stateMsg.put("subtype", "match_state");
+            stateMsg.put("payload", getMatchState());
+            broadcast(stateMsg.toString());
         }
-
-        matchState = MatchState.GAMEPLAY;
-
-
-
     }
 
     public synchronized void processDuelRoll(String playerId, int roll) {
