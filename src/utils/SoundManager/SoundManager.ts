@@ -1,4 +1,4 @@
-import { Howl } from 'howler';
+import { Howl, Howler } from 'howler';
 import diceRollSound from '../../ui/assets/sounds/dice-roll.mp3';
 import ChallengeSound from '../../ui/assets/sounds/challenge.mp3';
 import backgroundMusicFile from '../../ui/assets/sounds/base-music.mp3';
@@ -21,6 +21,14 @@ const backgroundMusic = new Howl({
 });
 
 let currentMusicVolume = 0.5;
+let muted = false;
+
+export const setMuted = (value: boolean) => {
+    muted = value;
+    Howler.mute(value);
+};
+
+export const isMuted = () => muted;
 
 export const playBackgroundMusic = () => {
     if (!backgroundMusic.playing()) {

@@ -1,4 +1,5 @@
 import { getHeroArt } from './HeroArt';
+import challengeArt from '../ui/assets/cards/challenge.png';
 
 import modifierPlus1 from '../ui/assets/cards/modifier/modifier+1.png';
 import modifierPlus2 from '../ui/assets/cards/modifier/modifier+2.png';
@@ -83,9 +84,11 @@ export function getMagicArt(cardName?: string): string | undefined {
     return MAGIC_ART[cardName];
 }
 
-/** Resolves the art for any card type (HERO, MAGIC, MODIFIER), regardless of which is passed. */
+/** Resolves the art for any card type (HERO, MAGIC, MODIFIER, CHALLENGE), regardless of which is passed. */
 export function getCardArt(card: { type?: string; cardName?: string; heroClass?: string }): string | undefined {
     if (card.type === 'MAGIC') return getMagicArt(card.cardName);
     if (card.type === 'MODIFIER') return getModifierArt(card.cardName);
+    if (card.type === 'CHALLENGE') return challengeArt;
+    if (card.type === 'ITEM') return undefined;
     return getHeroArt(card.heroClass, card.cardName) || undefined;
 }
