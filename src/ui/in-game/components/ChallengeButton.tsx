@@ -4,7 +4,7 @@ import GlareHover from "@/components/GlareHover";
 import { useState } from "react";
 
 interface ChallengeButtonProps {
-    socket: React.MutableRefObject<WebSocket | null> | null;
+    socket: WebSocket | null;
     id: string | undefined;
     progress: number;
     timeRemaining: number;
@@ -22,8 +22,8 @@ function ChallengeButton({ socket, id, progress, timeRemaining, canUse }: Challe
 
     function handleChallengeClick() {
         console.log("Challenge button clicked");
-        if (socket && socket.current) {
-            socket.current.send(JSON.stringify({
+        if (socket) {
+            socket.send(JSON.stringify({
                 type: 'match',
                 subtype: 'challenge',
                 id: id

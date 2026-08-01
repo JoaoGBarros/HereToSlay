@@ -54,6 +54,9 @@ public class HereToSlay extends WebSocketServer {
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
         System.out.println("onClose");
+        // Forget the connection so a reloaded page can re-bind the same player
+        // instead of state broadcasts resolving to this dead socket.
+        authService.handleDisconnect(conn);
     }
 
     @Override

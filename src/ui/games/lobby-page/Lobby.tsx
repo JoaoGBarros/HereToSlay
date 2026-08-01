@@ -16,10 +16,10 @@ function Lobby() {
     const socket = useContext(WebSocketContext);
 
     useEffect(() => {
-        if (socket && socket.current && id) {
+        if (socket && id) {
 
             // 1. Registra o listener PRIMEIRO para não perder nenhuma mensagem
-            socket.current.onmessage = (event: MessageEvent) => {
+            socket.onmessage = (event: MessageEvent) => {
                 try {
                     const data = JSON.parse(event.data);
 
@@ -49,7 +49,7 @@ function Lobby() {
             };
 
             // 2. DEPOIS de estar escutando, avisa o backend que entrou/precisa dos dados
-            socket.current.send(JSON.stringify({
+            socket.send(JSON.stringify({
                 type: 'lobby',
                 subtype: 'join',
                 payload: {
@@ -61,8 +61,8 @@ function Lobby() {
 
 
     function handleLeaveLobby() {
-        if (socket && socket.current) {
-            socket.current.send(JSON.stringify({
+        if (socket) {
+            socket.send(JSON.stringify({
                 type: 'lobby',
                 subtype: 'leave',
                 payload: {

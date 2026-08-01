@@ -15,7 +15,7 @@ export interface MonsterData {
 
 function MonsterComponent({ monster, socket, id, isPlayerTurn, matchState }: {
     monster: MonsterData;
-    socket: React.MutableRefObject<WebSocket | null> | null;
+    socket: WebSocket | null;
     id: string | undefined;
     isPlayerTurn: boolean;
     matchState?: string;
@@ -29,9 +29,9 @@ function MonsterComponent({ monster, socket, id, isPlayerTurn, matchState }: {
     const art = getMonsterArt(monster.name) || heroImg;
 
     useEffect(() => {
-        if (!socket || !socket.current) return;
+        if (!socket) return;
 
-        const ws = socket.current;
+        const ws = socket;
         const handleMessage = (event: MessageEvent) => {
             try {
                 const data = JSON.parse(event.data);
@@ -77,8 +77,8 @@ function MonsterComponent({ monster, socket, id, isPlayerTurn, matchState }: {
     const canAttack = isPlayerTurn && (!matchState || matchState === "GAMEPLAY") && !isRolling;
 
     const attemptSlay = () => {
-        if (!socket || !socket.current || !canAttack) return;
-        socket.current.send(JSON.stringify({
+        if (!socket || !canAttack) return;
+        socket.send(JSON.stringify({
             type: 'match',
             subtype: 'action',
             action: 'attempt_slay_monster',

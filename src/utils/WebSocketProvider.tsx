@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from "react"
+import { useEffect, useState, type ReactNode } from "react"
 import WebSocketContext from "./WebSocketContext"
 
 function resolveWebSocketUrl() {
@@ -26,32 +26,74 @@ function resolveWebSocketUrl() {
     return `${protocol}//${host}:${port}`
 }
 
+function readStoredPlayer(): { id: string; username: string } | null {
+    try {
+        const parsed = JSON.parse(localStorage.getItem("currentPlayer") || "null")
+        if (!parsed?.id || !parsed?.username) return null
+        return { id: String(parsed.id), username: String(parsed.username) }
+    } catch {
+        return null
+    }
+}
+
 export const WebSocketProvider = ({ children }: { children: ReactNode }) => {
-    const wsRef = useRef<WebSocket | null>(null)
+    // State (not a ref) so consumers re-render when the connection is created.
+    // Pages mount their message listeners in effects, which run before this
+    // provider's effect on first render; a ref would stay stale and listeners
+    // would attach to a closed socket.
+    const [socket, setSocket] = useState<WebSocket | null>(null)
 
     useEffect(() => {
-        const socket = new WebSocket(resolveWebSocketUrl())
+        const ws = new WebSocket(resolveWebSocketUrl())
         let shouldCloseWhenReady = false
 
-        socket.addEventListener("open", () => {
+        const handleOpen = () => {
             if (shouldCloseWhenReady) {
-                socket.close()
+                ws.close()
+                return
             }
-        })
+            // A full reload/direct URL navigation creates a new socket. Reclaim
+            // the stored identity before page effects send their first action.
+            const player = readStoredPlayer()
+            if (player) {
+                ws.send(JSON.stringify({ type: "auth", subtype: "resume", payload: player }))
+            }
+        }
 
-        wsRef.current = socket
+        const handleMessage = (event: MessageEvent) => {
+            if (shouldCloseWhenReady) return
+            try {
+                const data = JSON.parse(event.data)
+                if (data?.type === "auth" && data.subtype === "resume_fail") {
+                    localStorage.removeItem("currentPlayer")
+                    if (window.location.pathname !== "/") {
+                        window.location.assign("/")
+                    }
+                }
+            } catch {
+                // Not JSON; other listeners ignore it too.
+            }
+        }
+
+        ws.addEventListener("open", handleOpen)
+        ws.addEventListener("message", handleMessage)
+
+        setSocket(ws)
 
         return () => {
             shouldCloseWhenReady = true
+            ws.removeEventListener("message", handleMessage)
 
-            if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CLOSING) {
-                socket.close()
+            // Keep handleOpen attached for CONNECTING sockets: it closes them
+            // as soon as they open (React StrictMode mounts effects twice).
+            if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CLOSING) {
+                ws.close()
             }
         }
     }, [])
 
     return (
-        <WebSocketContext.Provider value={wsRef}>
+        <WebSocketContext.Provider value={socket}>
             {children}
         </WebSocketContext.Provider>
     )

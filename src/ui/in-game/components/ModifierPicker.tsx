@@ -12,7 +12,7 @@ function ModifierPicker({ window, hand, playersData, socket, id, onPlay }: {
     window: ModifierWindowState;
     hand: any[];
     playersData: Record<string, any>;
-    socket: React.MutableRefObject<WebSocket | null> | null;
+    socket: WebSocket | null;
     id: string | undefined;
     onPlay: () => void;
 }) {
@@ -28,8 +28,8 @@ function ModifierPicker({ window, hand, playersData, socket, id, onPlay }: {
     }, [window.durationMs, window.context]);
 
     const playModifier = (cardId: number, value: number, targetPlayerId: string) => {
-        if (!socket || !socket.current) return;
-        socket.current.send(JSON.stringify({
+        if (!socket) return;
+        socket.send(JSON.stringify({
             type: 'match',
             subtype: 'action',
             action: 'play_modifier',

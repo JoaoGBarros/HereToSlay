@@ -1,5 +1,5 @@
-import { createContext, type MutableRefObject } from "react"
+import { createContext } from "react"
 
 
-const WebSocketContext = createContext<MutableRefObject<WebSocket | null> | null>(null)
+const WebSocketContext = createContext<WebSocket | null>(null)
 export default WebSocketContext

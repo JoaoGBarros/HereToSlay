@@ -85,7 +85,7 @@ function InGame() {
     }, []);
 
     useEffect(() => {
-        if (!socket || !socket.current) {
+        if (!socket) {
             return;
         }
 
@@ -246,7 +246,7 @@ function InGame() {
             }
         };
 
-        const ws = socket.current;
+        const ws = socket;
         ws.addEventListener('message', handleMessage);
 
         return () => {
@@ -379,8 +379,8 @@ function InGame() {
 
 
     useEffect(() => {
-        if (socket && socket.current) {
-            socket.current.send(JSON.stringify({
+        if (socket) {
+            socket.send(JSON.stringify({
                 type: 'match',
                 subtype: 'get_match_state',
                 id: id

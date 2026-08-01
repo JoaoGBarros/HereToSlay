@@ -26,8 +26,42 @@ public class AuthService {
     public Player handleLogin(WebSocket conn, JSONObject json) {
         String username = json.getJSONObject("payload").getString("username");
         Player player = new Player(username);
-        onlinePlayers.put(conn, player);
+        bind(conn, player);
         return player;
+    }
+
+    /**
+     * Re-attaches a fresh socket to an existing identity after a page reload or
+     * a reconnect. Player ids are derived from the username, so the id sent by
+     * the client can be validated against the username before binding.
+     */
+    public Player handleResume(WebSocket conn, JSONObject json) {
+        JSONObject payload = json.optJSONObject("payload");
+        if (payload == null) return null;
+
+        String playerId = payload.optString("id", "").trim();
+        String username = payload.optString("username", "").trim();
+        if (playerId.isEmpty() || username.isEmpty()) return null;
+
+        Player player = new Player(username);
+        if (!player.getId().toString().equals(playerId)) return null;
+
+        bind(conn, player);
+        return player;
+    }
+
+    /** Drops the mapping for a closed connection. */
+    public void handleDisconnect(WebSocket conn) {
+        onlinePlayers.remove(conn);
+    }
+
+    /**
+     * A player must have at most one live connection. Replacing an older one
+     * prevents state broadcasts from resolving to a socket that is already gone.
+     */
+    private void bind(WebSocket conn, Player player) {
+        onlinePlayers.entrySet().removeIf(entry -> entry.getValue().getId().equals(player.getId()) && !entry.getKey().equals(conn));
+        onlinePlayers.put(conn, player);
     }
 
 
@@ -51,6 +85,26 @@ public class AuthService {
                     response.put("subtype", "login_fail");
                 }
                 conn.send(response.toString());
+                break;
+            case "resume":
+                JSONObject resumeResponse = new JSONObject();
+                resumeResponse.put("type", "auth");
+                try {
+                    Player resumed = handleResume(conn, json);
+                    if (resumed == null) {
+                        resumeResponse.put("subtype", "resume_fail");
+                    } else {
+                        resumeResponse.put("subtype", "resume_success");
+                        resumeResponse.put("payload", new JSONObject()
+                                .put("username", resumed.getUsername())
+                                .put("id", resumed.getId().toString()));
+                        System.out.println("Player resumed: " + resumed.getUsername());
+                    }
+                } catch (Exception e) {
+                    System.out.println(e);
+                    resumeResponse.put("subtype", "resume_fail");
+                }
+                conn.send(resumeResponse.toString());
                 break;
             default:
                 System.out.println("Unknown auth subtype: " + type);

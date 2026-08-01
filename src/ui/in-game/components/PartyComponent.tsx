@@ -12,7 +12,7 @@ interface PartyComponentProps {
     partyLeaderSelection: boolean;
     monsters: Array<MonsterData>;
     availablePartyLeaders: Array<string>;
-    socket: React.MutableRefObject<WebSocket | null> | null;
+    socket: WebSocket | null;
     id: string | undefined;
     currentPlayerIdx?: string;
     matchState?: string;
@@ -48,9 +48,9 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
     }, [cardIds]);
 
     useEffect(() => {
-        if (!socket || !socket.current) return;
+        if (!socket) return;
 
-        const ws = socket.current;
+        const ws = socket;
         const handleMessage = (event: MessageEvent) => {
             try {
                 const data = JSON.parse(event.data);
@@ -79,8 +79,8 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
 
     useEffect(() => {
         if (matchState === "SELECTING_CARDS") {
-            if (socket && socket.current) {
-                socket.current.send(JSON.stringify({
+            if (socket) {
+                socket.send(JSON.stringify({
                     type: 'match',
                     subtype: 'get_selected_targets',
                     id: id,
@@ -113,8 +113,8 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
 
 
     function handleChoosePartyLeader(leader: string) {
-        if (socket && socket.current) {
-            socket.current.send(JSON.stringify({
+        if (socket) {
+            socket.send(JSON.stringify({
                 type: 'match',
                 subtype: 'choose_party_leader',
                 id: id,
@@ -128,8 +128,8 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
 
     function handleSelectPartyHeroTarget(cardId: number) {
 
-        if (socket && socket.current && matchState === "SELECTING_CARDS" && isPlayerTurn && currentPlayerIdx !== loggedUserId) {
-            socket.current.send(JSON.stringify({
+        if (socket && matchState === "SELECTING_CARDS" && isPlayerTurn && currentPlayerIdx !== loggedUserId) {
+            socket.send(JSON.stringify({
                 type: 'match',
                 subtype: 'action',
                 action: 'select_effect_target',
@@ -144,8 +144,8 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
 
     function handleDeselectPartyHeroTarget(cardId: number) {
 
-        if (socket && socket.current && matchState === "SELECTING_CARDS" && isPlayerTurn && currentPlayerIdx !== loggedUserId) {
-            socket.current.send(JSON.stringify({
+        if (socket && matchState === "SELECTING_CARDS" && isPlayerTurn && currentPlayerIdx !== loggedUserId) {
+            socket.send(JSON.stringify({
                 type: 'match',
                 subtype: 'action',
                 action: 'deselect_effect_target',
@@ -159,8 +159,8 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
     }
 
     const useHeroCard = (cardId: number) => {
-        if (socket && socket.current && isPlayerTurn) {
-            socket.current.send(JSON.stringify({
+        if (socket && isPlayerTurn) {
+            socket.send(JSON.stringify({
                 type: 'match',
                 subtype: 'action',
                 action: 'use_card',
@@ -175,8 +175,8 @@ function PartyComponent({ isPlayerTurn, currentPlayerData, partyLeaderSelection,
     const [{ isOver, canDrop }, dropRef] = useDrop({
         accept: CARD_TYPE,
         drop: (item: { id: number; isUserCard: boolean }) => {
-            if (socket && socket.current && isPlayerTurn) {
-                socket.current.send(JSON.stringify({
+            if (socket && isPlayerTurn) {
+                socket.send(JSON.stringify({
                     type: 'match',
                     subtype: 'action',
                     action: 'play_card',

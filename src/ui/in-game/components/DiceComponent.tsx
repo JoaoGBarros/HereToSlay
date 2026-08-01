@@ -11,7 +11,7 @@ import { getMonsterArt } from "@/utils/CardArt";
 interface DiceComponentProps {
     currentPlayerIdx: string;
     loggedUserId: string;
-    socket: React.MutableRefObject<WebSocket | null> | null;
+    socket: WebSocket | null;
     id: string | undefined;
     currentPlayerData: any;
     pendingHeroCard: boolean;
@@ -49,8 +49,8 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
     }, [currentPlayerIdx, pendingHeroCard, isPlayerChallenger, isMonsterRoll]);
 
     useEffect(() => {
-        if (!socket || !socket.current) return;
-        const ws = socket.current;
+        if (!socket) return;
+        const ws = socket;
         const handleModifier = (event: MessageEvent) => {
             try {
                 const data = JSON.parse(event.data);
@@ -65,8 +65,8 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
     }, [socket, currentPlayerIdx, playersData]);
 
     useEffect(() => {
-        if (socket && socket.current) {
-            socket.current.onmessage = (event) => {
+        if (socket) {
+            socket.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 if (data.type === 'match' && data.subtype === 'timer_update') {
                     setChallengeWindowTimeRemaining(data.payload.remainingTime);
@@ -115,9 +115,9 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
     useEffect(() => {
         if (dice1Result !== null && dice2Result !== null) {
 
-            if (socket && socket.current) {
+            if (socket) {
                 if (currentPlayerData?.orderRoll === null) {
-                    socket.current.send(JSON.stringify({
+                    socket.send(JSON.stringify({
                         type: 'match',
                         subtype: 'order_selection',
                         id: id,
@@ -130,7 +130,7 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
                 }
 
                 if (pendingHeroCard) {
-                    socket.current.send(JSON.stringify({
+                    socket.send(JSON.stringify({
                         type: 'match',
                         subtype: 'action',
                         action: 'process_hero_roll',
@@ -144,7 +144,7 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
                 }
 
                 if (isPlayerChallenger) {
-                    socket.current.send(JSON.stringify({
+                    socket.send(JSON.stringify({
                         type: 'match',
                         subtype: 'process_challenge_roll',
                         id: id,
@@ -157,7 +157,7 @@ function DiceComponent({ currentPlayerIdx, loggedUserId, socket, currentPlayerDa
                 }
 
                 if (isMonsterRoll) {
-                    socket.current.send(JSON.stringify({
+                    socket.send(JSON.stringify({
                         type: 'match',
                         subtype: 'process_monster_roll',
                         id: id,

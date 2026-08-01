@@ -28,13 +28,13 @@ function Games() {
 
     // Requisita lista inicial e registra listener para atualizações
     useEffect(() => {
-        if (socket && socket.current) {
-            socket.current.send(JSON.stringify({
+        if (socket) {
+            socket.send(JSON.stringify({
                 type: 'lobby',
                 subtype: 'list'
             }));
 
-            socket.current.onmessage = (event) => {
+            socket.onmessage = (event) => {
               try {
                 const data = JSON.parse(event.data);
                 console.log("Games.tsx: Mensagem recebida:", data); // Log para todas as mensagens
@@ -68,8 +68,8 @@ function Games() {
 
     function handleCreateLobby(onClose: () => void) {
         if (!lobbyName || !minPlayers || !maxPlayers || minPlayers < 2 || maxPlayers > 6) return;
-        if (socket && socket.current) {
-            socket.current.send(JSON.stringify({
+        if (socket) {
+            socket.send(JSON.stringify({
                 type: 'lobby',
                 subtype: 'create',
                 payload: {
