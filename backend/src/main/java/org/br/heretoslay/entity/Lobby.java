@@ -18,6 +18,7 @@ public class Lobby {
     private int minPlayers;
     private LobbyStatus status;
     private Set<String> players;
+    private Set<String> readyPlayers = new HashSet<>();
     @JsonIgnore
     private transient Timer countdownTimer;
     @JsonIgnore
@@ -95,6 +96,34 @@ public class Lobby {
         this.players = players;
     }
 
+    public void removePlayer(String id) {
+        players.remove(id);
+        readyPlayers.remove(id);
+    }
+
+    public Set<String> getReadyPlayers() {
+        return readyPlayers;
+    }
+
+    public void setReadyPlayers(Set<String> readyPlayers) {
+        this.readyPlayers = readyPlayers == null ? new HashSet<>() : readyPlayers;
+    }
+
+    public void setReady(String id, boolean ready) {
+        if (!players.contains(id)) return;
+        if (ready) {
+            readyPlayers.add(id);
+        } else {
+            readyPlayers.remove(id);
+        }
+    }
+
+    /** The match only starts once the minimum is reached and every seated player is ready. */
+    @JsonIgnore
+    public boolean isReadyToStart() {
+        return players.size() >= minPlayers && readyPlayers.containsAll(players);
+    }
+
     @JsonIgnore
     public int getCountdownTimeLeft() {
         return countdownTimeLeft;
@@ -109,7 +138,7 @@ public class Lobby {
         countdownTimer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
-                if (players.size() < minPlayers) {
+                if (!isReadyToStart()) {
                     resetCountdown();
                     if (onTick != null) onTick.run();
                     return;

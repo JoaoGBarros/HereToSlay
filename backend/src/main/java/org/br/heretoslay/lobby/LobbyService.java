@@ -106,6 +106,34 @@ public class LobbyService {
         publishLobbyState(new JSONArray().put(playerId), payload);
     }
 
+    private JSONObject buildLobbyInfo(Lobby lobby) {
+        JSONArray seats = new JSONArray();
+        List<String> usernames = new ArrayList<>();
+        for (String id : lobby.getPlayers()) {
+            String username = playerUsernames.get(id);
+            usernames.add(username);
+            seats.put(new JSONObject()
+                    .put("id", id)
+                    .put("username", username)
+                    .put("ready", lobby.getReadyPlayers().contains(id)));
+        }
+        return new JSONObject()
+                .put("id", lobby.getId())
+                .put("name", lobby.getName())
+                .put("playerAmount", lobby.getPlayers().size())
+                .put("maxPlayers", lobby.getMaxPlayers())
+                .put("minPlayers", lobby.getMinPlayers())
+                .put("username", usernames)
+                .put("players", seats);
+    }
+
+    private void broadcastLobbyUpdate(Lobby lobby) {
+        broadcastToLobby(lobby.getId(), new JSONObject()
+                .put("type", "lobby")
+                .put("subtype", "lobby_update")
+                .put("payload", buildLobbyInfo(lobby)));
+    }
+
     private void publishLobbyState(Object targets, JSONObject payload) {
         JSONObject wrapper = new JSONObject();
         if (targets instanceof String) {
@@ -120,7 +148,7 @@ public class LobbyService {
     }
 
     private void checkAndHandleCountdown(Lobby lobby) {
-        if (lobby.getPlayers().size() >= lobby.getMinPlayers()) {
+        if (lobby.isReadyToStart()) {
             if (lobby.getCountdownTimeLeft() == -1) {
                 lobby.startCountdown(
                         () -> {
@@ -255,23 +283,7 @@ public class LobbyService {
                         lobbyToJoin.setStatus(LobbyStatus.STARTING);
                     }
 
-                    List<String> usernames = lobbyToJoin.getPlayers().stream()
-                            .map(playerUsernames::get)
-                            .toList();
-
-                    JSONObject lobbyInfo = new JSONObject();
-                    lobbyInfo.put("id", lobbyToJoin.getId());
-                    lobbyInfo.put("name", lobbyToJoin.getName());
-                    lobbyInfo.put("playerAmount", lobbyToJoin.getPlayers().size());
-                    lobbyInfo.put("maxPlayers", lobbyToJoin.getMaxPlayers());
-                    lobbyInfo.put("username", usernames);
-
-                    JSONObject joinResponse = new JSONObject();
-                    joinResponse.put("type", "lobby");
-                    joinResponse.put("subtype", "lobby_update");
-                    joinResponse.put("payload", lobbyInfo);
-
-                    broadcastToLobby(joinLobbyId, joinResponse);
+                    broadcastLobbyUpdate(lobbyToJoin);
                     checkAndHandleCountdown(lobbyToJoin);
                     persistStateToKafka(lobbyToJoin);
                 }
@@ -281,35 +293,32 @@ public class LobbyService {
                 Long leaveLobbyId = json.getJSONObject("payload").getLong("lobbyId");
                 Lobby lobbyToLeave = lobbies.get(leaveLobbyId);
                 if (lobbyToLeave != null){
-                    lobbyToLeave.getPlayers().remove(playerId);
+                    lobbyToLeave.removePlayer(playerId);
                     if(lobbyToLeave.getPlayers().size() < lobbyToLeave.getMinPlayers()) {
                         lobbyToLeave.setStatus(LobbyStatus.WAITING_FOR_PLAYERS);
                     }
 
-                    List<String> usernames = lobbyToLeave.getPlayers().stream()
-                            .map(playerUsernames::get)
-                            .toList();
-
-                    JSONObject lobbyInfo = new JSONObject();
-                    lobbyInfo.put("id", lobbyToLeave.getId());
-                    lobbyInfo.put("name", lobbyToLeave.getName());
-                    lobbyInfo.put("playerAmount", lobbyToLeave.getPlayers().size());
-                    lobbyInfo.put("maxPlayers", lobbyToLeave.getMaxPlayers());
-                    lobbyInfo.put("username", usernames);
+                    broadcastLobbyUpdate(lobbyToLeave);
 
                     JSONObject leaveResponse = new JSONObject();
                     leaveResponse.put("type", "lobby");
-                    leaveResponse.put("subtype", "lobby_update");
-                    leaveResponse.put("payload", lobbyInfo);
-                    broadcastToLobby(leaveLobbyId, leaveResponse);
-
                     leaveResponse.put("subtype", "leave_response");
-                    leaveResponse.remove("payload");
                     sendToPlayer(playerId, leaveResponse);
                     checkAndHandleCountdown(lobbyToLeave);
                     persistStateToKafka(lobbyToLeave);
                 }
                 break;
+
+            case "ready": {
+                JSONObject readyPayload = json.getJSONObject("payload");
+                Lobby readyLobby = lobbies.get(readyPayload.getLong("lobbyId"));
+                if (readyLobby == null) break;
+                readyLobby.setReady(playerId, readyPayload.optBoolean("ready", true));
+                broadcastLobbyUpdate(readyLobby);
+                checkAndHandleCountdown(readyLobby);
+                persistStateToKafka(readyLobby);
+                break;
+            }
 
             case "list":
                 JSONObject listResponse = new JSONObject();
@@ -418,6 +427,7 @@ public class LobbyService {
                             existingLobby.setMinPlayers(parsedLobby.getMinPlayers());
                             existingLobby.setPlayers(parsedLobby.getPlayers());
                             existingLobby.setStatus(parsedLobby.getStatus());
+                            existingLobby.setReadyPlayers(parsedLobby.getReadyPlayers());
                         } else {
                             lobbies.put(parsedLobby.getId(), parsedLobby);
                         }
