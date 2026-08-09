@@ -20,6 +20,8 @@ public class Lobby {
     private Set<String> players;
     private Set<String> readyPlayers = new HashSet<>();
     @JsonIgnore
+    private final transient ChatLog chat = new ChatLog();
+    @JsonIgnore
     private transient Timer countdownTimer;
     @JsonIgnore
     private transient int countdownTimeLeft = -1;
@@ -122,6 +124,11 @@ public class Lobby {
     @JsonIgnore
     public boolean isReadyToStart() {
         return players.size() >= minPlayers && readyPlayers.containsAll(players);
+    }
+
+    @JsonIgnore
+    public ChatLog getChat() {
+        return chat;
     }
 
     @JsonIgnore

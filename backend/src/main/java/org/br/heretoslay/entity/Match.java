@@ -47,6 +47,8 @@ public class Match {
 
     @JsonIgnore
     private final GameEventBus eventBus = new GameEventBus();
+    @JsonIgnore
+    private final transient ChatLog chat = new ChatLog();
     // MVP simplification: all 15 base monsters sit face-up on the board for the
     // whole match, instead of a shuffled monster deck revealing a few at a time.
     // Not Jackson-serializable (MonsterCard carries CardEffect strategy objects with
@@ -366,6 +368,26 @@ public class Match {
         orderFinalizedResponse.put("subtype", "order_finalized");
         orderFinalizedResponse.put("payload", getMatchState());
         broadcast(orderFinalizedResponse.toString());
+    }
+
+    public void handleChat(String playerId, String text) {
+        GameState sender = players.get(playerId);
+        if (sender == null) return;
+        JSONObject message = chat.append(playerId, sender.getUsername(), text);
+        if (message == null) return;
+        broadcast(new JSONObject()
+                .put("type", "match")
+                .put("subtype", "chat_message")
+                .put("payload", message)
+                .toString());
+    }
+
+    public void publishChatHistory() {
+        broadcast(new JSONObject()
+                .put("type", "match")
+                .put("subtype", "chat_history")
+                .put("payload", chat.history())
+                .toString());
     }
 
     public void broadcast(String message) {

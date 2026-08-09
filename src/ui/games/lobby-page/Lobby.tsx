@@ -2,6 +2,7 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import WebSocketContext from '@/utils/WebSocketContext';
 import { PLAYER_COLORS } from '@/utils/ClassInfo';
+import { appendChat, ChatPanel, type ChatMessage } from '../../common/ChatPanel';
 import { parseMessage, sendMessage } from '../../common/types';
 import { LanguageSwitch, useI18n } from '@/i18n';
 import { Avatar, SoundToggle, TimerRing } from '../../common/Widgets';
@@ -43,6 +44,7 @@ function Lobby() {
     const [maxPlayers, setMaxPlayers] = useState<number | null>(null);
     const [minPlayers, setMinPlayers] = useState<number | null>(null);
     const [countdown, setCountdown] = useState<number | null>(null);
+    const [chat, setChat] = useState<ChatMessage[]>([]);
 
     useEffect(() => {
         if (!me) navigate('/');
@@ -75,6 +77,12 @@ function Lobby() {
                 case 'countdown_finished':
                     navigate(`/match/${id}`);
                     return;
+                case 'chat_history':
+                    setChat(Array.isArray(data.payload) ? data.payload : []);
+                    return;
+                case 'chat_message':
+                    setChat((prev) => appendChat(prev, data.payload));
+                    return;
                 default:
                     return;
             }
@@ -92,8 +100,17 @@ function Lobby() {
     const totalSeats = maxPlayers || Math.max(DEFAULT_SEATS, seats.length);
     const isCounting = countdown !== null && countdown >= 0;
     const missing = minPlayers ? Math.max(0, minPlayers - seats.length) : 0;
+    const colorFor = (playerId: string) => {
+        const index = seats.findIndex((s) => s.id === playerId);
+        return PLAYER_COLORS[(index >= 0 ? index : 0) % PLAYER_COLORS.length];
+    };
+
     function toggleReady() {
         sendMessage(socket, { type: 'lobby', subtype: 'ready', payload: { lobbyId, ready: !isReady } });
+    }
+
+    function sendChat(text: string) {
+        sendMessage(socket, { type: 'lobby', subtype: 'chat', payload: { lobbyId, text } });
     }
 
     let status: string;
@@ -188,6 +205,17 @@ function Lobby() {
                         </button>
                     </div>
                 </section>
+
+                <aside className="lobby-side">
+                    <ChatPanel
+                        messages={chat}
+                        me={me?.id ?? ''}
+                        colorFor={colorFor}
+                        onSend={sendChat}
+                        subtitle={t.lobby.atTable(seats.length)}
+                        phrases={t.chat.lobbyPhrases}
+                    />
+                </aside>
             </main>
         </div>
     );

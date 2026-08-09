@@ -191,6 +191,15 @@ public class MatchService {
                 match.processDuelRoll(playerId, roll);
                 break;
 
+            case "chat":
+                JSONObject chatPayload = json.optJSONObject("payload");
+                match.handleChat(playerId, chatPayload == null ? "" : chatPayload.optString("text", ""));
+                break;
+
+            case "get_chat_history":
+                match.publishChatHistory();
+                break;
+
             case "process_monster_roll":
                 roll = json.getJSONObject("payload").getInt("roll");
                 match.processMonsterRoll(playerId, roll);

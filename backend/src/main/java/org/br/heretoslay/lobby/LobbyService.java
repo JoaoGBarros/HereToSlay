@@ -134,6 +134,13 @@ public class LobbyService {
                 .put("payload", buildLobbyInfo(lobby)));
     }
 
+    private void sendChatHistory(Lobby lobby, String playerId) {
+        sendToPlayer(playerId, new JSONObject()
+                .put("type", "lobby")
+                .put("subtype", "chat_history")
+                .put("payload", lobby.getChat().history()));
+    }
+
     private void publishLobbyState(Object targets, JSONObject payload) {
         JSONObject wrapper = new JSONObject();
         if (targets instanceof String) {
@@ -284,6 +291,7 @@ public class LobbyService {
                     }
 
                     broadcastLobbyUpdate(lobbyToJoin);
+                    sendChatHistory(lobbyToJoin, playerId);
                     checkAndHandleCountdown(lobbyToJoin);
                     persistStateToKafka(lobbyToJoin);
                 }
@@ -317,6 +325,19 @@ public class LobbyService {
                 broadcastLobbyUpdate(readyLobby);
                 checkAndHandleCountdown(readyLobby);
                 persistStateToKafka(readyLobby);
+                break;
+            }
+
+            case "chat": {
+                JSONObject chatPayload = json.getJSONObject("payload");
+                Lobby chatLobby = lobbies.get(chatPayload.getLong("lobbyId"));
+                if (chatLobby == null || !chatLobby.getPlayers().contains(playerId)) break;
+                JSONObject chatMessage = chatLobby.getChat().append(playerId, playerUsernames.get(playerId), chatPayload.optString("text", ""));
+                if (chatMessage == null) break;
+                broadcastToLobby(chatLobby.getId(), new JSONObject()
+                        .put("type", "lobby")
+                        .put("subtype", "chat_message")
+                        .put("payload", chatMessage));
                 break;
             }
 
