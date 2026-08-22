@@ -1,637 +1,354 @@
-import './theme.css';
-import './InGame.css';
-import deckImg from '../assets/deck.png';
-import { useContext, useEffect, useState } from 'react';
-import bardIcon from '../assets/class-icons/bard.png';
-import warriorIcon from '../assets/class-icons/warrior.png';
-import mageIcon from '../assets/class-icons/mage.png';
-import thiefIcon from '../assets/class-icons/thief.png';
-import guardianIcon from '../assets/class-icons/guardian.png';
-import rangerIcon from '../assets/class-icons/ranger.png';
-import { useParams } from 'react-router-dom';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import WebSocketContext from '@/utils/WebSocketContext';
-import GameHeader from './components/GameHeader';
-import DiceComponent from './components/DiceComponent';
-import PartyComponent from './components/PartyComponent';
-import HandComponent from './components/HandComponent';
-import PlayerInfoComponent from './components/PlayerInfoComponent';
-import { playBackgroundMusic, playClassSound, playSound, type ClassSoundType } from '@/utils/SoundManager/SoundManager';
-import TurnIndicator from './components/TurnIndicator';
-import OrderSelectionScoreboard from './components/OrderSelectionScoreboard';
-import crownImg from '../assets/crown.png'
-import { classAvatars } from '@/utils/ClassImages';
-import { addToast } from '@heroui/toast';
-import ModifierPicker, { type ModifierWindowState } from './components/ModifierPicker';
-import ActionHistoryPanel, { type ActionHistoryEntry } from './components/ActionHistoryPanel';
+import { getMonsterArt } from '@/utils/CardArt';
+import { classInfo, type HeroClassId } from '@/utils/ClassInfo';
+import { monsterRequirement, useI18n } from '@/i18n';
+import type { Dict } from '@/i18n/pt';
+import tableBackground from '../assets/ingame.png';
+import { CardInspector, type InspectorAction } from '../common/CardInspector';
+import { ChatPanel, type ChatMessage } from '../common/ChatPanel';
+import { SELECTING_STATES, type CardData, type MonsterData } from '../common/types';
+import ActionHistoryPanel from './components/ActionHistoryPanel';
+import ModifierPicker from './components/ModifierPicker';
+import ActionPanel from './board/ActionPanel';
+import Arena from './board/Arena';
+import OpponentRail from './board/OpponentRail';
+import { HandReveal, MatchEnd, PartyViewer, RulesSheet, TurnBanner } from './board/Overlays';
+import PlayerZone, { isPlayableFromHand } from './board/PlayerZone';
+import TargetSheet from './board/TargetSheet';
+import TopBar from './board/TopBar';
+import FxLayer from './fx/FxLayer';
+import DuelScene from './rolls/DuelScene';
+import MonsterScene from './rolls/MonsterScene';
+import RollDock from './rolls/RollDock';
+import InitiativeScreen from './screens/InitiativeScreen';
+import LeaderDraftScreen from './screens/LeaderDraftScreen';
+import { readLoggedUserId, useMatchSession } from './useMatchSession';
+import './board/board.css';
+
+const BANNER_MS = 1600;
+const BUBBLE_MS = 4500;
+const ATTACK_COST = 2;
+const SETUP_STATES = ['', 'ORDER_SELECTION', 'PARTY_LEADER_SELECTION'];
+
+type Inspecting =
+    | { kind: 'hand' | 'party'; card: CardData }
+    | { kind: 'other'; card: CardData }
+    | { kind: 'leader'; leader: string }
+    | { kind: 'monster'; monster: MonsterData };
+
+function phaseLabel(t: Dict, matchState: string, isMyTurn: boolean, ap: number, max: number, turnName: string): string {
+    switch (matchState) {
+        case 'GAMEPLAY': return isMyTurn ? t.phase.gameplayMine(ap, max) : t.phase.gameplayOther(turnName);
+        case 'WAITING_HERO_ROLL': return t.phase.heroRoll;
+        case 'CHALLENGE_WINDOW': return t.phase.challengeWindow;
+        case 'CHALLENGE_ROLL': return t.phase.challengeRoll;
+        case 'WAITING_MONSTER_ROLL': return t.phase.monster;
+        case 'SELECTING_CARDS':
+        case 'SELECTING_HAND_CARDS':
+        case 'SELECTING_PLAYER': return t.phase.selecting;
+        case 'FINISHED': return t.phase.finished;
+        default: return t.phase.resolving;
+    }
+}
 
 function InGame() {
-
     const socket = useContext(WebSocketContext);
-    const [playersData, setPlayersData] = useState<any>({});
-    const loggedUserId = JSON.parse(localStorage.getItem('currentPlayer')!)?.id || 0;
-    const [currentPlayerIdx, setCurrentPlayerIdx] = useState(loggedUserId);
-    const [diceRolled, setDiceRolled] = useState<{ [playerId: string]: boolean }>({});
-    const [currentPlayerData, setCurrentPlayerData] = useState<any>(playersData[currentPlayerIdx]);
-    const [matchState, setMatchState] = useState<string>("");
-    const [turn, setTurn] = useState("");
-    const [partyLeaderSelection, setPartyLeaderSelection] = useState(false);
-    const [isPlayerTurn, setIsPlayerTurn] = useState(false);
-    const [availablePartyLeaders, setAvailablePartyLeaders] = useState<string[]>([]);
-    const [pendingHeroCard, setPendingHeroCard] = useState<boolean>(false);
-    const [challengeHero, setChallengeHero] = useState<string>("");
-    const [challengeOpponent, setChallengeOpponent] = useState<string>("");
-    const [isPlayerChallenger, setIsPlayerChallenger] = useState(false);
-    const [challengeWindowTime, setChallengeWindowTime] = useState(0);
-    const [isTransitioning, setIsTransitioning] = useState(false);
-    const [hasPlayerChallenged, setHasPlayerChallenged] = useState(false);
-    const [showTurnIndicator, setShowTurnIndicator] = useState(false);
-    const [pendingTurn, setPendingTurn] = useState<string | null>(null);
-    const [autoSwitchView, setAutoSwitchView] = useState(true);
-    const [playersRolls, setPlayersRolls] = useState<{ [playerId: string]: number | null }>({});
-    const [isDiceRollVisible, setIsDiceRollVisible] = useState(true);
-    const [winnerId, setWinnerId] = useState<string | null>(null);
-    const [showChallengeButton, setShowChallengeButton] = useState(false);
-    const [showHeroBoard, setShowHeroBoard] = useState(false);
-    const [showHeroRollWaiting, setShowHeroRollWaiting] = useState(false);
-    const [showChallenge, setShowChallenge] = useState(false);
-    const [showChallengeResult, setShowChallengeResult] = useState(false);
-    const [challengeRolls, setChallengeRolls] = useState<{ [playerId: string]: number | null }>({});
-    const [pendingHeroCardUsed, setPendingHeroCardUsed] = useState(false);
-    const [selectedCards, setSelectedCards] = useState<number[]>([]);
-    const [selectedCardsTarget, setSelectedCardsTarget] = useState<number[]>([]);
-    const [maxSelectableCards, setMaxSelectableCards] = useState<number>(0);
-    const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
-
-
-    const classIcons: Record<string, string> = {
-        "BARD": bardIcon,
-        "WARRIOR": warriorIcon,
-        "WIZARD": mageIcon,
-        "THIEF": thiefIcon,
-        "RANGER": rangerIcon,
-        "GUARDIAN": guardianIcon,
-    };
-
+    const navigate = useNavigate();
+    const { t } = useI18n();
     const { id } = useParams();
+    const me = useMemo(readLoggedUserId, []);
+    const s = useMatchSession(socket, id, me);
+    const { players, matchState, turn, actions } = s;
 
-    const [monsters, setMonsters] = useState<any[]>([]);
-    const [modifierWindow, setModifierWindow] = useState<ModifierWindowState | null>(null);
-    const [pendingMonsterAttack, setPendingMonsterAttack] = useState<{ monsterId: number; playerId: string } | null>(null);
-    const [playerTags, setPlayerTags] = useState<Record<string, { key: string; label: string }[]>>({});
-    const [actionHistory, setActionHistory] = useState<ActionHistoryEntry[]>([]);
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const [rulesOpen, setRulesOpen] = useState(false);
+    const [viewing, setViewing] = useState<string | null>(null);
+    const [inspecting, setInspecting] = useState<Inspecting | null>(null);
+    const [banner, setBanner] = useState<string | null>(null);
+    const [chatOpen, setChatOpen] = useState(false);
+    const [seenChat, setSeenChat] = useState(0);
+    const [bubbles, setBubbles] = useState<ChatMessage[]>([]);
+    const lastTurn = useRef('');
+    const lastChatCount = useRef(0);
 
+    // New messages from others pop up as short bubbles while the chat is closed.
     useEffect(() => {
-        playBackgroundMusic();
-    }, []);
-
-    useEffect(() => {
-        if (!socket) {
+        const fresh = s.chat.slice(lastChatCount.current);
+        lastChatCount.current = s.chat.length;
+        if (chatOpen) {
+            setSeenChat(s.chat.length);
             return;
         }
-
-        const handleMessage = (event: MessageEvent) => {
-            try {
-                const data = JSON.parse(event.data);
-                console.log(data)
-                if (data.type === 'match') {
-                    if (data.subtype === 'match_state' || data.subtype === 'order_finalized') {
-                        console.log("Match state received:", data.payload);
-                        setPlayersData(data.payload.players);
-                        setMatchState(data.payload.matchState);
-                        setTurn(data.payload.currentPlayerTurn);
-                        setAvailablePartyLeaders(data.payload.availablePartyLeaders || []);
-                        setChallengeWindowTime(data.payload.challengeWindowTime || 0);
-                        setHasPlayerChallenged((data.payload.challengerSet || []).includes(loggedUserId));
-                        setMonsters(data.payload.monsters || []);
-                        setPendingMonsterAttack(data.payload.pendingMonsterAttack || null);
-                    } else if (data.subtype === 'order_selection_tie') {
-                        setPlayersData(data.payload.players);
-                    } else if (data.subtype === 'challenge_window_open') {
-                        console.log("Duel: " + data);
-                        setShowChallengeButton(true);
-                    } else if (data.subtype === 'duel_start') {
-                        console.log("Duel Start: ", data.payload);
-                        setChallengeHero(data.payload.heroPlayer);
-                        setChallengeOpponent(data.payload.challenger);
-                        setMatchState(data.payload.matchState);
-                    } else if (data.subtype === 'duel_result') {
-                        console.log("Duel Result: ", data.winner);
-                        setWinnerId(data.winner);
-                    } else if (data.subtype === 'modifier_window_open') {
-                        setModifierWindow(data.payload);
-                    } else if (data.subtype === 'modifier_window_closed') {
-                        setModifierWindow(null);
-                    }
-                }
-
-                if (data.type === 'sound' && data.subtype === 'play_class_sound') {
-                    console.log("Play class sound:", data.payload);
-                    const className = data.payload as ClassSoundType;
-                    if (className) {
-                        playClassSound(className);
-                    }
-                }
-
-                if (data.type === 'roll_result' && data.subtype === 'duel_roll') {
-                    setShowChallengeResult(true);
-                    setChallengeRolls(data.payload);
-                }
-
-                if (data.type === 'match' && (data.subtype === 'select_effect_target' || data.subtype === 'select_hand_target') ) {
-                    const target = data.payload.target;
-                    const cardIds = target ? Object.values(target).flat().map(Number) : [];
-                    console.log("Selected target cards updated:", cardIds);
-                    setSelectedCardsTarget(cardIds);
-
-                    
-                    setMaxSelectableCards(data.payload.maxTargets || 0);
-                }
-
-                if( data.type === 'match' && data.subtype === 'select_player_target') {
-                    const target = data.payload.target;
-                    console.log("Selected target updated:", target);
-                    setSelectedPlayerId(target || null);
-                    setMaxSelectableCards(data.payload.maxTargets || 1);
-                }
-
-                if (data.type === 'match' && data.subtype === 'hand_revealed') {
-                    if (data.payload.viewerPlayerId === loggedUserId) {
-                        const revealedUsername = data.payload.revealedPlayerUsername;
-                        const revealedEntry = Object.values(playersData).find((p: any) => p.username === revealedUsername) as any;
-                        const cardIds: number[] = data.payload.cardIds || [];
-                        const cardNames = cardIds.map((cid) => {
-                            const card = revealedEntry?.hand?.find((c: any) => c.cardId === cid);
-                            return card?.cardName || `#${cid}`;
-                        });
-                        addToast({
-                            title: `You saw ${revealedUsername}'s hand`,
-                            description: cardNames.length > 0 ? cardNames.join(', ') : 'Empty hand',
-                            color: 'primary',
-                            timeout: 8000,
-                        });
-                    }
-                }
-
-                if (data.type === 'match' && data.subtype === 'modifier_played') {
-                    const casterName = playersData[data.payload.playerId]?.username || data.payload.playerId;
-                    const targetName = playersData[data.payload.targetPlayerId]?.username || data.payload.targetPlayerId;
-                    const value = data.payload.value;
-                    addToast({
-                        title: `${casterName} played a Modifier (${value > 0 ? '+' : ''}${value}) on ${targetName}`,
-                        color: value > 0 ? 'success' : 'danger',
-                        timeout: 4000,
-                    });
-                }
-
-                if (data.type === 'animation' && (data.subtype === 'monster_slain' || data.subtype === 'monster_fight_back' || data.subtype === 'monster_survives')) {
-                    const attackerName = playersData[data.payload.playerId]?.username || data.payload.playerId;
-                    const monsterName = data.payload.monsterName;
-                    const roll = data.payload.roll;
-                    const messages: Record<string, string> = {
-                        monster_slain: `${attackerName} defeated ${monsterName}! (Roll: ${roll})`,
-                        monster_fight_back: `${monsterName} fought back against ${attackerName}! (Roll: ${roll})`,
-                        monster_survives: `${monsterName} survived ${attackerName}'s attack. (Roll: ${roll})`,
-                    };
-                    addToast({
-                        title: messages[data.subtype],
-                        color: data.subtype === 'monster_slain' ? 'success' : data.subtype === 'monster_fight_back' ? 'danger' : 'warning',
-                        timeout: 4000,
-                    });
-                }
-
-                if (data.type === 'monitoring_alert' && data.situation === 'ACTION_HISTORY') {
-                    setActionHistory(data.extra?.history || []);
-                }
-
-                if (data.type === 'monitoring_alert' && data.situation !== 'ACTION_HISTORY') {
-                    console.log(data)
-                    addToast({
-                        title: data.message,
-                        description: data.situation === 'TURNING_POINT' || data.situation === 'CHAIN_REACTION'
-                            ? 'Detected by the monitoring service (Kafka Streams)'
-                            : undefined,
-                        color: 'primary',
-                        timeout: 5000,
-                    });
-
-                    const taggedPlayerId = data.extra?.taggedPlayerId;
-                    const tagType = data.extra?.tagType;
-                    if (taggedPlayerId && tagType) {
-                        const tagLabels: Record<string, string> = {
-                            FREQUENT_BUYER: 'Frequent Buyer',
-                            FOCUSING: `Focusing on ${playersData[data.extra.targetId]?.username || data.extra.targetId}`,
-                            FOCUSED: 'Focused',
-                            RNG_DIFF: 'RNG Diff',
-                            FIRST_BLOOD: 'First Blood',
-                            COMBO: 'Combo',
-                            GENEROUS_SOUL: 'Generous Soul',
-                        };
-                        const label = tagLabels[tagType] || tagType;
-                        const tagKey = `${tagType}-${Date.now()}`;
-                        setPlayerTags((prev) => ({
-                            ...prev,
-                            [taggedPlayerId]: [...(prev[taggedPlayerId] || []), { key: tagKey, label }],
-                        }));
-                        setTimeout(() => {
-                            setPlayerTags((prev) => ({
-                                ...prev,
-                                [taggedPlayerId]: (prev[taggedPlayerId] || []).filter((t) => t.key !== tagKey),
-                            }));
-                        }, 20000);
-                    }
-                }
-
-            } catch (error) {
-                console.error("Error parsing WebSocket message:", error);
-            }
-        };
-
-        const ws = socket;
-        ws.addEventListener('message', handleMessage);
-
-        return () => {
-            ws.removeEventListener('message', handleMessage);
-        };
-    }, [socket, currentPlayerIdx]);
+        const incoming = fresh.filter((m) => m.playerId !== me);
+        if (incoming.length === 0) return;
+        setBubbles((prev) => [...prev, ...incoming].slice(-3));
+        const t = setTimeout(() => setBubbles((prev) => prev.filter((b) => !incoming.includes(b))), BUBBLE_MS);
+        return () => clearTimeout(t);
+    }, [s.chat, chatOpen, me]);
 
     useEffect(() => {
-        const player = playersData[currentPlayerIdx];
-        if (!player) return;
-
-        const needsToRollForOrder = matchState === "ORDER_SELECTION" && player.lastRoll === null;
-        const needsToRollForHero = player.pendingHeroCard != null;
-        const needsToRollForChallenge = matchState === "CHALLENGE_ROLL" && (currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent);
-        const needsToRollForMonster = matchState === "WAITING_MONSTER_ROLL" && pendingMonsterAttack?.playerId === currentPlayerIdx;
-
-        if (needsToRollForOrder || needsToRollForHero || needsToRollForChallenge || needsToRollForMonster) {
-            setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: false }));
-        } else {
-            setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
-        }
-    }, [currentPlayerIdx, playersData, matchState, challengeHero, challengeOpponent, pendingMonsterAttack]);
-
+        if (!me) navigate('/');
+    }, [me, navigate]);
 
     useEffect(() => {
-        if (turn && turn.length > 0) {
-            setShowTurnIndicator(false);
-            setPendingTurn(turn);
-            setTimeout(() => {
-                if (autoSwitchView) {
-                    setCurrentPlayerIdx(turn);
-                    setCurrentPlayerData(playersData[turn]);
-                }
+        if (!turn || turn === lastTurn.current || SETUP_STATES.includes(matchState)) return;
+        lastTurn.current = turn;
+        setBanner(turn);
+        const t = setTimeout(() => setBanner(null), BANNER_MS);
+        return () => clearTimeout(t);
+    }, [turn, matchState]);
 
-                setIsTransitioning(false);
-                if (matchState !== "PARTY_LEADER_SELECTION") {
-                    setShowTurnIndicator(true);
-                    setTimeout(() => setShowTurnIndicator(false), 1000);
-                }
-            }, 1500);
-            setIsPlayerTurn(turn === loggedUserId);
+    const ids = Object.keys(players);
+    const order = useMemo(() => {
+        const all = Object.keys(players);
+        if (all.some((pid) => players[pid].orderRoll == null)) return all;
+        return [...all].sort((a, b) => (players[b].orderRoll ?? 0) - (players[a].orderRoll ?? 0));
+    }, [players]);
+    const opponents = order.filter((pid) => pid !== me);
+    const mine = players[me];
+    const isMyTurn = turn === me;
+    const ap = mine?.currentAP ?? 0;
+    const canAct = isMyTurn && matchState === 'GAMEPLAY' && ap > 0;
+    const canAttack = isMyTurn && matchState === 'GAMEPLAY' && ap >= ATTACK_COST;
+    const turnName = players[turn]?.username || '…';
+
+    if (matchState === '' || matchState === 'ORDER_SELECTION' || matchState === 'PARTY_LEADER_SELECTION') {
+        return (
+            <div className="hts-screen">
+                <img src={tableBackground} alt="" className="hts-screen-bg" style={{ opacity: 0.24 }} />
+                {matchState === '' && <p className="hts-display" style={{ position: 'relative', textAlign: 'center', paddingTop: '40vh', fontSize: 40 }}>{t.board.preparing}</p>}
+                {matchState === 'ORDER_SELECTION' && (
+                    <InitiativeScreen key={s.tieRound} players={players} me={me} tieRolls={s.tieRolls} onRoll={actions.rollOrder} />
+                )}
+                {matchState === 'PARTY_LEADER_SELECTION' && (
+                    <LeaderDraftScreen players={players} me={me} turn={turn} order={order} available={s.availableLeaders} onChoose={actions.chooseLeader} />
+                )}
+            </div>
+        );
+    }
+
+    const pendingCard = players[turn]?.pendingHeroCard || null;
+    const showDuel = !!s.duel && (matchState === 'CHALLENGE_ROLL' || !!s.duelWinner);
+    const showDock = !showDuel && !s.monsterRoll && !!turn
+        && (matchState === 'CHALLENGE_WINDOW' || (matchState === 'WAITING_HERO_ROLL' && !!pendingCard) || !!s.heroRoll);
+    const selecting = SELECTING_STATES.includes(matchState);
+    const myModifiers = (mine?.hand || []).some((c) => c.type === 'MODIFIER');
+
+    function inspectorProps(target: Inspecting): { card?: CardData; image?: string; title?: string; kicker?: string; hint?: string; actions: InspectorAction[] } {
+        const close = () => setInspecting(null);
+        if (target.kind === 'leader') {
+            const info = classInfo(target.leader);
+            const text = t.classes[target.leader as HeroClassId];
+            return { image: info?.leaderArt, title: info?.leaderName, kicker: t.inspect.leaderKicker(text?.label ?? ''), hint: text?.skill, actions: [] };
         }
-    }, [turn]);
-
-    useEffect(() => {
-
-        if (matchState === "PARTY_LEADER_SELECTION") {
-            setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
-
-            setTimeout(() => {
-                setPartyLeaderSelection(true);
-                setIsDiceRollVisible(false);
-            }, 1000);
+        if (target.kind === 'monster') {
+            const m = target.monster;
+            return {
+                image: getMonsterArt(m.name),
+                title: m.name,
+                kicker: t.inspect.monsterKicker,
+                hint: t.inspect.monsterHint(monsterRequirement(t, m.partyRequirement), m.slayThreshold, m.fightBackThreshold),
+                actions: canAttack ? [{ label: t.board.attack(ATTACK_COST), onClick: () => { actions.attack(m.id); close(); } }] : [],
+            };
         }
-
-
-    }, [matchState]);
-
-    useEffect(() => {
-        if (matchState == "GAMEPLAY") {
-            setPartyLeaderSelection(false);
-            setAvailablePartyLeaders([]);
-            setDiceRolled((prev) => ({ ...prev, [currentPlayerIdx]: true }));
-            setTimeout(() => setIsDiceRollVisible(false), 2000);
-            if (Object.keys(challengeRolls).length !== 0) {
-                setTimeout(() => {
-                    setShowChallenge(false);
-                    setChallengeRolls({})
-                }, 5000);
-            }
-
-            if (loggedUserId === turn) {
-                setCurrentPlayerIdx(loggedUserId);
-            }
-
-            setSelectedCardsTarget([]);
-            setSelectedCards([]);
-            setMaxSelectableCards(0);
-            setSelectedPlayerId(null);
+        const card = target.card;
+        if (target.kind === 'hand') {
+            const playable = canAct && isPlayableFromHand(card);
+            return {
+                card,
+                hint: t.inspect.hints[card.type || ''] ?? '',
+                actions: playable ? [{ label: t.inspect.play, onClick: () => { actions.play(card.cardId); close(); } }] : [],
+            };
         }
-    }, [matchState]);
-
-    useEffect(() => {
-        if (matchState === "CHALLENGE_ROLL") {
-            playSound('challenge');
-            setIsPlayerChallenger(loggedUserId === challengeHero || loggedUserId === challengeOpponent);
-            setDiceRolled((prev) => ({
-                ...prev,
-                [challengeHero]: false,
-                [challengeOpponent]: false,
-            }));
-            setPendingHeroCard(false);
-            setShowChallenge(true);
-            setShowChallengeResult(false);
-            setWinnerId(null);
-            setIsDiceRollVisible(currentPlayerIdx === challengeHero || currentPlayerIdx === challengeOpponent);
+        if (target.kind === 'party') {
+            const used = mine?.usedCardIds?.includes(card.cardId) || s.locallyUsed.includes(card.cardId);
+            const canRoll = canAct && card.type === 'HERO' && !used;
+            return {
+                card,
+                hint: used ? t.inspect.partyUsed : t.inspect.partyRoll,
+                actions: canRoll ? [{ label: t.inspect.rollEffect, onClick: () => { actions.useHero(card.cardId); close(); } }] : [],
+            };
         }
-    }, [currentPlayerIdx, challengeHero, challengeOpponent, matchState, loggedUserId]);
-
-    useEffect(() => {
-        if (matchState === "WAITING_HERO_ROLL") {
-            setIsPlayerChallenger(false);
-            setChallengeHero("");
-            setIsDiceRollVisible(true);
-            setChallengeOpponent("");
-            if (Object.keys(challengeRolls).length !== 0) {
-                setTimeout(() => {
-                    setShowChallenge(false);
-                    setChallengeRolls({})
-                }, 2000);
-            }
-        }
-    }, [matchState, challengeHero, challengeOpponent]);
-
-
-
-    useEffect(() => {
-        if (matchState === "CHALLENGE_WINDOW") {
-            setIsDiceRollVisible(false);
-            setShowChallengeResult(false);
-            if (Object.keys(challengeRolls).length !== 0) {
-                setTimeout(() => {
-                    setShowChallenge(false);
-                    setChallengeRolls({})
-                }, 2000);
-            }
-        }
-    }, [matchState, challengeHero, challengeOpponent]);
-
-
-
-    useEffect(() => {
-        if (socket) {
-            socket.send(JSON.stringify({
-                type: 'match',
-                subtype: 'get_match_state',
-                id: id
-            }));
-        }
-    }, [socket, id]);
-
-    useEffect(() => {
-        if (playersData && playersData[currentPlayerIdx]) {
-            setCurrentPlayerData(playersData[currentPlayerIdx]);
-            setPendingHeroCard(playersData[currentPlayerIdx]?.pendingHeroCard != null);
-        }
-    }, [currentPlayerIdx, playersData]);
-
-    useEffect(() => {
-        if (pendingHeroCard) {
-            setShowHeroBoard(true);
-        } else {
-            setShowHeroBoard(false);
-        }
-    }, [pendingHeroCard]);
-
-    useEffect(() => {
-        if (matchState === "SELECTING_CARDS" || matchState === "SELECTING_HAND_CARDS" || matchState === "SELECTING_PLAYER") {
-            setIsDiceRollVisible(false);
-        }
-    }, [matchState]);
+        return { card, actions: [] };
+    }
 
     return (
-        <div className='ingame-background'>
-            {!showTurnIndicator ? (
-                <div className='player-area'>
+        <div className="board">
+            <img src={tableBackground} alt="" className="hts-screen-bg board-bg" />
+            <div className="board-vignette" aria-hidden="true" />
 
-                    <GameHeader
-                        playersData={playersData}
-                        playerTags={playerTags}
-                        partyLeaderSelection={partyLeaderSelection}
-                        isPlayerTurn={isPlayerTurn}
-                        diceRolled={diceRolled[currentPlayerIdx]}
-                        socket={socket}
-                        id={id}
-                        turn={turn}
-                        setCurrentPlayerData={setCurrentPlayerData}
-                        setCurrentPlayerIdx={(newIdx: string) => {
-                            if (newIdx !== currentPlayerIdx) {
-                                setIsTransitioning(true);
-                                setTimeout(() => {
-                                    setCurrentPlayerIdx(newIdx);
-                                    setIsTransitioning(false);
-                                }, 300);
-                            }
-                        }}
-                        currentPlayerIdx={currentPlayerIdx}
-                        deckImg={deckImg}
-                        loggedUserId={loggedUserId}
-                        autoSwitchView={autoSwitchView}
-                        setAutoSwitchView={setAutoSwitchView}
-                        matchState={matchState}
-                        selectedCardsCount={selectedCardsTarget.length}
-                        maxSelectableCards={maxSelectableCards}
-                        selectedPlayerId={selectedPlayerId}
-                    />
+            <TopBar
+                matchId={id}
+                players={players}
+                order={order}
+                turn={turn}
+                me={me}
+                historyOpen={historyOpen}
+                chatOpen={chatOpen}
+                unread={chatOpen ? 0 : s.chat.slice(seenChat).filter((m) => m.playerId !== me).length}
+                onToggleHistory={() => { setHistoryOpen((v) => !v); setChatOpen(false); }}
+                onToggleChat={() => { setChatOpen((v) => !v); setHistoryOpen(false); setSeenChat(s.chat.length); setBubbles([]); }}
+                onOpenRules={() => setRulesOpen(true)}
+            />
 
-                    <div className={`party-area flex ${isTransitioning ? 'slide-out' : 'slide-in'}`}>
-                        {!showTurnIndicator && (
-                            (!diceRolled[currentPlayerIdx] || isDiceRollVisible) && (matchState !== "SELECTING_CARDS" && matchState !== "SELECTING_HAND_CARDS" && matchState !== "SELECTING_PLAYER") ? (
-                                showChallenge ? (
-                                    // Challenge view
-                                    <>
-                                        <div className="challenge-roll w-full flex items-center h-full relative">
-                                            <div className="hero duel-panel duel-panel-hero p-4 flex flex-col items-center w-[50%] h-full z-10">
-                                                <div className='player-info flex items-center flex-col'>
-                                                    <img
-                                                        src={classAvatars[playersData[challengeHero]?.leader]}
-                                                        alt={playersData[challengeHero]?.username || 'Challenger'}
-                                                        style={{
-                                                            width: "150px",
-                                                            height: "150px",
-                                                            borderRadius: "50%",
-                                                            objectFit: "cover"
-                                                        }}
-                                                    />
-                                                    <div className='flex items-center mt-2'>
-                                                        <span className='text-white font-bold text-2xl mr-2'>{playersData[challengeHero]?.username || 'Hero'}</span>
-                                                        {winnerId === challengeHero && (<img
-                                                            src={crownImg}
-                                                            style={{
-                                                                width: "70px",
-                                                                height: "70px",
-                                                                borderRadius: "50%",
-                                                            }}
-                                                            className='crown-slide-in'
-                                                        />)}</div>
-                                                </div>
-                                                {!challengeRolls[challengeHero] ? (
-                                                    <div className='challenge-dice mt-20 w-full flex justify-center items-center h-fit'>
-                                                        <DiceComponent
-                                                            currentPlayerIdx={challengeHero}
-                                                            loggedUserId={loggedUserId}
-                                                            socket={socket}
-                                                            id={id}
-                                                            isDiceRollVisible={true}
-                                                            canUse={loggedUserId === challengeHero}
-                                                            currentPlayerData={playersData[challengeHero]}
-                                                            pendingHeroCard={showHeroBoard}
-                                                            isPlayerChallenger={isPlayerChallenger}
-                                                            challengeWindowDuration={challengeWindowTime}
-                                                            isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <div className='mt-30 text-white font-bold text-5xl'>
-                                                        {`${challengeRolls[challengeHero]}`}
-                                                    </div>
-                                                )}
+            <OpponentRail players={players} ids={opponents} turn={turn} slain={s.slain} tags={s.tags} removal={s.removal} onOpen={setViewing} />
 
-                                            </div>
-                                            <div className="challenger duel-panel duel-panel-challenger p-4 flex flex-col items-center w-[50%] h-full z-10">
-                                                <div className='player-info flex items-center flex-col'>
-                                                    <img
-                                                        src={classAvatars[playersData[challengeOpponent]?.leader]}
-                                                        alt={playersData[challengeOpponent]?.username || 'Opponent'}
-                                                        style={{
-                                                            width: "150px",
-                                                            height: "150px",
-                                                            borderRadius: "50%",
-                                                            objectFit: "cover"
-                                                        }}
-                                                    />
-                                                    <div className='flex items-center mt-2'>
-                                                        <span className='text-white font-bold text-2xl mr-2'>{playersData[challengeOpponent]?.username || 'Hero'}</span>
-                                                        {winnerId === challengeOpponent && (<img
-                                                            src={crownImg}
-                                                            style={{
-                                                                width: "70px",
-                                                                height: "70px",
-                                                                borderRadius: "50%",
-                                                            }}
-                                                            className='crown-slide-in'
-                                                        />)}</div>
-                                                </div>
+            <Arena
+                monsters={s.monsters}
+                canDraw={canAct}
+                canAttack={canAttack}
+                feed={s.feed}
+                onDraw={actions.draw}
+                onAttack={actions.attack}
+                onInspectMonster={(monster) => setInspecting({ kind: 'monster', monster })}
+                onOpenHistory={() => setHistoryOpen(true)}
+            />
 
-                                                {!challengeRolls[challengeOpponent] ? (
-                                                    <div className='challenge-dice mt-20 w-full flex justify-center items-center'>
-                                                        <DiceComponent
-                                                            currentPlayerIdx={challengeOpponent}
-                                                            loggedUserId={loggedUserId}
-                                                            socket={socket}
-                                                            id={id}
-                                                            isDiceRollVisible={true}
-                                                            canUse={loggedUserId === challengeOpponent}
-                                                            currentPlayerData={playersData[challengeOpponent]}
-                                                            pendingHeroCard={showHeroBoard}
-                                                            isPlayerChallenger={isPlayerChallenger}
-                                                            challengeWindowDuration={challengeWindowTime}
-                                                            isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <div className='mt-30 text-white font-bold text-5xl'>
-                                                        {`${challengeRolls[challengeOpponent]}`}
-                                                    </div>
-                                                )}
+            <div className="bottom">
+                <PlayerZone
+                    player={mine}
+                    slainCount={s.slain[me] || 0}
+                    tags={s.tags[me] || []}
+                    removal={s.removal}
+                    handRemoval={s.handRemoval}
+                    canPlay={canAct}
+                    locallyUsed={s.locallyUsed}
+                    onPlay={actions.play}
+                    onInspectLeader={() => mine?.leader && setInspecting({ kind: 'leader', leader: mine.leader })}
+                    onInspectCard={(card, source) => setInspecting({ kind: source, card })}
+                />
+                <ActionPanel
+                    isMyTurn={isMyTurn}
+                    turnName={turnName}
+                    currentAP={ap}
+                    maxAP={mine?.maxAP ?? 3}
+                    phaseLabel={phaseLabel(t, matchState, isMyTurn, ap, mine?.maxAP ?? 3, turnName)}
+                    canDraw={canAct}
+                    onDraw={actions.draw}
+                    onOpenRules={() => setRulesOpen(true)}
+                />
+            </div>
 
-                                            </div>
-                                            <div className="versus absolute z-20 items-center flex justify-center w-full font-bold text-9x1"
-                                                style={{ top: '50%', left: 0, transform: 'translateY(-50%)' }}>
-                                                VS
-                                            </div>
-                                        </div>
-                                    </>
-                                ) : (
-                                    // Normal view
-                                    <>
-                                        <DiceComponent
-                                            currentPlayerIdx={currentPlayerIdx}
-                                            loggedUserId={loggedUserId}
-                                            socket={socket}
-                                            id={id}
-                                            isDiceRollVisible={isDiceRollVisible && matchState === "ORDER_SELECTION"}
-                                            canUse={!hasPlayerChallenged}
-                                            currentPlayerData={playersData[currentPlayerIdx]}
-                                            pendingHeroCard={showHeroBoard}
-                                            isPlayerChallenger={isPlayerChallenger}
-                                            challengeWindowDuration={challengeWindowTime}
-                                            isDuel={(matchState === "CHALLENGE_ROLL" && (challengeHero !== "" && challengeOpponent !== "")) || matchState === "WAITING_HERO_ROLL"}
-                                            isMonsterRoll={matchState === "WAITING_MONSTER_ROLL" && pendingMonsterAttack?.playerId === currentPlayerIdx}
-                                            monster={monsters.find((m) => m.id === pendingMonsterAttack?.monsterId) ?? null}
-                                            playersData={playersData}
-                                        />
+            <FxLayer events={s.fx} me={me} onDone={s.finishFx} />
 
-                                        {isDiceRollVisible && matchState === "ORDER_SELECTION" && (
-                                            <OrderSelectionScoreboard playersData={playersData} />
-                                        )}
-                                    </>
-                                )
-                            ) : (
-                                <PartyComponent
-                                    isPlayerTurn={isPlayerTurn}
-                                    currentPlayerData={playersData[currentPlayerIdx]}
-                                    partyLeaderSelection={partyLeaderSelection}
-                                    monsters={monsters}
-                                    availablePartyLeaders={availablePartyLeaders}
-                                    socket={socket}
-                                    id={id}
-                                    currentPlayerIdx={currentPlayerIdx}
-                                    matchState={matchState}
-                                    loggedUserId={loggedUserId}
-                                    turn={turn}
-                                    cardIds={selectedCardsTarget}
-                                />
-                            )
-                        )}
-                    </div>
-
-                    {!isTransitioning &&
-                        <div className='hand-area flex relative row mt-2'>
-                            <PlayerInfoComponent currentPlayerData={playersData[currentPlayerIdx]} />
-                            <HandComponent
-                                currentPlayerData={playersData[currentPlayerIdx]}
-                                currentPlayerIdx={currentPlayerIdx}
-                                loggedUserId={loggedUserId}
-                                socket={socket}
-                                id={id}
-                                matchState={matchState}
-                                isPlayerTurn={isPlayerTurn}
-                                selectedCards={selectedCards}
-                                setMaxSelectableCards={setMaxSelectableCards}
-                                setSelectedCards={setSelectedCards}
-                            />
-                        </div>}
-
-
-                </div>) : (<>
-                    {!partyLeaderSelection && (
-                        <TurnIndicator playerName={playersData[turn]?.username || "Player"} key={turn} leader={playersData[turn]?.leader || "BARD"} />
-                    )}</>)}
-
-            {modifierWindow && (
-                <ModifierPicker
-                    window={modifierWindow}
-                    hand={playersData[loggedUserId]?.hand || []}
-                    playersData={playersData}
-                    socket={socket}
-                    id={id}
-                    onPlay={() => setModifierWindow(null)}
+            {showDock && (
+                <RollDock
+                    key={`${turn}-${pendingCard?.cardId ?? 'card'}`}
+                    players={players}
+                    me={me}
+                    rollerId={turn}
+                    card={pendingCard}
+                    matchState={matchState}
+                    challengeFraction={s.challengeWindowMs ? s.challengeRemainingMs / s.challengeWindowMs : 0}
+                    challengeSeconds={s.challengeRemainingMs / 1000}
+                    canChallenge={!s.hasChallenged && !isMyTurn}
+                    result={s.heroRoll}
+                    mods={s.mods}
+                    onRoll={actions.rollHero}
+                    onChallenge={actions.challenge}
                 />
             )}
 
-            <ActionHistoryPanel history={actionHistory} playersData={playersData} />
+            {selecting && !isMyTurn && (
+                <div className="status-banner" role="status">{t.board.picking(turnName, pendingCard?.cardName)}</div>
+            )}
+            {selecting && isMyTurn && (
+                <TargetSheet
+                    mode={matchState as 'SELECTING_CARDS' | 'SELECTING_HAND_CARDS' | 'SELECTING_PLAYER'}
+                    players={players}
+                    me={me}
+                    source={mine?.pendingHeroCard || null}
+                    targets={s.targets}
+                    maxTargets={s.maxTargets}
+                    selectedPlayerId={s.selectedPlayerId}
+                    onToggleCard={actions.toggleCardTarget}
+                    onTogglePlayer={actions.togglePlayerTarget}
+                    onConfirm={actions.confirmTargets}
+                />
+            )}
 
+            {showDuel && s.duel && (
+                <DuelScene
+                    key={`${s.duel.heroId}-${s.duel.challengerId}`}
+                    players={players}
+                    me={me}
+                    heroId={s.duel.heroId}
+                    challengerId={s.duel.challengerId}
+                    card={players[s.duel.heroId]?.pendingHeroCard || null}
+                    rolls={s.duelRolls}
+                    winnerId={s.duelWinner}
+                    mods={s.mods}
+                    onRoll={actions.rollDuel}
+                />
+            )}
+
+            {s.monsterRoll && (
+                <MonsterScene
+                    key={s.monsterRoll.monster.id}
+                    players={players}
+                    me={me}
+                    attackerId={s.monsterRoll.attackerId}
+                    monster={s.monsterRoll.monster}
+                    raw={s.monsterRoll.raw}
+                    outcome={s.monsterRoll.outcome}
+                    mods={s.mods}
+                    onRoll={actions.rollMonster}
+                />
+            )}
+
+            {s.modifierWindow && myModifiers && (
+                <ModifierPicker
+                    key={s.modifierWindowSeq}
+                    window={s.modifierWindow}
+                    hand={mine?.hand || []}
+                    playersData={players}
+                    me={me}
+                    socket={socket}
+                    id={id}
+                    onPlay={actions.closeModifierWindow}
+                />
+            )}
+
+            {chatOpen && (
+                <div className="game-chat hts-rise">
+                    <ChatPanel
+                        messages={s.chat}
+                        me={me}
+                        colorFor={(pid) => classInfo(players[pid]?.leader)?.tint ?? 'var(--hts-gold)'}
+                        onSend={actions.sendChat}
+                        phrases={t.chat.gamePhrases}
+                        autoFocus
+                        onClose={() => setChatOpen(false)}
+                    />
+                </div>
+            )}
+            {!chatOpen && bubbles.length > 0 && (
+                <div className="chat-bubbles" aria-hidden="true">
+                    {bubbles.map((b) => (
+                        <div key={`${b.timestamp}-${b.playerId}`} className="chat-bubble">
+                            <b style={{ color: classInfo(players[b.playerId]?.leader)?.tint ?? 'var(--hts-gold)' }}>{b.username}</b>
+                            {b.text}
+                        </div>
+                    ))}
+                </div>
+            )}
+            {historyOpen && <ActionHistoryPanel history={s.history} playersData={players} onClose={() => setHistoryOpen(false)} />}
+            {rulesOpen && <RulesSheet onClose={() => setRulesOpen(false)} />}
+            {viewing && players[viewing] && (
+                <PartyViewer
+                    player={players[viewing]}
+                    slainCount={s.slain[viewing] || 0}
+                    onClose={() => setViewing(null)}
+                    onInspect={(card) => setInspecting({ kind: 'other', card })}
+                />
+            )}
+            {s.revealed && <HandReveal username={s.revealed.username} cards={s.revealed.cards} onClose={actions.closeReveal} />}
+            {inspecting && <CardInspector {...inspectorProps(inspecting)} onClose={() => setInspecting(null)} />}
+            {banner && players[banner] && <TurnBanner name={players[banner].username} leader={players[banner].leader} isMe={banner === me} />}
+            {matchState === 'FINISHED' && <MatchEnd players={players} slain={s.slain} onLeave={() => navigate('/games')} />}
+            {ids.length === 0 && <p className="status-banner">{t.board.connecting}</p>}
         </div>
     );
 }

@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useI18n } from '@/i18n';
+import type { PlayersMap } from '../../common/types';
 import './css/ActionHistoryPanel.css';
 
 export interface ActionHistoryEntry {
@@ -7,48 +9,42 @@ export interface ActionHistoryEntry {
     timestamp: number;
 }
 
-const ACTION_LABELS: Record<string, string> = {
-    draw_card: 'drew a card',
-    play_card: 'played a card',
-    use_card: 'used a card',
-    process_hero_roll: 'rolled for a Hero',
-    process_challenge_roll: 'rolled in a duel',
-    process_monster_roll: 'rolled against a monster',
-    challenge: 'challenged the play',
-    play_modifier: 'played a Modifier',
-    order_selection: 'rolled for turn order',
-    choose_party_leader: 'chose a Party Leader',
-    select_effect_target: 'chose an effect target',
-    deselect_effect_target: 'deselected an effect target',
-    select_effect_player: 'chose a target player',
-    deselect_effect_player: 'deselected a target player',
-    apply_card_effects: 'resolved a card effect',
-    attempt_slay_monster: 'attacked a monster',
-};
+const ROLL_ACTIONS = ['process_hero_roll', 'process_challenge_roll', 'process_monster_roll', 'order_selection', 'play_modifier'];
 
-function ActionHistoryPanel({ history, playersData }: {
+type Tab = 'all' | 'rolls';
+
+function ActionHistoryPanel({ history, playersData, onClose }: {
     history: ActionHistoryEntry[];
-    playersData: Record<string, any>;
+    playersData: PlayersMap;
+    onClose: () => void;
 }) {
-    const [collapsed, setCollapsed] = useState(true);
+    const { t } = useI18n();
+    const [tab, setTab] = useState<Tab>('all');
+    const entries = [...history].reverse().filter((e) => tab === 'all' || ROLL_ACTIONS.includes(e.action));
 
     return (
-        <div className={`action-history-panel ${collapsed ? 'action-history-collapsed' : ''}`}>
-            <button className="action-history-toggle" onClick={() => setCollapsed((c) => !c)}>
-                📜 History {collapsed ? '' : '▾'}
-            </button>
-            {!collapsed && (
-                <div className="action-history-list">
-                    {history.length === 0 && <div className="action-history-empty">No actions yet</div>}
-                    {[...history].reverse().map((entry, idx) => (
-                        <div className="action-history-entry" key={`${entry.timestamp}-${idx}`}>
-                            <span className="action-history-player">{playersData[entry.playerId]?.username || 'Someone'}</span>
-                            <span className="action-history-text">{ACTION_LABELS[entry.action] || entry.action}</span>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
+        <aside className="history hts-fade" aria-label={t.history.aria}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <h2 className="hts-display" style={{ fontSize: 30 }}>{t.history.title}</h2>
+                <button type="button" className="hts-icon-btn" aria-label={t.history.close} onClick={onClose}>✕</button>
+            </div>
+            <div role="tablist" className="history-tabs">
+                {(['all', 'rolls'] as Tab[]).map((id) => (
+                    <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? 'history-tab history-tab--on' : 'history-tab'} onClick={() => setTab(id)}>
+                        {id === 'all' ? t.history.all : t.history.rolls}
+                    </button>
+                ))}
+            </div>
+            <ol className="history-list hts-scroll">
+                {entries.length === 0 && <li className="hts-muted">{t.history.empty}</li>}
+                {entries.map((entry, idx) => (
+                    <li key={`${entry.timestamp}-${idx}`} className="history-item">
+                        <time className="history-time">{new Date(entry.timestamp).toLocaleTimeString(t.history.locale, { hour: '2-digit', minute: '2-digit' })}</time>
+                        <span><b>{playersData[entry.playerId]?.username || t.common.someone}</b> {t.history.actions[entry.action] || entry.action}</span>
+                    </li>
+                ))}
+            </ol>
+        </aside>
     );
 }
 
