@@ -208,6 +208,11 @@ npm run dev
 
 Isso sobe o Vite (React) e o Electron em paralelo, com hot-reload.
 
+### Acesso pela rede local
+- Se o frontend estiver sendo aberto de outro dispositivo na rede, o backend WebSocket precisa estar acessível pelo IP da máquina hospedeira e pela porta publicada no proxy do Docker.
+- O frontend usa por padrão `VITE_BACKEND_WS_URL`, `VITE_BACKEND_HOST` ou `VITE_BACKEND_PORT` quando definidos; caso contrário, ele tenta conectar no mesmo host do frontend pela porta `8889`.
+- No Windows, verifique se a porta `8889` está liberada no firewall para conexões da rede local. Se estiver usando o servidor Vite diretamente, a porta `5173` também precisa estar liberada.
+
 ### 3. Acompanhando o Kafka
 
 - **Kafka UI**: [http://localhost:8080](http://localhost:8080) — veja os tópicos listados acima, quantas partições/réplicas cada um tem, e as mensagens chegando em tempo real conforme você joga.
