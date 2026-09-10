@@ -1,112 +1,147 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '@/i18n';
-import { GameCard } from '../../common/GameCard';
-import { sendMessage, type CardData, type PlayersMap, type Socket } from '../../common/types';
-import { TimerRing } from '../../common/Widgets';
-import './css/ModifierPicker.css';
+import { getCardArt } from '@/utils/CardArt';
+import type { CardData, ModifierWindowData, PlayersMap, RollData } from '../../common/types';
+import { signed, useWindowClock } from '../rolls/RollParts';
+import '../rolls/stage.css';
 
-export interface ModifierWindowState {
-    context: string;
-    legalTargets: string[];
-    durationMs: number;
+export interface ModifierPreview {
+    targetId: string;
+    value: number;
 }
 
-function ModifierPicker({ window: modWindow, hand, playersData, me, socket, id, onPlay }: {
-    window: ModifierWindowState;
+interface ModifierPickerProps {
+    window?: ModifierWindowData;
+    rolls: RollData[];
     hand: CardData[];
-    playersData: PlayersMap;
+    players: PlayersMap;
     me: string;
-    socket: Socket;
-    id: string | undefined;
-    onPlay: () => void;
-}) {
+    /** "embedded" sits inside a 1440×900 Stage (duel); "dock" is fixed to the bottom of the board. */
+    placement: 'embedded' | 'dock';
+    onPlay: (cardId: number, value: number, targetId: string, guardianBonus: number) => void;
+    onPass: () => void;
+    onPreview?: (preview: ModifierPreview | null) => void;
+}
+
+const RING = 2 * Math.PI * 27;
+
+/** The Modifier window from the design: who is still reacting, your Modifier cards, value and target. */
+function ModifierPicker({ window: w, rolls, hand, players, me, placement, onPlay, onPass, onPreview }: ModifierPickerProps) {
     const { t } = useI18n();
-    const modifierCards = hand.filter((card) => card.type === 'MODIFIER');
-    const [msLeft, setMsLeft] = useState(modWindow.durationMs);
-    const [cardId, setCardId] = useState<number | null>(modifierCards[0]?.cardId ?? null);
+    const { left, fraction, seconds } = useWindowClock(w?.remainingMs ?? 0, w?.durationMs ?? 1);
+    const modifiers = hand.filter((c) => c.type === 'MODIFIER');
+    const [cardId, setCardId] = useState<number | null>(null);
     const [value, setValue] = useState<number | null>(null);
-    const [target, setTarget] = useState<string | null>(modWindow.legalTargets.length === 1 ? modWindow.legalTargets[0] : null);
+    const [target, setTarget] = useState('');
+    const [guardian, setGuardian] = useState(0);
+    const isGuardian = players[me]?.leader === 'GUARDIAN';
+    const selected = modifiers.find((c) => c.cardId === cardId) ?? null;
+    const options = useMemo(() => selected?.possibleValues ?? [], [selected]);
+    const open = !!w && left > 0;
+    const canReact = open && w.holders.includes(me) && !w.passed.includes(me);
 
     useEffect(() => {
-        const started = Date.now();
-        setMsLeft(modWindow.durationMs);
-        const interval = setInterval(() => {
-            setMsLeft(Math.max(0, modWindow.durationMs - (Date.now() - started)));
-        }, 200);
-        return () => clearInterval(interval);
-    }, [modWindow.durationMs, modWindow.context]);
-
-    const selected = modifierCards.find((c) => c.cardId === cardId) || null;
-    const options = useMemo(() => selected?.possibleValues || [], [selected]);
+        if (!selected) return;
+        const v = options.includes(value ?? NaN) ? value! : options[0];
+        if (v !== value) setValue(v);
+        if (!target && w) {
+            // Positive values usually help yourself, negative ones hurt the other roll.
+            const mine = w.targets.find((pid) => pid === me);
+            const other = w.targets.find((pid) => pid !== me);
+            setTarget((v > 0 ? mine ?? other : other ?? mine) ?? w.targets[0] ?? '');
+        }
+    }, [selected, options, value, target, w, me]);
 
     useEffect(() => {
-        if (selected && (value === null || !options.includes(value))) setValue(options[0] ?? null);
-    }, [selected, options, value]);
+        onPreview?.(selected && value !== null && target ? { targetId: target, value: value + guardian } : null);
+    }, [selected, value, target, guardian, onPreview]);
 
-    if (modifierCards.length === 0) return null;
-
-    const canPlay = selected && value !== null && target !== null && msLeft > 0;
+    const totalOf = (pid: string) => rolls.find((r) => r.rollerId === pid)?.total;
 
     function play() {
         if (!selected || value === null || !target) return;
-        sendMessage(socket, {
-            type: 'match',
-            subtype: 'action',
-            action: 'play_modifier',
-            id,
-            payload: { card_id: selected.cardId, chosen_value: value, target_player_id: target },
-        });
-        onPlay();
+        onPlay(selected.cardId, value, target, isGuardian ? guardian : 0);
+        setCardId(null);
+        setGuardian(0);
     }
 
+    const btn = (on: boolean) => `modwin-opt ${on ? 'modwin-opt--on' : ''}`;
+
     return (
-        <section className="modtray hts-rise" role="dialog" aria-label={t.modifier.aria}>
-            <div className="modtray-intro">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <TimerRing fraction={msLeft / modWindow.durationMs} size={58} label={String(Math.ceil(msLeft / 1000))} />
+        <section className={`modwin modwin--${placement} hts-rise`} aria-label={t.modifier.aria}>
+            <div className="modwin-left">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden="true">
+                        <circle cx="32" cy="32" r="27" fill="none" stroke="rgba(243,234,214,.12)" strokeWidth="7" />
+                        <circle cx="32" cy="32" r="27" fill="none" stroke="#e9b949" strokeWidth="7" strokeDasharray={RING} strokeDashoffset={RING * (1 - fraction)} strokeLinecap="round" transform="rotate(-90 32 32)" />
+                        <text x="32" y="40" textAnchor="middle" fill="#f3d48a" fontFamily="Grenze,serif" fontWeight="800" fontSize="24">{open ? seconds : '–'}</text>
+                    </svg>
                     <div style={{ lineHeight: 1.1 }}>
-                        <div className="hts-display" style={{ fontSize: 26 }}>{t.modifier.title}</div>
-                        <div className="hts-muted" style={{ fontSize: 13 }}>{t.modifier.contexts[modWindow.context] || t.modifier.generic}</div>
+                        <div className="modwin-title">{t.engine.modifier.title}</div>
+                        <div className="modwin-sub">{t.engine.modifier.seconds}</div>
                     </div>
                 </div>
-                <p className="hts-muted" style={{ margin: 0, fontSize: 14, lineHeight: 1.45 }}>
-                    {t.modifier.intro}
-                </p>
+                <p className="modwin-intro">{t.engine.modifier.intro}</p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {(w?.holders ?? []).filter((pid) => pid !== me).map((pid) => {
+                        const passed = w?.passed.includes(pid);
+                        return (
+                            <div key={pid} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+                                <span style={{ fontWeight: 800 }}>{players[pid]?.username}</span>
+                                <span style={{ fontWeight: 700, color: passed ? '#8e897e' : '#f3d48a' }}>{passed ? t.engine.modifier.passed : t.engine.modifier.thinking}</span>
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
 
-            <div className="modtray-cards" role="radiogroup" aria-label={t.modifier.cardsAria}>
-                {modifierCards.map((card) => (
-                    <GameCard
-                        key={card.cardId}
-                        card={card}
-                        width={120}
-                        selectable
-                        selected={card.cardId === cardId}
-                        onClick={() => setCardId(card.cardId)}
-                    />
-                ))}
+            <div className="modwin-mid">
+                <span className="modwin-label">{t.engine.modifier.yours}</span>
+                <div className="modwin-cards">
+                    {modifiers.map((card) => {
+                        const on = card.cardId === cardId;
+                        const art = getCardArt(card);
+                        return (
+                            <button key={card.cardId} type="button" className={`modwin-card ${on ? 'modwin-card--on' : ''}`} aria-pressed={on} aria-label={card.cardName} disabled={!canReact}
+                                onClick={() => { setCardId(on ? null : card.cardId); setTarget(''); }}>
+                                {art ? <img src={art} alt="" /> : <span>{card.cardName}</span>}
+                            </button>
+                        );
+                    })}
+                    <div className="modwin-placeholder">{modifiers.length === 0 ? t.engine.modifier.noneHint : t.engine.modifier.dimmedHint}</div>
+                </div>
             </div>
 
-            <div className="modtray-choices">
-                <span className="hts-label">{t.modifier.value}</span>
-                <div className="modtray-options">
-                    {options.map((v) => (
-                        <button key={v} type="button" aria-pressed={value === v} className={`modtray-opt ${value === v ? 'modtray-opt--on' : ''} ${v > 0 ? 'modtray-opt--plus' : 'modtray-opt--minus'}`} onClick={() => setValue(v)}>
-                            {v > 0 ? `+${v}` : `−${Math.abs(v)}`}
-                        </button>
-                    ))}
-                </div>
-                <span className="hts-label">{t.modifier.onRollOf}</span>
-                <div className="modtray-options">
-                    {modWindow.legalTargets.map((pid) => (
-                        <button key={pid} type="button" aria-pressed={target === pid} className={`modtray-opt ${target === pid ? 'modtray-opt--on' : ''}`} onClick={() => setTarget(pid)}>
-                            {pid === me ? t.common.you : playersData[pid]?.username || pid}
-                        </button>
-                    ))}
-                </div>
-                <div style={{ display: 'flex', gap: 10, marginTop: 'auto' }}>
-                    <button type="button" className="hts-btn hts-btn--ghost" onClick={onPlay}>{t.modifier.pass}</button>
-                    <button type="button" className="hts-btn" style={{ flex: 1 }} disabled={!canPlay} onClick={play}>{t.modifier.play}</button>
+            <div className="modwin-right">
+                {selected ? (
+                    <>
+                        <span className="modwin-label">{t.engine.modifier.value}</span>
+                        <div className="modwin-grid">
+                            {options.map((v) => <button key={v} type="button" className={btn(value === v)} onClick={() => setValue(v)}>{signed(v)}</button>)}
+                        </div>
+                        {isGuardian && (
+                            <>
+                                <span className="modwin-label">{t.engine.modifier.guardian}</span>
+                                <div className="modwin-grid modwin-grid--3">
+                                    {[-1, 0, 1].map((g) => <button key={g} type="button" className={btn(guardian === g)} onClick={() => setGuardian(g)}>{g === 0 ? '0' : signed(g)}</button>)}
+                                </div>
+                            </>
+                        )}
+                        <span className="modwin-label">{t.engine.modifier.target}</span>
+                        <div className="modwin-grid">
+                            {(w?.targets ?? []).map((pid) => (
+                                <button key={pid} type="button" className={btn(target === pid)} onClick={() => setTarget(pid)}>
+                                    {pid === me ? t.engine.modifier.mine : players[pid]?.username} ({totalOf(pid) ?? '–'})
+                                </button>
+                            ))}
+                        </div>
+                    </>
+                ) : (
+                    <p className="modwin-hint">{canReact ? t.engine.modifier.pickHint : open ? t.engine.modifier.passedHint : t.engine.modifier.waitingHint}</p>
+                )}
+                <div className="modwin-actions">
+                    <button type="button" className="modwin-pass" disabled={!canReact} onClick={() => { setCardId(null); onPass(); }}>{t.engine.modifier.pass}</button>
+                    <button type="button" className="modwin-play" disabled={!canReact || !selected || value === null || !target} onClick={play}>{t.engine.modifier.play}</button>
                 </div>
             </div>
         </section>

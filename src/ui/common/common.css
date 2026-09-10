@@ -91,3 +91,63 @@
 .hts-range-cell--mid { background: #3a474c; color: #d7dee0; }
 .hts-range-cell--win { background: var(--hts-jade); color: #06180d; }
 .hts-range-cell--mark { box-shadow: 0 0 0 3px var(--hts-parchment); transform: scaleY(1.18); }
+
+/* Equipped Item, tucked under the bottom edge of its Hero. */
+.hts-card-item {
+    position: absolute;
+    left: 6%;
+    right: 6%;
+    bottom: -7%;
+    padding: 3px 6px;
+    border-radius: 6px;
+    background: #f3ead6;
+    border: 2px solid #b8862a;
+    color: #2b2118;
+    font-weight: 800;
+    line-height: 1.15;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.45);
+    pointer-events: none;
+}
+.hts-card-item--cursed { background: #3a1d4a; border-color: #9b59d0; color: #f6eefb; }
+.hts-card-item-dot {
+    position: absolute;
+    right: -3px;
+    bottom: -3px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--hts-gold);
+    border: 2px solid #0d1315;
+}
+.hts-card-item-dot--cursed { background: #9b59d0; }
+
+/* Inspector: card text laid out as topics */
+.insp-topics { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.insp-topics li { display: flex; align-items: center; gap: 12px; font-size: 17px; line-height: 1.35; color: var(--hts-text-2); }
+.insp-tag {
+    flex: none;
+    min-width: 46px;
+    padding: 5px 10px;
+    border-radius: 8px;
+    text-align: center;
+    font: 800 15px var(--hts-font-ui);
+}
+.insp-tag--req { background: var(--hts-surface-3); color: var(--hts-text); }
+.insp-tag--fail { background: #e8693f; color: #1a0c06; }
+.insp-tag--win { background: #5cc28a; color: #06180d; }
+.insp-box {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background: #f3ead6;
+    color: #2b2118;
+}
+.insp-box .hts-label { color: #7a5c2e; }
+.insp-box p { margin: 0; font-size: 16px; line-height: 1.45; font-weight: 600; }
+.insp-box--effect p { font-size: 17px; }

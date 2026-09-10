@@ -1,1064 +1,1197 @@
 package org.br.heretoslay.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import org.apache.kafka.common.protocol.types.Field;
-import org.br.heretoslay.entity.Card.*;
-import org.br.heretoslay.entity.Card.CardEffects.CompositeCardEffect;
-import org.br.heretoslay.entity.Card.CardEffects.DestroyCardEffect;
-import org.br.heretoslay.entity.Card.CardEffects.StealCardEffect;
-import org.br.heretoslay.entity.Card.CardEffects.StealHandEffect;
+import org.br.heretoslay.engine.CardCatalog;
+import org.br.heretoslay.engine.Choice;
+import org.br.heretoslay.engine.Ctx;
+import org.br.heretoslay.engine.GameCard;
+import org.br.heretoslay.engine.HeroClass;
+import org.br.heretoslay.engine.Monster;
+import org.br.heretoslay.engine.MonsterCatalog;
+import org.br.heretoslay.engine.PlayerState;
+import org.br.heretoslay.engine.Roll;
+import org.br.heretoslay.engine.Table;
 import org.br.heretoslay.match.MatchService;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Timer;
+import java.util.TimerTask;
+import java.util.function.Consumer;
 
-public class Match {
+/**
+ * One match of Here to Slay. Every action and card effect becomes a sequence of
+ * steps; choices, challenge windows and rolls pause the sequence until the right
+ * player answers. The turn only passes once nothing is pending.
+ */
+public class Match implements Table {
 
-    private final Map<String, GameState> players = new ConcurrentHashMap<>();
-    private List<String> turnOrder = new ArrayList<>();
-    private List<String> availablePartyLeaders = new ArrayList<>(
-            Arrays.stream(PartyLeader.values())
-                    .map(Enum::name)
-                    .collect(Collectors.toList())
-    );
-    private int currentLeaderPickerIndex = 0;
-    private MatchState matchState;
-    private int currentPlayerTurnIndex = 0;
-    private Stack<Card> drawPile = new Stack<>();
-    private List<Card> discardPile = new ArrayList<>();
-    private boolean challengeWindowOpen = false;
-    private Card currentHeroCard = null;
-    private String currentHeroPlayer = null;
-    private Set<String> challengers = new HashSet<>();
-    @JsonIgnore
-    private Timer challengeTimer = new Timer();
-    private Map<String, Integer> duelRolls = new HashMap<>();
-    private String duelChallenger = null;
-    private long challengeWindowRemainingTime;
-    private long challengeWindowStartTime;
-    private long challengeWindowDuration = 10000;
+    public enum Phase { ORDER_SELECTION, PARTY_LEADER_SELECTION, GAMEPLAY, FINISHED }
+
+    private static final long CHOICE_MS = 60_000;
+    private static final long CHALLENGE_WINDOW_MS = 8_000;
+    private static final long MODIFIER_WINDOW_MS = 10_000;
+    private static final long MODIFIER_EXTEND_MS = 3_000;
+    private static final long ROLL_WAIT_MS = 25_000;
+    private static final int STARTING_HAND = 5;
+    private static final int REDRAW_HAND = 5;
+    private static final int MONSTERS_FACE_UP = 3;
+    private static final int MONSTERS_TO_WIN = 3;
+    private static final int CLASSES_TO_WIN = 6;
+    private static final int LOG_LIMIT = 80;
+
     private final Long matchId;
-    private final List<MatchState> forbiddenTurnChange = new ArrayList<>(
-            Arrays.asList(MatchState.CHALLENGE_WINDOW, MatchState.CHALLENGE_ROLL, MatchState.SELECTING_CARDS, MatchState.SELECTING_HAND_CARDS, MatchState.SELECTING_PLAYER)
-    );
+    private final Map<String, PlayerState> players = new LinkedHashMap<>();
+    private final List<String> pickOrder = new ArrayList<>();
+    private final List<String> turnOrder = new ArrayList<>();
+    private final List<String> availableLeaders = new ArrayList<>();
+    private Phase phase = Phase.ORDER_SELECTION;
+    private int leaderPickIndex;
+    private int turnIndex;
+    private int round;
+    private long startedAt;
 
-    @JsonIgnore
-    private final GameEventBus eventBus = new GameEventBus();
-    @JsonIgnore
-    private final transient ChatLog chat = new ChatLog();
-    // MVP simplification: all 15 base monsters sit face-up on the board for the
-    // whole match, instead of a shuffled monster deck revealing a few at a time.
-    // Not Jackson-serializable (MonsterCard carries CardEffect strategy objects with
-    // no data properties) - excluded from match-state-store snapshots. Harmless: the
-    // board is deterministically rebuilt by this same field initializer either way.
-    @JsonIgnore
-    private final List<MonsterCard> monsterBoard = createMonsterBoard();
+    private final Deque<GameCard> drawPile;
+    private final List<GameCard> discardPile = new ArrayList<>();
+    private final List<Monster> monsterDeck;
+    private final List<Monster> monsterBoard = new ArrayList<>();
 
-    private boolean modifierWindowOpen = false;
-    private String modifierWindowContext;
-    private Set<String> modifierWindowLegalTargets = Collections.emptySet();
-    private final Map<String, Integer> pendingModifierDelta = new ConcurrentHashMap<>();
-    private Timer modifierWindowTimer;
-    private static final long MODIFIER_WINDOW_DURATION = 5000;
+    private final Deque<Runnable> flow = new ArrayDeque<>();
+    private boolean waiting;
+    private boolean pumping;
 
-    private Long pendingMonsterId;
-    private String pendingMonsterAttacker;
-    private Integer pendingMonsterRoll;
+    private Choice choice;
+    private ChallengeWindow challengeWindow;
+    private Duel duel;
+    private Roll roll;
+    private ModifierWindow modifierWindow;
+    private JSONObject recent;
+    private int recentSeq;
 
-    private String pendingHeroRoller;
-    private Integer pendingHeroRollValue;
+    private final List<JSONObject> log = new ArrayList<>();
+    private String winnerId;
+    private String winReason;
+
+    private final Timer timer = new Timer(true);
+    private long timerToken;
+    private int idSeq;
+    private final ChatLog chat = new ChatLog();
+    private final Output output;
+
+    /** Where match messages go; MatchService in production. */
+    public interface Output {
+        void toAll(Long matchId, String message);
+
+        void toPlayers(Long matchId, List<String> playerIds, String message);
+    }
+
+    /** A Hero, Item or Magic card on its way to the table. */
+    private static final class Play {
+        final String ownerId;
+        final GameCard card;
+        String equipOwnerId;
+        GameCard equipTarget;
+        boolean blocked;
+
+        Play(String ownerId, GameCard card) {
+            this.ownerId = ownerId;
+            this.card = card;
+        }
+    }
+
+    private static final class ChallengeWindow {
+        final Play play;
+        final Set<String> eligible;
+        final Set<String> passed = new HashSet<>();
+        long deadline;
+
+        ChallengeWindow(Play play, Set<String> eligible) {
+            this.play = play;
+            this.eligible = eligible;
+        }
+    }
+
+    private static final class Duel {
+        final Play play;
+        final String challengerId;
+        final Roll ownerRoll;
+        final Roll challengerRoll;
+        String winnerId;
+
+        Duel(Play play, String challengerId, Roll ownerRoll, Roll challengerRoll) {
+            this.play = play;
+            this.challengerId = challengerId;
+            this.ownerRoll = ownerRoll;
+            this.challengerRoll = challengerRoll;
+        }
+    }
+
+    private static final class ModifierWindow {
+        final List<Roll> rolls;
+        final Runnable onClose;
+        final Set<String> passed = new HashSet<>();
+        long deadline;
+
+        ModifierWindow(List<Roll> rolls, Runnable onClose) {
+            this.rolls = rolls;
+            this.onClose = onClose;
+        }
+    }
 
     public Match(Long matchId, List<Player> startingPlayers) {
+        this(matchId, startingPlayers, new Output() {
+            @Override
+            public void toAll(Long id, String message) {
+                MatchService.getInstance().publishToKafka(id, message);
+            }
+
+            @Override
+            public void toPlayers(Long id, List<String> playerIds, String message) {
+                MatchService.getInstance().publishToPlayers(id, playerIds, message);
+            }
+        });
+    }
+
+    public Match(Long matchId, List<Player> startingPlayers, Output output) {
         this.matchId = matchId;
-        for (Player player : startingPlayers) {
-            GameState gameState = new GameState(player.getUsername(), player.getId());
-            players.put(player.getId().toString(), gameState);
+        this.output = output;
+        for (Player p : startingPlayers) {
+            String id = p.getId().toString();
+            players.put(id, new PlayerState(id, p.getUsername()));
         }
-        matchState = MatchState.ORDER_SELECTION;
-        drawPile = CardDeck.createDeck();
-        Collections.shuffle(drawPile);
+        for (HeroClass cls : HeroClass.values()) {
+            // The Shadow Claw cannot be used in 2-player games.
+            if (cls == HeroClass.THIEF && players.size() == 2) continue;
+            availableLeaders.add(cls.name());
+        }
+        drawPile = CardCatalog.shuffledDeck();
+        monsterDeck = MonsterCatalog.shuffledDeck();
     }
 
-    private static List<MonsterCard> createMonsterBoard() {
-        long base = 9000;
-        return new ArrayList<>(List.of(
-                MonsterFactory.abyssQueen(base + 1), MonsterFactory.anuranCauldron(base + 2),
-                MonsterFactory.articAries(base + 3), MonsterFactory.bloodwing(base + 4),
-                MonsterFactory.corruptedSabretooth(base + 5), MonsterFactory.crownedSerpent(base + 6),
-                MonsterFactory.darkDragonKing(base + 7), MonsterFactory.dracos(base + 8),
-                MonsterFactory.malamammoth(base + 9), MonsterFactory.megaSlime(base + 10),
-                MonsterFactory.orthus(base + 11), MonsterFactory.rexMajor(base + 12),
-                MonsterFactory.terratuga(base + 13), MonsterFactory.titanWyvern(base + 14),
-                MonsterFactory.warwornOwlbear(base + 15)
-        ));
-    }
+    public Long getMatchId() { return matchId; }
 
     @JsonIgnore
-    public GameEventBus getEventBus() {
-        return eventBus;
+    public Map<String, PlayerState> getPlayers() { return players; }
+
+    // =====================================================================
+    // Entry points (called by MatchService and timers)
+    // =====================================================================
+
+    public synchronized void processOrderSelectionRoll(String playerId, int ignoredClientRoll) {
+        PlayerState p = players.get(playerId);
+        if (phase != Phase.ORDER_SELECTION || p == null || p.getOrderRoll() != null) return;
+        int[] dice = Roll.throwDice();
+        p.setOrderRoll(dice[0] + dice[1], dice);
+        if (players.values().stream().allMatch(x -> x.getOrderRoll() != null)) finishOrderSelection();
+        publishState();
     }
 
-    public String getPlayerId(GameState gameState) {
-        return players.entrySet().stream()
-                .filter(entry -> entry.getValue() == gameState)
-                .map(Map.Entry::getKey)
-                .findFirst()
-                .orElse(null);
-    }
-
-    public Map<String, GameState> getPlayers() {
-        return players;
-    }
-
-    public List<Card> getDiscardPile() {
-        return discardPile;
-    }
-
-    public void performAction(String playerId, String action, JSONObject json) {
-
-        if (action.equals("play_modifier")) {
-            handlePlayModifier(playerId, json);
-            return;
-        }
-
-        if (action.equals("attempt_slay_monster")) {
-            if (!turnOrder.get(currentPlayerTurnIndex).equals(playerId)) return;
-            GameState attackerState = players.get(playerId);
-            if (attackerState.getCurrentAP() <= 0 || matchState != MatchState.GAMEPLAY) return;
-
-            JSONObject slayPayload = json.getJSONObject("payload");
-            Long monsterId = slayPayload.getLong("monster_id");
-            Optional<MonsterCard> monsterOpt = monsterBoard.stream().filter(m -> m.getCardId().equals(monsterId)).findFirst();
-            if (monsterOpt.isEmpty() || !monsterOpt.get().meetsPartyRequirement(attackerState)) return;
-
-            pendingMonsterId = monsterId;
-            pendingMonsterAttacker = playerId;
-            matchState = MatchState.WAITING_MONSTER_ROLL;
-
-            JSONObject startMsg = new JSONObject();
-            startMsg.put("type", "animation");
-            startMsg.put("subtype", "monster_attack_start");
-            startMsg.put("payload", new JSONObject().put("monsterId", monsterId).put("playerId", playerId));
-            broadcast(startMsg.toString());
-
-            JSONObject slayResponse = new JSONObject();
-            slayResponse.put("type", "match");
-            slayResponse.put("subtype", "match_state");
-            slayResponse.put("payload", getMatchState());
-            broadcast(slayResponse.toString());
-            return;
-        }
-
-        if (!turnOrder.get(currentPlayerTurnIndex).equals(playerId)) return;
-        GameState gameState = players.get(playerId);
-
-        switch (action) {
-            case "draw_card":
-                drawCard(gameState);
-                gameState.setCurrentAP(gameState.getCurrentAP() - 1);
-                break;
-
-            case "play_card":
-                playCard(gameState, json.getJSONObject("payload").getLong("card_id"));
-                break;
-
-            case "use_card":
-                useCard(gameState, json.getJSONObject("payload").getLong("card_id"));
-                break;
-            case "process_hero_roll":
-                int roll = json.getJSONObject("payload").getInt("roll");
-                processHeroDiceRoll(gameState, roll);
-                gameState.setCurrentAP(gameState.getCurrentAP() - 1);
-                break;
-
-            case "apply_card_effects":
-                Card pendingHero = gameState.getPendingHeroCard();
-                gameState.clearLastDrawnCards();
-                pendingHero.getEffect().applyEffect(this, gameState);
-                if (gameState.getPendingHeroCard() != null && gameState.getPendingHeroCard() != pendingHero) {
-                    // A nested effect (e.g. Wiggles stealing-and-using a hero) queued up a
-                    // freshly-acquired hero to roll for - let it play through the normal
-                    // WAITING_HERO_ROLL flow instead of clearing it below.
-                    matchState = MatchState.WAITING_HERO_ROLL;
-                } else {
-                    gameState.setPendingHeroCard(null);
-                    matchState = MatchState.GAMEPLAY;
-                }
-                JSONObject matchUpdate = new JSONObject();
-                matchUpdate.put("type", "match");
-                matchUpdate.put("subtype", "match_state");
-                matchUpdate.put("payload", getMatchState());
-                broadcast(matchUpdate.toString());
-                break;
-
-            case "select_effect_target":
-                Long targetCardId = json.getJSONObject("payload").getLong("card_id");
-                String targetPlayerId = json.getJSONObject("payload").getString("player_id");
-                if (gameState.getPendingHeroCard() != null) {
-                    HeroCard heroCard = (HeroCard) gameState.getPendingHeroCard();
-                    Map<String, List<Long>> targetMap = heroCard.addTarget(targetCardId, targetPlayerId);
-                    JSONObject effectMsg = new JSONObject();
-                    effectMsg.put("type", "match");
-                    effectMsg.put("subtype", matchState == MatchState.SELECTING_HAND_CARDS ? "select_hand_target" : "select_effect_target");
-                    effectMsg.put("payload", new JSONObject()
-                            .put("target",targetMap)
-                            .put("maxTargets", heroCard.getMaxDestroy()));
-
-                    broadcast(effectMsg.toString());
-                }
-                break;
-
-            case "deselect_effect_target":
-                Long deselectCardId = json.getJSONObject("payload").getLong("card_id");
-                String deselectPlayerId = json.getJSONObject("payload").getString("player_id");
-                if (gameState.getPendingHeroCard() != null) {
-                    HeroCard heroCard = (HeroCard) gameState.getPendingHeroCard();
-                    Map<String, List<Long>> targetMap  = heroCard.removeTarget(deselectCardId, deselectPlayerId);
-
-                    JSONObject effectMsg = new JSONObject();
-                    effectMsg.put("type", "match");
-                    effectMsg.put("subtype", matchState == MatchState.SELECTING_HAND_CARDS ? "select_hand_target" : "select_effect_target");
-                    effectMsg.put("payload", new JSONObject().put("target",targetMap).put("maxTargets", heroCard.getMaxDestroy()));
-                    broadcast(effectMsg.toString());
-                }
-                break;
-
-            case "select_effect_player":
-                String selectPlayerId = json.getString("targetPlayerId");
-                if (gameState.getPendingHeroCard() != null) {
-                    HeroCard heroCard = (HeroCard) gameState.getPendingHeroCard();
-                    String targetedPlayer = heroCard.addTargetPlayer(selectPlayerId);
-                    JSONObject effectMsg = new JSONObject();
-                    effectMsg.put("type", "match");
-                    effectMsg.put("subtype", "select_player_target");
-                    effectMsg.put("payload", new JSONObject().put("target", targetedPlayer).put("maxTargets", 1));
-                    broadcast(effectMsg.toString());
-                }
-                break;
-            case "deselect_effect_player":
-                String deselectTargetPlayerId = json.getString("targetPlayerId");
-                if (gameState.getPendingHeroCard() != null) {
-                    HeroCard heroCard = (HeroCard) gameState.getPendingHeroCard();
-                    String targetedPlayer = heroCard.removeTargetPlayer(deselectTargetPlayerId);
-                    JSONObject effectMsg = new JSONObject();
-                    effectMsg.put("type", "match");
-                    effectMsg.put("subtype", "select_player_target");
-                    effectMsg.put("payload", new JSONObject().put("target", targetedPlayer).put("maxTargets", 1));
-                    broadcast(effectMsg.toString());
-                }
-                break;
-            default:
-                System.out.println("Unknown action: " + action);
-                break;
-        }
-
-        if(gameState.getCurrentAP() == 0 && !forbiddenTurnChange.contains(matchState)){
-
-            JSONObject endTurn = new JSONObject();
-            endTurn.put("type", "animation");
-            endTurn.put("subtype", "end_turn");
-            broadcast(endTurn.toString());
-            gameState.clearEndOfTurnStatuses();
-            currentPlayerTurnIndex = (currentPlayerTurnIndex + 1) % turnOrder.size();
-            GameState nextPlayerState = players.get(turnOrder.get(currentPlayerTurnIndex));
-            nextPlayerState.clearStartOfTurnStatuses();
-            nextPlayerState.setCurrentAP(nextPlayerState.getMaxAP() + nextPlayerState.getPermanentExtraActionPoints());
-            gameState.getUsedCardIds().clear();
-        }
-
-        JSONObject drawResponse = new JSONObject();
-        drawResponse.put("type", "match");
-        drawResponse.put("subtype", "match_state");
-        drawResponse.put("payload", getMatchState());
-        gameState.setLastRoll(0);
-        broadcast(drawResponse.toString());
-
-    }
-
-    @JsonIgnore
-    public Map<String, List<Long>> getSelectedTargets() {
-        Card pendingHero = players.get(turnOrder.get(currentPlayerTurnIndex)).getPendingHeroCard();
-        if (pendingHero != null && pendingHero.getType() == CardType.HERO) {
-            HeroCard heroCard = (HeroCard) pendingHero;
-            CompositeCardEffect effect = heroCard.getEffect();
-            if (effect != null) {
-                for (CardEffect subEffect : effect.getEffects()) {
-                    if (subEffect instanceof DestroyCardEffect) {
-                        return ((DestroyCardEffect) subEffect).getPlayerIdToCardId();
-                    }
-
-                    if(subEffect instanceof StealHandEffect){
-                        return ((StealHandEffect) subEffect).getPlayerIdToCardId();
-                    }
-
-                    if (subEffect instanceof StealCardEffect) {
-                        return ((StealCardEffect) subEffect).getPlayerIdToCardId();
-                    }
-
-                }
-            }
-        }
-        return Collections.emptyMap();
-    }
-
-    public synchronized void processOrderSelectionRoll(String playerId, int roll) {
-        GameState playerState = players.get(playerId);
-        if (playerState != null && playerState.getOrderRoll() == null) {
-            playerState.setOrderRoll(roll);
-            System.out.println("Player " + playerState.getUsername() + " rolled: " + roll);
-            checkAndFinalizeOrder();
-        }
-
-        JSONObject rollResponse = new JSONObject();
-        rollResponse.put("type", "match");
-        rollResponse.put("subtype", "match_state");
-        rollResponse.put("payload", getMatchState());
-        broadcast(rollResponse.toString());
-    }
-
-    public void useCard(GameState gameState, Long cardId) {
-        Optional<Card> cardOpt = gameState.getParty().stream().filter(c -> c.getCardId().equals(cardId)).findFirst();
-        if (cardOpt.isEmpty()) return;
-        Card card = cardOpt.get();
-        if(card.getType() != CardType.HERO) return;
-        if (gameState.getUsedCardIds().contains(card.getCardId())) return;
-        gameState.setPendingHeroCard(card);
-        matchState = MatchState.WAITING_HERO_ROLL;
-    }
-
-    private void checkAndFinalizeOrder() {
-        boolean allPlayersRolled = players.values().stream().allMatch(p -> p.getOrderRoll() != null);
-        if (!allPlayersRolled) {
-            return;
-        }
-        Set<Integer> uniqueRolls = players.values().stream()
-                .map(GameState::getOrderRoll)
-                .collect(Collectors.toSet());
-
-        if (uniqueRolls.size() < players.size()) {
-            System.out.println("Tie detected! Requesting a re-roll.");
-            JSONObject tieResponse = new JSONObject();
-            players.values().forEach(GameState::resetOrderRoll);
-            tieResponse.put("type", "match");
-            tieResponse.put("subtype", "order_selection_tie");
-            tieResponse.put("payload", getMatchState());
-            broadcast(tieResponse.toString());
-            return;
-
-        }
-
-        System.out.println("All players rolled without ties. Finalizing turn order.");
-        this.turnOrder = players.entrySet().stream()
-                .sorted(Map.Entry.comparingByValue(Comparator.comparingInt(GameState::getOrderRoll).reversed()))
-                .map(Map.Entry::getKey)
-                .collect(Collectors.toList());
-
-        System.out.println("Final turn order determined:");
-        int i = 1;
-        for (String playerId : turnOrder) {
-            System.out.println(i++ + ". " + players.get(playerId).getUsername());
-        }
-
-        JSONObject orderFinalizedResponse = new JSONObject();
-        matchState = MatchState.PARTY_LEADER_SELECTION;
-        orderFinalizedResponse.put("type", "match");
-        orderFinalizedResponse.put("subtype", "order_finalized");
-        orderFinalizedResponse.put("payload", getMatchState());
-        broadcast(orderFinalizedResponse.toString());
-    }
-
-    public void handleChat(String playerId, String text) {
-        GameState sender = players.get(playerId);
-        if (sender == null) return;
-        JSONObject message = chat.append(playerId, sender.getUsername(), text);
-        if (message == null) return;
-        broadcast(new JSONObject()
-                .put("type", "match")
-                .put("subtype", "chat_message")
-                .put("payload", message)
-                .toString());
-    }
-
-    public void publishChatHistory() {
-        broadcast(new JSONObject()
-                .put("type", "match")
-                .put("subtype", "chat_history")
-                .put("payload", chat.history())
-                .toString());
-    }
-
-    public void broadcast(String message) {
-        MatchService.getInstance().publishToKafka(this.matchId, message);
-    }
-
-    public JSONObject getMatchState() {
-        JSONObject playersJson = new JSONObject();
-        for (Map.Entry<String, GameState> entry : players.entrySet()) {
-            String playerId = entry.getKey();
-            GameState player = entry.getValue();
-            JSONObject playerJson = new JSONObject()
-                    .put("leader", player.getLeader() == null ? "" : player.getLeader().toString())
-                    .put("party", player.getParty())
-                    .put("hand", player.getHand())
-                    .put("lastRoll", player.getLastRoll())
-                    .put("maxAP", player.getMaxAP())
-                    .put("currentAP", player.getCurrentAP())
-                    .put("username", player.getUsername())
-                    .put("pendingHeroCard", player.getPendingHeroCard() == null ? JSONObject.NULL : new JSONObject(player.getPendingHeroCard()))
-                    .put("usedCardIds", player.getUsedCardIds())
-                    .put("orderRoll", player.getOrderRoll() == null ? JSONObject.NULL : player.getOrderRoll())
-                    .put("rollBonusUntilEndOfTurn", player.getRollBonusUntilEndOfTurn())
-                    .put("rollBonusSources", player.getRollBonusSources())
-                    .put("permanentRollBonus", player.getPermanentRollBonus())
-                    .put("permanentRollBonusSources", player.getPermanentRollBonusSources());
-            playersJson.put(playerId, playerJson);
-        }
-
-        JSONArray monstersJson = new JSONArray();
-        for (MonsterCard monster : monsterBoard) {
-            monstersJson.put(new JSONObject()
-                    .put("id", monster.getCardId())
-                    .put("name", monster.getCardName())
-                    .put("partyRequirement", monster.getPartyRequirementDescription())
-                    .put("fightBackThreshold", monster.getFightBackThreshold())
-                    .put("slayThreshold", monster.getSlayThreshold()));
-        }
-
-        return new JSONObject()
-                .put("availablePartyLeaders", availablePartyLeaders)
-                .put("currentPlayerTurn", turnOrder.isEmpty() ? "" : turnOrder.get(currentPlayerTurnIndex))
-                .put("matchState", matchState.toString())
-                .put ("challengeWindowTime", challengeWindowDuration)
-                .put("challengerSet", new ArrayList<>(challengers))
-                .put("players", playersJson)
-                .put("monsters", monstersJson)
-                .put("modifierWindowOpen", modifierWindowOpen)
-                .put("modifierWindowLegalTargets", new ArrayList<>(modifierWindowLegalTargets))
-                .put("pendingMonsterAttack", pendingMonsterId == null ? JSONObject.NULL : new JSONObject()
-                        .put("monsterId", pendingMonsterId)
-                        .put("playerId", pendingMonsterAttacker));
-    }
-
-    public synchronized boolean choosePartyLeader(String playerId, String leaderName) {
-
-        System.out.println(turnOrder.get(currentPlayerTurnIndex) == playerId);
-        if (!turnOrder.get(currentPlayerTurnIndex).equals(playerId)) return false;
-        if (!availablePartyLeaders.contains(leaderName)) return false;
-        GameState playerState = players.get(playerId);
-        playerState.setLeader(PartyLeader.valueOf(leaderName));
-        JSONObject playSound = new JSONObject();
-        playSound.put("type", "sound");
-        playSound.put("subtype", "play_class_sound");
-        playSound.put("payload", leaderName);
-        broadcast(playSound.toString());
-        availablePartyLeaders.remove(leaderName);
-
-        currentPlayerTurnIndex++;
-
-        if (currentPlayerTurnIndex >= turnOrder.size()) {
-            currentPlayerTurnIndex = 0;
-            matchState = MatchState.GAMEPLAY;
-            for (String player : turnOrder) {
-                GameState gs = players.get(player);
-                for (int i = 0; i < 5; i++) {
-                    if (!drawPile.isEmpty()) {
-                        gs.getHand().add(drawPile.pop());
-                    }
-                }
-            }
-        }
-        JSONObject matchUpdate = new JSONObject();
-        matchUpdate.put("type", "match");
-        matchUpdate.put("subtype", "match_state");
-        matchUpdate.put("payload", getMatchState());
-        broadcast(matchUpdate.toString());
+    public synchronized boolean choosePartyLeader(String playerId, String leader) {
+        if (phase != Phase.PARTY_LEADER_SELECTION) return false;
+        if (!playerId.equals(pickOrder.get(leaderPickIndex)) || !availableLeaders.contains(leader)) return false;
+        players.get(playerId).setLeader(HeroClass.valueOf(leader));
+        availableLeaders.remove(leader);
+        log("leader_chosen", new JSONObject().put("actor", playerId).put("leader", leader));
+        leaderPickIndex++;
+        if (leaderPickIndex >= pickOrder.size()) startGame();
+        publishState();
         return true;
     }
 
-    public List<String> getAvailablePartyLeaders() {
-        return Collections.unmodifiableList(availablePartyLeaders);
+    public synchronized void challengeHero(String playerId) {
+        try {
+            challenge(playerId);
+            pump();
+        } catch (RuntimeException e) {
+            e.printStackTrace();
+        }
+        publishState();
     }
 
-    public void drawCard(GameState gameState) {
+    public synchronized void processDuelRoll(String playerId, int ignored) {
+        performAction(playerId, "roll", new JSONObject());
+    }
 
-        JSONObject drawSound = new JSONObject();
-        drawSound.put("type", "sound");
-        drawSound.put("subtype", "play_draw_card_sound");
-        broadcast(drawSound.toString());
+    public synchronized void processMonsterRoll(String playerId, int ignored) {
+        performAction(playerId, "roll", new JSONObject());
+    }
 
-        if (drawPile.isEmpty()) {
-            reshuffleDiscardIntoDraw();
-        }
-
-        if (!drawPile.isEmpty()) {
-            Card drawnCard = drawPile.pop();
-            gameState.getHand().add(drawnCard);
-            gameState.addLastDrawnCard(drawnCard);
-            String drawerId = getPlayerId(gameState);
-            if (drawerId != null) {
-                eventBus.publishCardDrawn(drawerId, drawnCard);
+    public synchronized void performAction(String playerId, String action, JSONObject json) {
+        if (phase != Phase.GAMEPLAY || !players.containsKey(playerId)) return;
+        JSONObject payload = json.optJSONObject("payload");
+        if (payload == null) payload = new JSONObject();
+        try {
+            switch (action) {
+                case "play_modifier" -> playModifier(playerId, payload);
+                case "select_effect_target" -> answerChoice(playerId, payload);
+                case "roll" -> rollDice(playerId);
+                case "pass" -> pass(playerId);
+                case "challenge" -> challenge(playerId);
+                default -> turnAction(playerId, action, payload);
             }
+            pump();
+        } catch (RuntimeException e) {
+            e.printStackTrace();
         }
-
+        publishState();
     }
 
-    /**
-     * Reveals the top revealCount cards of the draw pile, keeps the first
-     * keepCount of them in gameState's hand, and returns the rest to the top
-     * of the draw pile.
-     */
-    public void scryTop(int revealCount, int keepCount, GameState gameState) {
-        List<Card> revealed = new ArrayList<>();
-        for (int i = 0; i < revealCount && !drawPile.isEmpty(); i++) {
-            revealed.add(drawPile.pop());
-        }
-        int keep = Math.min(keepCount, revealed.size());
-        for (int i = 0; i < keep; i++) {
-            gameState.getHand().add(revealed.get(i));
-        }
-        for (int i = revealed.size() - 1; i >= keep; i--) {
-            drawPile.push(revealed.get(i));
-        }
+    public synchronized void handleChat(String playerId, String text) {
+        PlayerState sender = players.get(playerId);
+        if (sender == null) return;
+        JSONObject message = chat.append(playerId, sender.getUsername(), text);
+        if (message == null) return;
+        broadcast(event("chat_message", message));
     }
 
-    /**
-     * Plays a card right away, bypassing the challenge window - used for
-     * "may play immediately" hero/monster effects. Heroes go straight to
-     * party; Magic resolves its effect and goes to the discard pile.
-     */
-    public void playCardImmediately(GameState gameState, Card card) {
-        if (!gameState.getHand().contains(card)) return;
-        gameState.getHand().remove(card);
+    public synchronized void publishChatHistory() {
+        broadcast(new JSONObject().put("type", "match").put("subtype", "chat_history").put("payload", chat.history()).toString());
+    }
 
-        if (card.getType() == CardType.HERO) {
-            gameState.getParty().add(card);
-        } else if (card.getType() == CardType.MAGIC) {
-            card.getEffect().applyEffect(this, gameState);
-            discardPile.add(card);
-        } else {
-            gameState.getParty().add(card);
+    /** Sends every player their own view of the match. */
+    public synchronized void publishState() {
+        long now = System.currentTimeMillis();
+        for (String viewer : players.keySet()) {
+            JSONObject message = new JSONObject().put("type", "match").put("subtype", "match_state").put("payload", stateFor(viewer, now));
+            output.toPlayers(matchId, List.of(viewer), message.toString());
         }
     }
 
-    private void reshuffleDiscardIntoDraw() {
-        Collections.shuffle(discardPile);
-        drawPile.addAll(discardPile);
-        discardPile.clear();
-    }
+    // =====================================================================
+    // Setup
+    // =====================================================================
 
-    public void playCard(GameState gameState, Long cardId) {
-
-        if (gameState.getCurrentAP() == 0) return;
-        Optional<Card> cardOpt = gameState.getHand().stream().filter(c -> c.getCardId().equals(cardId)).findFirst();
-        if (cardOpt.isEmpty()) return;
-        Card card = cardOpt.get();
-        challengeWindowRemainingTime = challengeWindowDuration;
-
-        if(card.getType() == CardType.HERO){
-            gameState.setPendingHeroCard(card);
-            openChallengeWindow(players.entrySet().stream()
-                    .filter(entry -> entry.getValue().equals(gameState))
-                    .map(Map.Entry::getKey)
-                    .findFirst()
-                    .orElse(null) , card);
+    private void finishOrderSelection() {
+        Set<Integer> rolls = new HashSet<>();
+        players.values().forEach(p -> rolls.add(p.getOrderRoll()));
+        if (rolls.size() < players.size()) {
+            JSONObject previous = new JSONObject();
+            players.values().forEach(p -> previous.put(p.getId(), p.getOrderRoll()));
+            players.values().forEach(p -> p.setOrderRoll(null, null));
+            broadcast(event("order_selection_tie", new JSONObject().put("rolls", previous)));
             return;
         }
+        pickOrder.clear();
+        players.values().stream()
+                .sorted((a, b) -> Integer.compare(b.getOrderRoll(), a.getOrderRoll()))
+                .forEach(p -> pickOrder.add(p.getId()));
+        // Whoever picks their Party Leader last goes first; play continues in pick order.
+        turnOrder.clear();
+        turnOrder.add(pickOrder.get(pickOrder.size() - 1));
+        for (int i = 0; i < pickOrder.size() - 1; i++) turnOrder.add(pickOrder.get(i));
+        phase = Phase.PARTY_LEADER_SELECTION;
+        leaderPickIndex = 0;
+        broadcast(event("order_finalized", new JSONObject().put("turnOrder", new JSONArray(turnOrder))));
+    }
 
-        if (card.getType() == CardType.MAGIC) {
-            gameState.clearLastDrawnCards();
-            playCardImmediately(gameState, card);
-            return;
+    private void startGame() {
+        for (String id : turnOrder) {
+            for (int i = 0; i < STARTING_HAND; i++) drawRaw(players.get(id));
         }
-
-        // Modifier (and any other non-hero) cards can only be played through
-        // handlePlayModifier during an open modifier window - never dropped
-        // directly into the party like a hero.
+        while (monsterBoard.size() < MONSTERS_FACE_UP && !monsterDeck.isEmpty()) monsterBoard.add(monsterDeck.remove(0));
+        phase = Phase.GAMEPLAY;
+        startedAt = System.currentTimeMillis();
+        turnIndex = 0;
+        round = 1;
+        current().onTurnStart();
+        log("turn_start", new JSONObject().put("actor", current().getId()).put("round", round));
     }
 
-    private void openChallengeWindow(String playerId, Card heroCard) {
-        challengeWindowOpen = true;
-        currentHeroCard = heroCard;
-        currentHeroPlayer = playerId;
-        this.matchState = MatchState.CHALLENGE_WINDOW;
-        challengers.clear();
+    // =====================================================================
+    // Flow
+    // =====================================================================
 
-        players.get(playerId).getHand().remove(heroCard);
-        players.get(playerId).getParty().add(currentHeroCard);
-
-        JSONObject challengeMsg = new JSONObject();
-        challengeMsg.put("type", "match");
-        challengeMsg.put("subtype", "challenge_window_open");
-        broadcast(challengeMsg.toString());
-
-        // Timer de 5 segundos
-        challengeTimer = new Timer();
-        challengeWindowStartTime = System.currentTimeMillis();
-        challengeTimer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                closeChallengeWindow();
-            }
-        }, challengeWindowRemainingTime);
-
-        challengeTimer.scheduleAtFixedRate(new TimerTask() {
-            @Override
-            public void run() {
-                long remainingTime = getRemainingTime();
-                if (remainingTime <= 0) {
-                    cancel();
-                } else {
-                    JSONObject timeUpdateMsg = new JSONObject();
-                    timeUpdateMsg.put("type", "match");
-                    timeUpdateMsg.put("subtype", "timer_update");
-                    timeUpdateMsg.put("payload", new JSONObject().put("remainingTime", remainingTime));
-                    broadcast(timeUpdateMsg.toString());
-                }
-            }
-        }, 0, 100);
+    @Override
+    public void push(List<Runnable> steps) {
+        for (int i = steps.size() - 1; i >= 0; i--) flow.addFirst(steps.get(i));
     }
 
-    private long getRemainingTime() {
-        return challengeWindowRemainingTime - (System.currentTimeMillis() - challengeWindowStartTime);
-    }
-
-    public synchronized void challengeHero(String challengerId) {
-        if (!challengeWindowOpen || challengerId.equals(currentHeroPlayer) || challengers.contains(challengerId)) return;
-        challengers.add(challengerId);
-        duelChallenger = challengerId;
-        duelRolls.clear();
-        challengeWindowRemainingTime -= (System.currentTimeMillis() - challengeWindowStartTime);
-        challengeTimer.cancel();
-        eventBus.publish(GameEventBus.EventType.PLAYER_CHALLENGED, currentHeroPlayer, challengerId);
-
-        matchState = MatchState.CHALLENGE_ROLL;
-        JSONObject duelMsg = new JSONObject();
-        duelMsg.put("type", "match");
-        duelMsg.put("subtype", "duel_start");
-        duelMsg.put("payload", new JSONObject()
-                .put("challenger", challengerId)
-                .put("heroPlayer", currentHeroPlayer)
-                .put("matchState", matchState.toString()));
-        broadcast(duelMsg.toString());
-    }
-
-    /**
-     * Opens a short window during which any player may play a Modifier card
-     * (play_modifier action) targeting one of legalTargets' rolls, bypassing
-     * the normal turn gate in performAction. onClose runs once the window
-     * times out, with pendingModifierDelta populated for whoever got modified.
-     */
-    private void openModifierWindow(String context, Set<String> legalTargets, Runnable onClose) {
-        modifierWindowOpen = true;
-        modifierWindowContext = context;
-        modifierWindowLegalTargets = legalTargets;
-        pendingModifierDelta.clear();
-
-        JSONObject openMsg = new JSONObject();
-        openMsg.put("type", "match");
-        openMsg.put("subtype", "modifier_window_open");
-        openMsg.put("payload", new JSONObject()
-                .put("context", context)
-                .put("legalTargets", new JSONArray(legalTargets))
-                .put("durationMs", MODIFIER_WINDOW_DURATION));
-        broadcast(openMsg.toString());
-
-        modifierWindowTimer = new Timer();
-        modifierWindowTimer.schedule(new TimerTask() {
-            @Override
-            public void run() {
-                closeModifierWindow(onClose);
-            }
-        }, MODIFIER_WINDOW_DURATION);
-    }
-
-    private void closeModifierWindow(Runnable onClose) {
-        if (!modifierWindowOpen) return;
-        modifierWindowOpen = false;
-        modifierWindowContext = null;
-        modifierWindowLegalTargets = Collections.emptySet();
-
-        JSONObject closeMsg = new JSONObject();
-        closeMsg.put("type", "match");
-        closeMsg.put("subtype", "modifier_window_closed");
-        broadcast(closeMsg.toString());
-
-        onClose.run();
-    }
-
-    private int effectiveRollBonus(String realPlayerId) {
-        GameState state = players.get(realPlayerId);
-        int bonus = pendingModifierDelta.getOrDefault(realPlayerId, 0);
-        if (state != null) {
-            bonus += state.getRollBonusUntilEndOfTurn() + state.getPermanentRollBonus();
+    private void pump() {
+        if (pumping) return;
+        pumping = true;
+        try {
+            while (!waiting && !flow.isEmpty() && phase == Phase.GAMEPLAY) flow.pollFirst().run();
+        } finally {
+            pumping = false;
         }
-        return bonus;
+        if (!waiting && flow.isEmpty() && phase == Phase.GAMEPLAY && current().getActionPoints() <= 0) endTurn();
     }
 
-    private void handlePlayModifier(String playerId, JSONObject json) {
-        GameState caster = players.get(playerId);
-        if (caster == null || !modifierWindowOpen) return;
-
-        JSONObject payload = json.getJSONObject("payload");
-        Long cardId = payload.getLong("card_id");
-        int chosenValue = payload.getInt("chosen_value");
-        String targetPlayerId = payload.getString("target_player_id");
-
-        if (!modifierWindowLegalTargets.contains(targetPlayerId)) return;
-
-        Optional<Card> cardOpt = caster.getHand().stream()
-                .filter(c -> c.getCardId().equals(cardId) && c.getType() == CardType.MODIFIER)
-                .findFirst();
-        if (cardOpt.isEmpty()) return;
-
-        ModifierCard modifierCard = (ModifierCard) cardOpt.get();
-        if (!modifierCard.getPossibleValues().contains(chosenValue)) return;
-
-        caster.getHand().remove(modifierCard);
-        discardPile.add(modifierCard);
-        pendingModifierDelta.merge(targetPlayerId, chosenValue, Integer::sum);
-
-        eventBus.publish(GameEventBus.EventType.MODIFIER_PLAYED, playerId, targetPlayerId);
-
-        JSONObject playedMsg = new JSONObject();
-        playedMsg.put("type", "match");
-        playedMsg.put("subtype", "modifier_played");
-        playedMsg.put("payload", new JSONObject()
-                .put("playerId", playerId)
-                .put("targetPlayerId", targetPlayerId)
-                .put("value", chosenValue));
-        broadcast(playedMsg.toString());
-
-        JSONObject stateMsg = new JSONObject();
-        stateMsg.put("type", "match");
-        stateMsg.put("subtype", "match_state");
-        stateMsg.put("payload", getMatchState());
-        broadcast(stateMsg.toString());
+    private void suspend() {
+        waiting = true;
     }
 
-    public synchronized void processMonsterRoll(String playerId, int roll) {
-        if (matchState != MatchState.WAITING_MONSTER_ROLL || !playerId.equals(pendingMonsterAttacker)) return;
-
-        JSONObject rollResponse = new JSONObject();
-        rollResponse.put("type", "roll_result");
-        rollResponse.put("subtype", "monster_roll");
-        rollResponse.put("payload", new JSONObject().put("playerId", playerId).put("monsterId", pendingMonsterId).put("roll", roll));
-        broadcast(rollResponse.toString());
-
-        pendingMonsterRoll = roll;
-        openModifierWindow("MONSTER_ROLL", Set.of(playerId), this::resolveMonsterAttack);
+    private void resume() {
+        waiting = false;
+        pump();
     }
 
-    private void resolveMonsterAttack() {
-        synchronized (this) {
-            String attackerId = pendingMonsterAttacker;
-            Long monsterId = pendingMonsterId;
-            int roll = pendingMonsterRoll;
-            GameState attacker = players.get(attackerId);
+    private boolean idle() {
+        return !waiting && flow.isEmpty() && choice == null && challengeWindow == null && duel == null && roll == null;
+    }
 
-            pendingMonsterId = null;
-            pendingMonsterAttacker = null;
-            pendingMonsterRoll = null;
-            matchState = MatchState.GAMEPLAY;
-
-            if (attacker != null) {
-                attacker.setCurrentAP(attacker.getCurrentAP() - 1);
-
-                Optional<MonsterCard> monsterOpt = monsterBoard.stream().filter(m -> m.getCardId().equals(monsterId)).findFirst();
-                if (monsterOpt.isPresent()) {
-                    MonsterCard monster = monsterOpt.get();
-                    int effectiveRoll = roll + effectiveRollBonus(attackerId);
-
-                    JSONObject resultMsg = new JSONObject();
-                    resultMsg.put("type", "animation");
-
-                    if (effectiveRoll >= monster.getSlayThreshold()) {
-                        monsterBoard.remove(monster);
-                        monster.getReward().onSlain(this, attacker);
-                        resultMsg.put("subtype", "monster_slain");
-                        resultMsg.put("payload", new JSONObject().put("monsterId", monsterId).put("monsterName", monster.getCardName()).put("playerId", attackerId).put("roll", effectiveRoll));
-                        broadcast(resultMsg.toString());
-                    } else if (effectiveRoll <= monster.getFightBackThreshold()) {
-                        if (monster.getFightBackPenalty() != null) monster.getFightBackPenalty().applyEffect(this, attacker);
-                        resultMsg.put("subtype", "monster_fight_back");
-                        resultMsg.put("payload", new JSONObject().put("monsterId", monsterId).put("monsterName", monster.getCardName()).put("playerId", attackerId).put("roll", effectiveRoll));
-                        broadcast(resultMsg.toString());
-                    } else {
-                        resultMsg.put("subtype", "monster_survives");
-                        resultMsg.put("payload", new JSONObject().put("monsterId", monsterId).put("monsterName", monster.getCardName()).put("playerId", attackerId).put("roll", effectiveRoll));
-                        broadcast(resultMsg.toString());
+    private void schedule(long delayMs, Runnable task) {
+        long token = ++timerToken;
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                synchronized (Match.this) {
+                    if (token != timerToken || phase != Phase.GAMEPLAY) return;
+                    try {
+                        task.run();
+                        pump();
+                    } catch (RuntimeException e) {
+                        e.printStackTrace();
                     }
-                }
-
-                if (attacker.getCurrentAP() == 0) {
-                    JSONObject endTurn = new JSONObject();
-                    endTurn.put("type", "animation");
-                    endTurn.put("subtype", "end_turn");
-                    broadcast(endTurn.toString());
-                    attacker.clearEndOfTurnStatuses();
-                    currentPlayerTurnIndex = (currentPlayerTurnIndex + 1) % turnOrder.size();
-                    GameState nextPlayerState = players.get(turnOrder.get(currentPlayerTurnIndex));
-                    nextPlayerState.clearStartOfTurnStatuses();
-                    nextPlayerState.setCurrentAP(nextPlayerState.getMaxAP() + nextPlayerState.getPermanentExtraActionPoints());
-                    attacker.getUsedCardIds().clear();
+                    publishState();
                 }
             }
+        }, delayMs);
+    }
 
-            JSONObject stateMsg = new JSONObject();
-            stateMsg.put("type", "match");
-            stateMsg.put("subtype", "match_state");
-            stateMsg.put("payload", getMatchState());
-            broadcast(stateMsg.toString());
+    private String newId() {
+        return matchId + "-" + (++idSeq);
+    }
+
+    // =====================================================================
+    // Turn actions
+    // =====================================================================
+
+    private PlayerState current() {
+        return players.get(turnOrder.get(turnIndex));
+    }
+
+    private void turnAction(String playerId, String action, JSONObject payload) {
+        PlayerState p = players.get(playerId);
+        if (p != current() || !idle()) return;
+        switch (action) {
+            case "draw_card" -> {
+                if (!spend(p, 1)) return;
+                push(List.of(() -> draw(playerId, 1)));
+            }
+            case "play_card" -> {
+                GameCard card = p.findInHand(payload.optLong("card_id", -1));
+                if (card == null || !(card.is(GameCard.Kind.HERO) || card.is(GameCard.Kind.ITEM) || card.is(GameCard.Kind.MAGIC))) return;
+                if (card.is(GameCard.Kind.ITEM) && equipTargets(playerId, card).isEmpty()) return;
+                if (!spend(p, 1)) return;
+                push(playSteps(playerId, card));
+            }
+            case "use_card" -> {
+                GameCard hero = p.findInParty(payload.optLong("card_id", -1));
+                if (hero == null || !hero.is(GameCard.Kind.HERO) || p.getUsedHeroes().contains(hero.getId())) return;
+                if (hero.hasItemEffect(GameCard.ItemEffect.SEALING_KEY)) return;
+                if (!spend(p, 1)) return;
+                push(heroRollSteps(playerId, hero));
+            }
+            case "attempt_slay_monster" -> {
+                long monsterId = payload.optLong("monster_id", -1);
+                Monster monster = monsterBoard.stream().filter(m -> m.getId() == monsterId).findFirst().orElse(null);
+                if (monster == null || !monster.meetsRequirement(p) || p.getActionPoints() < 2) return;
+                spend(p, 2);
+                push(attackSteps(playerId, monster));
+            }
+            case "redraw_hand" -> {
+                if (!spend(p, 3)) return;
+                push(List.of(() -> {
+                    p.getHand().forEach(this::discard);
+                    p.getHand().clear();
+                    log("redrew", new JSONObject().put("actor", playerId));
+                    draw(playerId, REDRAW_HAND);
+                }));
+            }
+            case "leader_skill" -> {
+                if (p.getLeader() != HeroClass.THIEF || p.isLeaderSkillUsed() || others(playerId).stream().allMatch(o -> o.getHand().isEmpty())) return;
+                if (!spend(p, 1)) return;
+                p.setLeaderSkillUsed(true);
+                Ctx ctx = new Ctx(this, playerId, null);
+                push(List.of(ctx.choosePlayer("target", o -> !o.getHand().isEmpty()), ctx.pull(ctx.varOf("target"), 1, "pulled")));
+            }
+            case "end_turn" -> endTurn();
+            default -> System.out.println("Unknown action: " + action);
         }
     }
 
-    @JsonIgnore
-    public List<MonsterCard> getMonsterBoard() {
-        return Collections.unmodifiableList(monsterBoard);
+    private boolean spend(PlayerState p, int points) {
+        if (p.getActionPoints() < points) return false;
+        p.spend(points);
+        return true;
+    }
+
+    private void endTurn() {
+        PlayerState p = current();
+        if (p.classes().size() >= CLASSES_TO_WIN) {
+            finish(p.getId(), "classes");
+            return;
+        }
+        p.onTurnEnd();
+        turnIndex = (turnIndex + 1) % turnOrder.size();
+        if (turnIndex == 0) round++;
+        current().onTurnStart();
+        broadcast(new JSONObject().put("type", "animation").put("subtype", "end_turn").toString());
+        log("turn_start", new JSONObject().put("actor", current().getId()).put("round", round));
+    }
+
+    private void finish(String playerId, String reason) {
+        phase = Phase.FINISHED;
+        winnerId = playerId;
+        winReason = reason;
+        flow.clear();
+        waiting = false;
+        choice = null;
+        challengeWindow = null;
+        duel = null;
+        roll = null;
+        modifierWindow = null;
+        timerToken++;
+        log("won", new JSONObject().put("actor", playerId).put("reason", reason));
+        broadcast(event("match_finished", new JSONObject().put("winner", playerId).put("reason", reason)));
+    }
+
+    // =====================================================================
+    // Playing cards: declare, challenge, resolve
+    // =====================================================================
+
+    private List<Runnable> playSteps(String playerId, GameCard card) {
+        Play play = new Play(playerId, card);
+        List<Runnable> steps = new ArrayList<>();
+        steps.add(() -> {
+            PlayerState p = players.get(playerId);
+            if (!p.getHand().remove(card)) {
+                play.blocked = true;
+                return;
+            }
+            log("played", new JSONObject().put("actor", playerId).put("cardName", card.getName()).put("cardType", card.getKind().name()));
+        });
+        if (card.is(GameCard.Kind.ITEM)) steps.add(() -> chooseEquipTarget(play));
+        steps.add(() -> {
+            if (!play.blocked) openChallengeWindow(play);
+        });
+        steps.add(() -> resolvePlay(play));
+        return steps;
+    }
+
+    private List<JSONObject> equipTargets(String playerId, GameCard item) {
+        List<JSONObject> options = new ArrayList<>();
+        List<PlayerState> owners = item.isCursed() ? new ArrayList<>(players.values()) : List.of(players.get(playerId));
+        for (PlayerState owner : owners) {
+            for (GameCard hero : owner.heroes()) {
+                if (hero.getItem() != null) continue;
+                options.add(new JSONObject().put("id", String.valueOf(hero.getId())).put("ownerId", owner.getId()).put("card", hero.toJson()));
+            }
+        }
+        return options;
+    }
+
+    private void chooseEquipTarget(Play play) {
+        if (play.blocked) return;
+        List<JSONObject> options = equipTargets(play.ownerId, play.card);
+        if (options.isEmpty()) {
+            players.get(play.ownerId).getHand().add(play.card);
+            play.blocked = true;
+            return;
+        }
+        ask(play.ownerId, "equip_target", new JSONObject().put("card", play.card.getName()), 1, 1, options, play.card, sel -> {
+            JSONObject chosen = options.stream().filter(o -> o.getString("id").equals(sel.get(0))).findFirst().orElseThrow();
+            play.equipOwnerId = chosen.getString("ownerId");
+            play.equipTarget = players.get(play.equipOwnerId).findInParty(Long.parseLong(sel.get(0)));
+        });
+    }
+
+    private boolean isChallengeable(Play play) {
+        PlayerState owner = players.get(play.ownerId);
+        if (owner.isUnchallengeableThisTurn()) return false;
+        return !(play.card.is(GameCard.Kind.ITEM) && owner.has(Monster.Reward.WARWORN_OWLBEAR));
+    }
+
+    private void openChallengeWindow(Play play) {
+        if (!isChallengeable(play)) return;
+        Set<String> eligible = new HashSet<>();
+        for (PlayerState other : others(play.ownerId)) {
+            if (other.count(GameCard.Kind.CHALLENGE) > 0) eligible.add(other.getId());
+        }
+        if (eligible.isEmpty()) return;
+        challengeWindow = new ChallengeWindow(play, eligible);
+        challengeWindow.deadline = System.currentTimeMillis() + CHALLENGE_WINDOW_MS;
+        suspend();
+        schedule(CHALLENGE_WINDOW_MS, this::closeChallengeWindow);
     }
 
     private void closeChallengeWindow() {
-        challengeWindowOpen = false;
-        GameState heroState = players.get(currentHeroPlayer);
-        if (currentHeroCard != null) {
-            heroState.setPendingHeroCard(currentHeroCard);
-            matchState = MatchState.WAITING_HERO_ROLL;
-        }else{
-            matchState = MatchState.GAMEPLAY;
-        }
-
-        currentHeroCard = null;
-        currentHeroPlayer = null;
-        challengers.clear();
-
-        JSONObject challengeMsg = new JSONObject();
-        challengeMsg.put("type", "match");
-        challengeMsg.put("subtype", "match_state");
-        challengeMsg.put("payload", getMatchState());
-        broadcast(challengeMsg.toString());
-        System.out.println("Mensagem enviada");
+        if (challengeWindow == null) return;
+        challengeWindow = null;
+        resume();
     }
 
-    public boolean isSelectableHeroAvailable(GameState player) {
-        for (GameState gameState : players.values()) {
-            if(gameState == player) continue;
-            for (Card card : gameState.getParty()) {
-                if (card.getType() == CardType.HERO) {
-                    return true;
-                }
-            }
+    private void challenge(String challengerId) {
+        ChallengeWindow window = challengeWindow;
+        if (window == null || !window.eligible.contains(challengerId) || window.passed.contains(challengerId)) return;
+        PlayerState challenger = players.get(challengerId);
+        GameCard challengeCard = challenger.getHand().stream().filter(c -> c.is(GameCard.Kind.CHALLENGE)).findFirst().orElse(null);
+        if (challengeCard == null) return;
+        challenger.getHand().remove(challengeCard);
+        discard(challengeCard);
+        challengeWindow = null;
+        timerToken++;
+        Play play = window.play;
+        log("challenged", new JSONObject().put("actor", challengerId).put("target", play.ownerId).put("cardName", play.card.getName()));
+        broadcast(event("duel_start", new JSONObject().put("challenger", challengerId).put("heroPlayer", play.ownerId)));
+
+        List<Runnable> steps = new ArrayList<>();
+        if (players.get(play.ownerId).has(Monster.Reward.BLOODWING)) {
+            steps.add(new Ctx(this, play.ownerId, null).discard(() -> challengerId, 1, false, "bloodwing"));
         }
-        return false;
+        steps.add(() -> startDuel(play, challengerId));
+        push(steps);
+        waiting = false;
     }
 
-    public boolean isSelectableHandAvailable(GameState player) {
-        for (GameState gameState : players.values()) {
-            if(gameState == player) continue;
-            if(!gameState.getHand().isEmpty()){
-                return true;
-            }
-        }
-        return false;
+    private void startDuel(Play play, String challengerId) {
+        Roll ownerRoll = new Roll(newId(), Roll.Kind.CHALLENGE, play.ownerId, play.card, null);
+        Roll challengerRoll = new Roll(newId(), Roll.Kind.CHALLENGE, challengerId, play.card, null);
+        addRollBonuses(ownerRoll, false);
+        addRollBonuses(challengerRoll, true);
+        duel = new Duel(play, challengerId, ownerRoll, challengerRoll);
+        suspend();
+        schedule(ROLL_WAIT_MS, this::autoRollPending);
     }
 
-    public void processHeroDiceRoll(GameState gameState, int diceValue) {
-        Card pendingHero = gameState.getPendingHeroCard();
-        gameState.setLastRoll(diceValue);
-        if (pendingHero == null || pendingHero.getType() != CardType.HERO) {
-            matchState = MatchState.GAMEPLAY;
+    private void resolveDuel() {
+        Duel d = duel;
+        boolean challengerWins = d.challengerRoll.total() >= d.ownerRoll.total();
+        d.winnerId = challengerWins ? d.challengerId : d.play.ownerId;
+        d.play.blocked = challengerWins;
+        log("challenge_result", new JSONObject()
+                .put("actor", d.winnerId)
+                .put("target", challengerWins ? d.play.ownerId : d.challengerId)
+                .put("cardName", d.play.card.getName())
+                .put("blocked", challengerWins)
+                .put("value", d.ownerRoll.total())
+                .put("value2", d.challengerRoll.total()));
+        broadcast(new JSONObject().put("type", "match").put("subtype", "duel_result").put("winner", d.winnerId).toString());
+        setRecent(new JSONObject().put("type", "duel").put("duel", duelJson(d)));
+        duel = null;
+        resume();
+    }
+
+    private void resolvePlay(Play play) {
+        PlayerState owner = players.get(play.ownerId);
+        GameCard card = play.card;
+        if (play.blocked) {
+            if (!owner.getHand().contains(card)) discard(card);
             return;
         }
-
-        HeroCard card = (HeroCard) pendingHero;
-        JSONObject rollResponse = new JSONObject();
-        rollResponse.put("type", "dice_roll");
-        rollResponse.put("subtype", "hero_roll");
-        rollResponse.put("diceRoll", diceValue);
-        rollResponse.put("minValue", card.getDiceValue());
-        broadcast(rollResponse.toString());
-
-        String rollerId = getPlayerId(gameState);
-        pendingHeroRoller = rollerId;
-        pendingHeroRollValue = diceValue;
-        openModifierWindow("HERO_ROLL", Set.of(rollerId), this::resolveHeroRoll);
-    }
-
-    private void resolveHeroRoll() {
-        synchronized (this) {
-            String rollerId = pendingHeroRoller;
-            int diceValue = pendingHeroRollValue;
-            pendingHeroRoller = null;
-            pendingHeroRollValue = null;
-
-            GameState gameState = players.get(rollerId);
-            Card pendingHero = gameState != null ? gameState.getPendingHeroCard() : null;
-            if (gameState == null || pendingHero == null || pendingHero.getType() != CardType.HERO) {
-                matchState = MatchState.GAMEPLAY;
-                return;
-            }
-
-            HeroCard card = (HeroCard) pendingHero;
-            int minValue = card.getDiceValue();
-            int effectiveDiceValue = diceValue + effectiveRollBonus(rollerId);
-
-            if (effectiveDiceValue >= minValue) {
-                gameState.getUsedCardIds().add(card.getCardId());
-                eventBus.publish(GameEventBus.EventType.HERO_EFFECT_SUCCEEDED, rollerId, card.getCardName());
-
-
-                if (card.checkForSelectablePartyEffect() && isSelectableHeroAvailable(gameState)) {
-                    gameState.setPendingHeroCard(card);
-                    matchState = MatchState.SELECTING_CARDS;
-                    gameState.getUsedCardIds().add(card.getCardId());
-                    JSONObject effectMsg = new JSONObject();
-                    effectMsg.put("type", "match");
-                    effectMsg.put("subtype", "match_state");
-                    effectMsg.put("payload", getMatchState());
-                    broadcast(effectMsg.toString());
-
-                    effectMsg.put("type", "match");
-                    effectMsg.put("subtype", "select_effect_target");
-                    effectMsg.put("payload", new JSONObject()
-                            .put("maxTargets", card.getMaxDestroy())
-                            .put("target", Collections.emptyMap()));
-                    broadcast(effectMsg.toString());
-                    return;
-                }
-
-                if (card.checkForSelectableHandEffect() && isSelectableHandAvailable(gameState)) {
-                    gameState.setPendingHeroCard(card);
-                    matchState = MatchState.SELECTING_HAND_CARDS;
-                    gameState.getUsedCardIds().add(card.getCardId());
-                    JSONObject effectMsg = new JSONObject();
-                    effectMsg.put("type", "match");
-                    effectMsg.put("subtype", "match_state");
-                    effectMsg.put("payload", getMatchState());
-                    broadcast(effectMsg.toString());
-
-                    effectMsg.put("type", "match");
-                    effectMsg.put("subtype", "select_effect_target");
-                    effectMsg.put("payload", new JSONObject()
-                            .put("maxTargets", card.getMaxDestroy())
-                            .put("target", Collections.emptyMap()));
-                    broadcast(effectMsg.toString());
-                    return;
-                }
-
-                if (card.checkForSelectablePlayerEffect()) {
-                    gameState.setPendingHeroCard(card);
-                    matchState = MatchState.SELECTING_PLAYER;
-                    gameState.getUsedCardIds().add(card.getCardId());
-                    JSONObject effectMsg = new JSONObject();
-                    effectMsg.put("type", "match");
-                    effectMsg.put("subtype", "match_state");
-                    effectMsg.put("payload", getMatchState());
-                    broadcast(effectMsg.toString());
-
-                    effectMsg.put("type", "match");
-                    effectMsg.put("subtype", "select_player_target");
-                    effectMsg.put("payload", new JSONObject()
-                            .put("target", JSONObject.NULL)
-                            .put("maxTargets", 1));
-                    broadcast(effectMsg.toString());
-                    return;
-                }
-
-                if (!card.checkForSelectablePartyEffect() && !card.checkForSelectableHandEffect()) {
-                    gameState.clearLastDrawnCards();
-                    card.applyEffect(this, gameState);
+        switch (card.getKind()) {
+            case HERO -> {
+                owner.getParty().add(card);
+                log("hero_entered", new JSONObject().put("actor", play.ownerId).put("cardName", card.getName()));
+                if (!card.hasItemEffect(GameCard.ItemEffect.SEALING_KEY)) {
+                    confirm(play.ownerId, "confirm_roll_now", new JSONObject().put("card", card.getName()), card, yes -> {
+                        if (yes) push(heroRollSteps(play.ownerId, card));
+                    });
                 }
             }
-            gameState.getUsedCardIds().add(card.getCardId());
-            gameState.setPendingHeroCard(null);
-            matchState = MatchState.GAMEPLAY;
-
-            JSONObject stateMsg = new JSONObject();
-            stateMsg.put("type", "match");
-            stateMsg.put("subtype", "match_state");
-            stateMsg.put("payload", getMatchState());
-            broadcast(stateMsg.toString());
+            case ITEM -> {
+                PlayerState heroOwner = players.get(play.equipOwnerId);
+                if (play.equipTarget != null && heroOwner.getParty().contains(play.equipTarget) && play.equipTarget.getItem() == null) {
+                    play.equipTarget.setItem(card);
+                    log("equipped", new JSONObject().put("actor", play.ownerId).put("target", play.equipOwnerId)
+                            .put("cardName", card.getName()).put("heroName", play.equipTarget.getName()));
+                } else {
+                    owner.getHand().add(card);
+                }
+            }
+            case MAGIC -> {
+                Ctx ctx = new Ctx(this, play.ownerId, card);
+                List<Runnable> steps = new ArrayList<>(card.getScript().steps(ctx));
+                steps.add(() -> {
+                    discard(card);
+                    if (owner.getLeader() == HeroClass.WIZARD) draw(play.ownerId, 1);
+                });
+                push(steps);
+            }
+            default -> discard(card);
         }
     }
 
-    public synchronized void processDuelRoll(String playerId, int roll) {
-        duelRolls.put(playerId, roll);
-        JSONObject rollResponse = new JSONObject();
-        rollResponse.put("type", "roll_result");
-        rollResponse.put("subtype", "duel_roll");
-        rollResponse.put("payload", duelRolls);
-        broadcast(rollResponse.toString());
+    // =====================================================================
+    // Hero effect rolls
+    // =====================================================================
 
-        if (duelRolls.size() == 2) {
-            String heroPlayerId = turnOrder.get(currentPlayerTurnIndex);
-            openModifierWindow("DUEL", Set.of(heroPlayerId, duelChallenger), this::resolveDuelRoll);
+    private List<Runnable> heroRollSteps(String playerId, GameCard hero) {
+        return List.of(() -> {
+            PlayerState p = players.get(playerId);
+            if (!p.getParty().contains(hero) || hero.hasItemEffect(GameCard.ItemEffect.SEALING_KEY)) return;
+            p.getUsedHeroes().add(hero.getId());
+            Roll r = new Roll(newId(), Roll.Kind.HERO, playerId, hero, null);
+            addRollBonuses(r, false);
+            roll = r;
+            suspend();
+            schedule(ROLL_WAIT_MS, this::autoRollPending);
+        });
+    }
+
+    private void resolveHeroRoll(Roll r) {
+        GameCard hero = r.getCard();
+        String playerId = r.getRollerId();
+        PlayerState p = players.get(playerId);
+        boolean success = r.total() >= hero.getDice();
+        r.setOutcome(success ? "success" : "fail");
+        log("hero_roll", new JSONObject().put("actor", playerId).put("cardName", hero.getName())
+                .put("value", r.total()).put("target", hero.getDice()).put("success", success));
+        broadcast(new JSONObject().put("type", "dice_roll").put("subtype", "hero_roll")
+                .put("diceRoll", r.total()).put("minValue", hero.getDice()).put("playerId", playerId).toString());
+        setRecent(new JSONObject().put("type", "roll").put("roll", r.toJson()));
+        roll = null;
+
+        List<Runnable> steps = new ArrayList<>();
+        if (success) {
+            steps.addAll(hero.getScript().steps(new Ctx(this, playerId, hero)));
+            if (p.has(Monster.Reward.ARTIC_ARIES)) steps.add(() -> draw(playerId, 1));
+            if (hero.hasItemEffect(GameCard.ItemEffect.SHINY_COIN)) {
+                steps.add(new Ctx(this, playerId, hero.getItem()).discardOwn(1));
+            }
+        } else if (hero.hasItemEffect(GameCard.ItemEffect.RUSTY_COIN)) {
+            steps.add(() -> draw(playerId, 1));
+        }
+        push(steps);
+        resume();
+    }
+
+    // =====================================================================
+    // Monster attacks
+    // =====================================================================
+
+    private List<Runnable> attackSteps(String playerId, Monster monster) {
+        return List.of(() -> {
+            Roll r = new Roll(newId(), Roll.Kind.ATTACK, playerId, null, monster);
+            addRollBonuses(r, false);
+            roll = r;
+            log("attacked", new JSONObject().put("actor", playerId).put("cardName", monster.getName()));
+            broadcast(new JSONObject().put("type", "animation").put("subtype", "monster_attack_start")
+                    .put("payload", new JSONObject().put("monsterId", monster.getId()).put("playerId", playerId)).toString());
+            suspend();
+            schedule(ROLL_WAIT_MS, this::autoRollPending);
+        });
+    }
+
+    private void resolveAttack(Roll r) {
+        Monster monster = r.getMonster();
+        String playerId = r.getRollerId();
+        PlayerState p = players.get(playerId);
+        int total = r.total();
+        String subtype;
+        List<Runnable> steps = new ArrayList<>();
+        if (total >= monster.getSlay()) {
+            subtype = "monster_slain";
+            r.setOutcome("slain");
+            monsterBoard.remove(monster);
+            p.getSlain().add(monster);
+            if (!monsterDeck.isEmpty()) monsterBoard.add(monsterDeck.remove(0));
+        } else if (total <= monster.getFightBack()) {
+            subtype = "monster_fight_back";
+            r.setOutcome("fight_back");
+            Ctx ctx = new Ctx(this, playerId, null);
+            steps.add(monster.getPenalty() == Monster.Penalty.SACRIFICE_HERO
+                    ? ctx.sacrificeBy(() -> playerId)
+                    : ctx.discard(() -> playerId, 2, false, "penalty"));
+        } else {
+            subtype = "monster_survives";
+            r.setOutcome("survives");
+        }
+        broadcast(new JSONObject().put("type", "animation").put("subtype", subtype).put("payload", new JSONObject()
+                .put("monsterId", monster.getId()).put("monsterName", monster.getName()).put("playerId", playerId).put("roll", total)).toString());
+        log("attack_result", new JSONObject().put("actor", playerId).put("cardName", monster.getName()).put("value", total).put("outcome", r.toJson().optString("outcome")));
+        setRecent(new JSONObject().put("type", "roll").put("roll", r.toJson()));
+        roll = null;
+        if (p.getSlain().size() >= MONSTERS_TO_WIN) {
+            finish(playerId, "monsters");
+            return;
+        }
+        push(steps);
+        resume();
+    }
+
+    // =====================================================================
+    // Dice, bonuses and the Modifier window
+    // =====================================================================
+
+    private void addRollBonuses(Roll r, boolean asChallenger) {
+        PlayerState p = players.get(r.getRollerId());
+        switch (r.getKind()) {
+            case HERO -> {
+                if (p.getLeader() == HeroClass.BARD) r.addBonus("The Charismatic Song", 1);
+                if (p.has(Monster.Reward.ANURAN_CAULDRON)) r.addBonus("Anuran Cauldron", 1);
+                if (r.getCard().hasItemEffect(GameCard.ItemEffect.BIG_RING)) r.addBonus("Really Big Ring", 2);
+                if (r.getCard().hasItemEffect(GameCard.ItemEffect.SNAKE_EYES)) r.addBonus("Curse of the Snake's Eyes", -2);
+            }
+            case ATTACK -> {
+                if (p.getLeader() == HeroClass.RANGER) r.addBonus("The Divine Arrow", 1);
+            }
+            case CHALLENGE -> {
+                if (asChallenger && p.getLeader() == HeroClass.FIGHTER) r.addBonus("The Fist of Reason", 2);
+                if (p.has(Monster.Reward.TITAN_WYVERN)) r.addBonus("Titan Wyvern", 1);
+            }
+        }
+        if (p.has(Monster.Reward.DARK_DRAGON_KING)) r.addBonus("Dark Dragon King", 1);
+        // "Until the end of your turn" bonuses only count during your own turn.
+        if (p == current() && p.getTurnRollBonus() != 0) r.addBonus(String.join(", ", p.getTurnBonusSources()), p.getTurnRollBonus());
+    }
+
+    private void rollDice(String playerId) {
+        if (roll != null && roll.getRollerId().equals(playerId) && !roll.isRolled()) {
+            roll.roll();
+            Roll r = roll;
+            openModifierWindow(List.of(r), () -> {
+                if (r.getKind() == Roll.Kind.HERO) resolveHeroRoll(r);
+                else resolveAttack(r);
+            });
+            return;
+        }
+        if (duel != null) {
+            Roll r = duel.ownerRoll.getRollerId().equals(playerId) ? duel.ownerRoll
+                    : duel.challengerRoll.getRollerId().equals(playerId) ? duel.challengerRoll : null;
+            if (r == null || r.isRolled()) return;
+            r.roll();
+            if (duel.ownerRoll.isRolled() && duel.challengerRoll.isRolled()) {
+                openModifierWindow(List.of(duel.ownerRoll, duel.challengerRoll), this::resolveDuel);
+            }
         }
     }
 
-    private void resolveDuelRoll() {
-        synchronized (this) {
-            int heroRoll = duelRolls.get(turnOrder.get(currentPlayerTurnIndex)) + effectiveRollBonus(turnOrder.get(currentPlayerTurnIndex));
-            int challengerRoll = duelRolls.get(duelChallenger) + effectiveRollBonus(duelChallenger);
+    /** Players who don't click in time get rolled for. */
+    private void autoRollPending() {
+        if (roll != null && !roll.isRolled()) {
+            rollDice(roll.getRollerId());
+        } else if (duel != null) {
+            if (!duel.ownerRoll.isRolled()) rollDice(duel.ownerRoll.getRollerId());
+            if (duel != null && !duel.challengerRoll.isRolled()) rollDice(duel.challengerRoll.getRollerId());
+        }
+    }
 
-            JSONObject resultMsg = new JSONObject();
-            resultMsg.put("type", "match");
-            resultMsg.put("subtype", "duel_result");
+    private Set<String> modifierHolders() {
+        Set<String> holders = new HashSet<>();
+        players.values().forEach(p -> {
+            if (p.count(GameCard.Kind.MODIFIER) > 0) holders.add(p.getId());
+        });
+        return holders;
+    }
 
-            if (heroRoll >= challengerRoll) {
-                resultMsg.put("winner", turnOrder.get(currentPlayerTurnIndex));
-                matchState = MatchState.CHALLENGE_WINDOW;
-                JSONObject matchUpdate = new JSONObject();
-                matchUpdate.put("type", "match");
-                matchUpdate.put("subtype", "match_state");
-                matchUpdate.put("payload", getMatchState());
-                broadcast(matchUpdate.toString());
+    private void openModifierWindow(List<Roll> rolls, Runnable onClose) {
+        timerToken++;
+        if (modifierHolders().isEmpty()) {
+            onClose.run();
+            return;
+        }
+        modifierWindow = new ModifierWindow(rolls, onClose);
+        modifierWindow.deadline = System.currentTimeMillis() + MODIFIER_WINDOW_MS;
+        schedule(MODIFIER_WINDOW_MS, this::closeModifierWindow);
+    }
 
-                challengeTimer = new Timer();
-                challengeWindowStartTime = System.currentTimeMillis();
-                challengeTimer.schedule(new TimerTask() {
-                    @Override
-                    public void run() {
-                        closeChallengeWindow();
-                    }
-                }, challengeWindowRemainingTime);
-                challengeTimer.scheduleAtFixedRate(new TimerTask() {
-                    @Override
-                    public void run() {
-                        long remainingTime = getRemainingTime();
-                        if (remainingTime <= 0) {
-                            cancel();
-                        } else {
-                            JSONObject timeUpdateMsg = new JSONObject();
-                            timeUpdateMsg.put("type", "match");
-                            timeUpdateMsg.put("subtype", "timer_update");
-                            timeUpdateMsg.put("payload", new JSONObject().put("remainingTime", remainingTime));
-                            broadcast(timeUpdateMsg.toString());
-                        }
-                    }
-                }, 0, 100);
-            } else {
-                discardPile.add(currentHeroCard);
-                GameState heroState = players.get(turnOrder.get(currentPlayerTurnIndex));
-                heroState.getParty().remove(currentHeroCard);
-                heroState.setPendingHeroCard(null);
-                currentHeroCard = null;
+    private void closeModifierWindow() {
+        ModifierWindow window = modifierWindow;
+        if (window == null) return;
+        modifierWindow = null;
+        timerToken++;
+        window.onClose.run();
+    }
 
+    private void playModifier(String playerId, JSONObject payload) {
+        ModifierWindow window = modifierWindow;
+        if (window == null) return;
+        PlayerState p = players.get(playerId);
+        GameCard card = p.findInHand(payload.optLong("card_id", -1));
+        int value = payload.optInt("chosen_value", 0);
+        String targetId = payload.optString("target_player_id", "");
+        if (card == null || !card.is(GameCard.Kind.MODIFIER) || !card.getModifierValues().contains(value)) return;
+        Roll target = window.rolls.stream().filter(r -> r.getRollerId().equals(targetId)).findFirst().orElse(null);
+        if (target == null) return;
+
+        p.getHand().remove(card);
+        discard(card);
+        target.addModifier(playerId, value, card.getName());
+        int guardian = payload.optInt("guardian_bonus", 0);
+        if (p.getLeader() == HeroClass.GUARDIAN && (guardian == 1 || guardian == -1)) {
+            target.addModifier(playerId, guardian, "The Protecting Horn");
+        }
+        if (!playerId.equals(targetId) && players.get(targetId).has(Monster.Reward.ABYSS_QUEEN)) target.addBonus("Abyss Queen", 1);
+        log("modifier", new JSONObject().put("actor", playerId).put("target", targetId).put("value", value));
+        broadcast(event("modifier_played", new JSONObject().put("playerId", playerId).put("targetPlayerId", targetId).put("value", value)));
+        for (PlayerState holder : players.values()) {
+            if (holder.has(Monster.Reward.CROWNED_SERPENT)) drawRaw(holder);
+        }
+        window.passed.remove(playerId);
+        long now = System.currentTimeMillis();
+        if (window.deadline - now < MODIFIER_EXTEND_MS) {
+            window.deadline = now + MODIFIER_EXTEND_MS;
+            schedule(MODIFIER_EXTEND_MS, this::closeModifierWindow);
+        }
+        closeModifierWindowIfAllPassed();
+    }
+
+    private void pass(String playerId) {
+        if (challengeWindow != null && challengeWindow.eligible.contains(playerId)) {
+            challengeWindow.passed.add(playerId);
+            if (challengeWindow.passed.containsAll(challengeWindow.eligible)) {
+                timerToken++;
                 closeChallengeWindow();
-                resultMsg.put("winner", duelChallenger);
-
             }
-            resultMsg.put("Rolls", duelRolls);
-            broadcast(resultMsg.toString());
-
-            duelRolls.clear();
-            duelChallenger = null;
+            return;
         }
-
-        }
-
-        public Long getMatchId() {
-            return matchId;
+        if (modifierWindow != null) {
+            modifierWindow.passed.add(playerId);
+            closeModifierWindowIfAllPassed();
         }
     }
 
+    private void closeModifierWindowIfAllPassed() {
+        if (modifierWindow != null && modifierWindow.passed.containsAll(modifierHolders())) closeModifierWindow();
+    }
+
+    // =====================================================================
+    // Choices
+    // =====================================================================
+
+    @Override
+    public void ask(String chooserId, String prompt, JSONObject params, int min, int max, List<JSONObject> options,
+                    GameCard source, Consumer<List<String>> onAnswer) {
+        // Every real decision is shown to the player, even a forced one, so they always see the cards involved.
+        // "view_" and "notice_" prompts only show information and wait for an OK.
+        boolean informative = prompt.startsWith("view_") || prompt.startsWith("notice_");
+        if (!informative && (options.isEmpty() || max == 0)) {
+            onAnswer.accept(List.of());
+            return;
+        }
+        Choice c = new Choice(newId(), chooserId, prompt, params, min, max, options, source, onAnswer);
+        c.setDeadline(System.currentTimeMillis() + CHOICE_MS);
+        choice = c;
+        suspend();
+        schedule(CHOICE_MS, () -> {
+            if (choice != c) return;
+            List<JSONObject> shuffled = new ArrayList<>(options);
+            Collections.shuffle(shuffled);
+            answer(c, shuffled.subList(0, Math.max(min, 0)).stream().map(o -> o.getString("id")).toList());
+        });
+    }
+
+    @Override
+    public void confirm(String chooserId, String prompt, JSONObject params, GameCard source, Consumer<Boolean> onAnswer) {
+        List<JSONObject> options = List.of(new JSONObject().put("id", "yes"), new JSONObject().put("id", "no"));
+        Choice c = new Choice(newId(), chooserId, prompt, params, 1, 1, options, source, sel -> onAnswer.accept("yes".equals(sel.get(0))));
+        c.setDeadline(System.currentTimeMillis() + CHOICE_MS);
+        choice = c;
+        suspend();
+        schedule(CHOICE_MS, () -> {
+            if (choice == c) answer(c, List.of("no"));
+        });
+    }
+
+    private void answerChoice(String playerId, JSONObject payload) {
+        Choice c = choice;
+        if (c == null || !c.getChooserId().equals(playerId)) return;
+        if (!payload.optString("choice_id", c.getId()).equals(c.getId())) return;
+        JSONArray raw = payload.optJSONArray("selection");
+        List<String> selection = new ArrayList<>();
+        if (raw != null) for (int i = 0; i < raw.length(); i++) selection.add(String.valueOf(raw.get(i)));
+        if (!c.isValid(selection)) return;
+        answer(c, selection);
+    }
+
+    private void answer(Choice c, List<String> selection) {
+        choice = null;
+        timerToken++;
+        // The answer may open a follow-up choice, which suspends the flow again.
+        waiting = false;
+        c.getOnAnswer().accept(selection);
+        pump();
+    }
+
+    // =====================================================================
+    // Table: what card effects can do
+    // =====================================================================
+
+    @Override
+    public PlayerState player(String id) {
+        return players.get(id);
+    }
+
+    @Override
+    public List<PlayerState> others(String id) {
+        List<PlayerState> result = new ArrayList<>();
+        List<String> order = turnOrder.isEmpty() ? new ArrayList<>(players.keySet()) : turnOrder;
+        int start = order.indexOf(id);
+        for (int i = 1; i < order.size(); i++) result.add(players.get(order.get((start + i) % order.size())));
+        return result;
+    }
+
+    private GameCard drawRaw(PlayerState p) {
+        if (drawPile.isEmpty() && !discardPile.isEmpty()) {
+            List<GameCard> reshuffled = new ArrayList<>(discardPile);
+            discardPile.clear();
+            Collections.shuffle(reshuffled);
+            reshuffled.forEach(drawPile::push);
+            log("reshuffled", new JSONObject());
+        }
+        if (drawPile.isEmpty()) return null;
+        GameCard card = drawPile.pop();
+        p.getHand().add(card);
+        return card;
+    }
+
+    @Override
+    public List<GameCard> draw(String playerId, int count) {
+        PlayerState p = players.get(playerId);
+        List<GameCard> drawn = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            GameCard card = drawRaw(p);
+            if (card == null) break;
+            drawn.add(card);
+        }
+        if (drawn.isEmpty()) return drawn;
+        log("drew", new JSONObject().put("actor", playerId).put("count", drawn.size()));
+        broadcast(new JSONObject().put("type", "sound").put("subtype", "play_draw_card_sound").toString());
+
+        List<Runnable> steps = new ArrayList<>();
+        for (GameCard card : drawn) {
+            if (card.is(GameCard.Kind.MODIFIER) && p.has(Monster.Reward.REX_MAJOR)) steps.add(() -> draw(playerId, 1));
+            boolean playable = (card.is(GameCard.Kind.MAGIC) && p.has(Monster.Reward.ORTHUS))
+                    || (card.is(GameCard.Kind.ITEM) && p.has(Monster.Reward.MALAMAMMOTH) && !equipTargets(playerId, card).isEmpty());
+            if (playable) {
+                steps.add(() -> {
+                    if (!p.getHand().contains(card)) return;
+                    confirm(playerId, "confirm_play", new JSONObject().put("target", card.getName()), card, yes -> {
+                        if (yes) playFree(playerId, card);
+                    });
+                });
+            }
+        }
+        push(steps);
+        return drawn;
+    }
+
+    @Override
+    public void discard(GameCard card) {
+        if (card == null) return;
+        if (card.getItem() != null) {
+            discardPile.add(card.getItem());
+            card.setItem(null);
+        }
+        discardPile.add(card);
+    }
+
+    @Override
+    public List<GameCard> discardPile() {
+        return discardPile;
+    }
+
+    @Override
+    public List<GameCard> takeFromDeck(int count) {
+        List<GameCard> taken = new ArrayList<>();
+        for (int i = 0; i < count && !drawPile.isEmpty(); i++) taken.add(drawPile.pop());
+        return taken;
+    }
+
+    @Override
+    public void returnToDeckTop(List<GameCard> cards) {
+        for (int i = cards.size() - 1; i >= 0; i--) drawPile.push(cards.get(i));
+    }
+
+    @Override
+    public void destroyHero(String actorId, String ownerId, GameCard hero, boolean itemToActorHand) {
+        PlayerState owner = players.get(ownerId);
+        PlayerState actor = players.get(actorId);
+        if (actor.has(Monster.Reward.CORRUPTED_SABRETOOTH) && owner.canHeroBeStolen()) {
+            confirm(actorId, "confirm_steal_instead", new JSONObject().put("card", hero.getName()), hero, steal -> {
+                if (steal) stealHero(actorId, ownerId, hero);
+                else removeDestroyed(actor, owner, hero, itemToActorHand);
+            });
+            return;
+        }
+        removeDestroyed(actor, owner, hero, itemToActorHand);
+    }
+
+    private void removeDestroyed(PlayerState actor, PlayerState owner, GameCard hero, boolean itemToActorHand) {
+        if (!owner.getParty().contains(hero)) return;
+        if (hero.hasItemEffect(GameCard.ItemEffect.DECOY_DOLL)) {
+            GameCard doll = hero.getItem();
+            hero.setItem(null);
+            discardPile.add(doll);
+            log("decoy_doll", new JSONObject().put("actor", owner.getId()).put("cardName", hero.getName()));
+            return;
+        }
+        owner.getParty().remove(hero);
+        GameCard item = hero.getItem();
+        hero.setItem(null);
+        if (item != null) {
+            if (itemToActorHand) actor.getHand().add(item);
+            else discardPile.add(item);
+        }
+        discardPile.add(hero);
+        broadcast(new JSONObject().put("type", "animation").put("subtype", "destroy_card")
+                .put("payload", new JSONObject().put("cardId", hero.getId()).put("playerId", owner.getId())).toString());
+        log("destroyed", new JSONObject().put("actor", actor.getId()).put("target", owner.getId()).put("cardName", hero.getName()));
+        if (owner.has(Monster.Reward.DRACOS)) draw(owner.getId(), 1);
+    }
+
+    @Override
+    public void sacrificeHero(String ownerId, GameCard hero) {
+        PlayerState owner = players.get(ownerId);
+        if (!owner.getParty().contains(hero)) return;
+        if (hero.hasItemEffect(GameCard.ItemEffect.DECOY_DOLL)) {
+            discardPile.add(hero.getItem());
+            hero.setItem(null);
+            log("decoy_doll", new JSONObject().put("actor", ownerId).put("cardName", hero.getName()));
+            return;
+        }
+        owner.getParty().remove(hero);
+        discard(hero);
+        broadcast(new JSONObject().put("type", "animation").put("subtype", "destroy_card")
+                .put("payload", new JSONObject().put("cardId", hero.getId()).put("playerId", ownerId)).toString());
+        log("sacrificed", new JSONObject().put("actor", ownerId).put("cardName", hero.getName()));
+    }
+
+    @Override
+    public void stealHero(String actorId, String ownerId, GameCard hero) {
+        PlayerState owner = players.get(ownerId);
+        if (!owner.getParty().remove(hero)) return;
+        players.get(actorId).getParty().add(hero);
+        broadcast(new JSONObject().put("type", "animation").put("subtype", "steal_card")
+                .put("payload", new JSONObject().put("cardId", hero.getId()).put("playerId", ownerId).put("thiefId", actorId)).toString());
+        log("stolen", new JSONObject().put("actor", actorId).put("target", ownerId).put("cardName", hero.getName()));
+    }
+
+    @Override
+    public void playFree(String playerId, GameCard card) {
+        if (card == null || !players.get(playerId).getHand().contains(card)) return;
+        if (card.is(GameCard.Kind.ITEM) && equipTargets(playerId, card).isEmpty()) return;
+        push(playSteps(playerId, card));
+    }
+
+    @Override
+    public void rollHeroEffect(String playerId, GameCard hero) {
+        push(heroRollSteps(playerId, hero));
+    }
+
+    @Override
+    public void reveal(String viewerId, String ownerId, List<GameCard> cards, String reason) {
+        // Shown as a view-only choice, so the flow waits until the player has seen the cards.
+        List<JSONObject> options = new ArrayList<>();
+        cards.forEach(c -> options.add(new JSONObject().put("id", String.valueOf(c.getId())).put("card", c.toJson())));
+        JSONObject params = new JSONObject().put("target", ownerId).put("count", cards.size());
+        push(List.of(() -> ask(viewerId, "view_" + reason, params, 0, 0, options, null, sel -> { })));
+    }
+
+    @Override
+    public void log(String key, JSONObject params) {
+        params.put("key", key).put("id", ++idSeq).put("ts", System.currentTimeMillis());
+        log.add(params);
+        while (log.size() > LOG_LIMIT) log.remove(0);
+    }
+
+    // =====================================================================
+    // Serialization
+    // =====================================================================
+
+    private void broadcast(String message) {
+        output.toAll(matchId, message);
+    }
+
+    private static String event(String subtype, JSONObject payload) {
+        return new JSONObject().put("type", "match").put("subtype", subtype).put("payload", payload).toString();
+    }
+
+    private void setRecent(JSONObject result) {
+        recent = result.put("seq", ++recentSeq);
+    }
+
+    private JSONObject duelJson(Duel d) {
+        JSONObject json = new JSONObject()
+                .put("type", "duel")
+                .put("card", d.play.card.toJson())
+                .put("ownerId", d.play.ownerId)
+                .put("challengerId", d.challengerId)
+                .put("ownerRoll", d.ownerRoll.toJson())
+                .put("challengerRoll", d.challengerRoll.toJson());
+        if (d.winnerId != null) json.put("winnerId", d.winnerId);
+        return json;
+    }
+
+    private JSONObject modifierWindowJson(long now) {
+        if (modifierWindow == null) return null;
+        return new JSONObject()
+                .put("holders", new JSONArray(modifierHolders()))
+                .put("passed", new JSONArray(modifierWindow.passed))
+                .put("targets", new JSONArray(modifierWindow.rolls.stream().map(Roll::getRollerId).toList()))
+                .put("remainingMs", Math.max(0, modifierWindow.deadline - now))
+                .put("durationMs", MODIFIER_WINDOW_MS);
+    }
+
+    private JSONObject pendingFor(String viewer, long now) {
+        if (choice != null) return choice.toJson(viewer.equals(choice.getChooserId()), now);
+        if (challengeWindow != null) {
+            return new JSONObject()
+                    .put("type", "challenge_window")
+                    .put("card", challengeWindow.play.card.toJson())
+                    .put("ownerId", challengeWindow.play.ownerId)
+                    .put("eligible", new JSONArray(challengeWindow.eligible))
+                    .put("passed", new JSONArray(challengeWindow.passed))
+                    .put("remainingMs", Math.max(0, challengeWindow.deadline - now))
+                    .put("durationMs", CHALLENGE_WINDOW_MS);
+        }
+        if (duel != null) {
+            JSONObject json = duelJson(duel);
+            JSONObject window = modifierWindowJson(now);
+            if (window != null) json.put("modifierWindow", window);
+            return json;
+        }
+        if (roll != null) {
+            JSONObject json = new JSONObject().put("type", "roll").put("roll", roll.toJson());
+            JSONObject window = modifierWindowJson(now);
+            if (window != null) json.put("modifierWindow", window);
+            return json;
+        }
+        return null;
+    }
+
+    private JSONObject stateFor(String viewer, long now) {
+        JSONObject playersJson = new JSONObject();
+        players.forEach((id, p) -> playersJson.put(id, p.toJson(id.equals(viewer))));
+        JSONArray monsters = new JSONArray();
+        monsterBoard.forEach(m -> monsters.put(m.toJson()));
+        JSONArray discard = new JSONArray();
+        for (int i = discardPile.size() - 1; i >= 0; i--) discard.put(discardPile.get(i).toJson());
+
+        String turn = "";
+        if (phase == Phase.PARTY_LEADER_SELECTION && leaderPickIndex < pickOrder.size()) turn = pickOrder.get(leaderPickIndex);
+        else if (!turnOrder.isEmpty() && phase != Phase.ORDER_SELECTION) turn = turnOrder.get(turnIndex);
+
+        JSONObject state = new JSONObject()
+                .put("matchState", phase.name())
+                .put("round", round)
+                .put("startedAt", startedAt)
+                .put("currentPlayerTurn", turn)
+                .put("turnOrder", new JSONArray(turnOrder))
+                .put("pickOrder", new JSONArray(pickOrder))
+                .put("availablePartyLeaders", new JSONArray(availableLeaders))
+                .put("players", playersJson)
+                .put("monsters", monsters)
+                .put("monsterDeckCount", monsterDeck.size())
+                .put("drawPileCount", drawPile.size())
+                .put("discardPile", discard)
+                .put("log", new JSONArray(log))
+                .put("idle", idle());
+        JSONObject pending = pendingFor(viewer, now);
+        if (pending != null) state.put("pending", pending);
+        if (recent != null) state.put("recent", recent);
+        if (winnerId != null) state.put("winner", new JSONObject().put("playerId", winnerId).put("reason", winReason));
+        return state;
+    }
+}

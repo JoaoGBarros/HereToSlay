@@ -6,14 +6,28 @@ interface ActionPanelProps {
     turnName: string;
     currentAP: number;
     maxAP: number;
-    phaseLabel: string;
-    canDraw: boolean;
+    idle: boolean;
+    canThiefSkill: boolean;
     onDraw: () => void;
-    onOpenRules: () => void;
+    onRedraw: () => void;
+    onLeaderSkill: () => void;
+    onEndTurn: () => void;
 }
 
-function ActionPanel({ isMyTurn, turnName, currentAP, maxAP, phaseLabel, canDraw, onDraw, onOpenRules }: ActionPanelProps) {
+const DRAW_COST = 1;
+const ATTACK_COST = 2;
+const REDRAW_COST = 3;
+const SKILL_COST = 1;
+
+function ActionPanel({ isMyTurn, turnName, currentAP, maxAP, idle, canThiefSkill, onDraw, onRedraw, onLeaderSkill, onEndTurn }: ActionPanelProps) {
     const { t } = useI18n();
+    const ready = isMyTurn && idle;
+    const row = (label: string, cost: number, onClick: (() => void) | null, note?: string) => (
+        <button type="button" className="actions-row" disabled={!onClick || !ready || currentAP < cost} onClick={onClick ?? undefined}>
+            <span className="actions-row-label">{label}{note && <small>{note}</small>}</span>
+            <span>{cost} PA</span>
+        </button>
+    );
     return (
         <aside className={`actions ${isMyTurn ? 'actions--mine hts-glow' : ''}`} aria-label={t.actions.aria}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
@@ -25,17 +39,12 @@ function ActionPanel({ isMyTurn, turnName, currentAP, maxAP, phaseLabel, canDraw
                 </div>
                 <ApPips current={isMyTurn ? currentAP : 0} max={maxAP || 3} />
             </div>
-            <span className="actions-phase" role="status">{phaseLabel}</span>
-            <button type="button" className="actions-row" disabled={!canDraw} onClick={onDraw}>
-                {t.actions.draw} <span>{t.actions.costs[0].cost}</span>
-            </button>
-            <ul className="actions-costs">
-                {t.actions.costs.map((c) => (
-                    <li key={c.label}><span>{c.label}</span><span>{c.cost}</span></li>
-                ))}
-            </ul>
-            <p className="actions-note">{t.actions.autoEnd}</p>
-            <button type="button" className="hts-btn hts-btn--ghost hts-btn--sm" style={{ marginTop: 'auto' }} onClick={onOpenRules}>{t.actions.rules}</button>
+            <span className="actions-phase" role="status">{!isMyTurn ? t.engine.actions.wait : idle ? t.phase.gameplayMine(currentAP, maxAP) : t.engine.actions.busy}</span>
+            {row(t.engine.actions.draw, DRAW_COST, onDraw)}
+            {row(t.engine.actions.attack, ATTACK_COST, null, t.engine.actions.attackHint)}
+            {row(t.engine.actions.redraw, REDRAW_COST, onRedraw)}
+            {canThiefSkill && row(t.engine.actions.leaderSkill, SKILL_COST, onLeaderSkill)}
+            <button type="button" className="actions-end" disabled={!ready} onClick={onEndTurn}>{t.engine.actions.endTurn}</button>
         </aside>
     );
 }

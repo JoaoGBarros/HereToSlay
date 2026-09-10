@@ -1,25 +1,23 @@
-import { useCallback } from 'react';
+import { useState } from 'react';
 import { getMonsterArt } from '@/utils/CardArt';
 import { chanceAtLeast, chanceAtMost } from '@/utils/ClassInfo';
 import { monsterRequirement, useI18n } from '@/i18n';
-import { DicePair, useLocalRoll } from '../../common/PipDie';
-import type { MonsterData, PlayersMap } from '../../common/types';
+import type { ModifierWindowData, PlayersMap, RollData } from '../../common/types';
 import { RollRangeBar } from '../../common/Widgets';
-import { ModifierChips, modifierSum, PassiveChips, passiveBonus, type AppliedModifier } from './RollParts';
+import { bonusSum, ModifierStatus, rawOf, RollChips, RollNumbers } from './RollParts';
 import '../fx/fx.css';
 
 export type MonsterOutcome = 'monster_slain' | 'monster_fight_back' | 'monster_survives';
 
 interface MonsterSceneProps {
+    roll: RollData;
+    modifierWindow?: ModifierWindowData;
     players: PlayersMap;
     me: string;
-    attackerId: string;
-    monster: MonsterData;
-    raw: number | null;
-    outcome: { kind: MonsterOutcome; roll: number } | null;
-    mods: AppliedModifier[];
-    onRoll: (sum: number) => void;
+    onRoll: () => void;
 }
+
+const OUTCOME_KIND: Record<string, MonsterOutcome> = { slain: 'monster_slain', fight_back: 'monster_fight_back', survives: 'monster_survives' };
 
 const OUTCOME_TONE: Record<MonsterOutcome, string> = { monster_slain: 'win', monster_fight_back: 'fail', monster_survives: 'mid' };
 
@@ -31,17 +29,20 @@ const SLASHES = [
 ];
 
 /** Monster attack: shows the three roll ranges, the roll, and every modifier before it resolves. */
-function MonsterScene({ players, me, attackerId, monster, raw, outcome, mods, onRoll }: MonsterSceneProps) {
+function MonsterScene({ roll, modifierWindow, players, me, onRoll }: MonsterSceneProps) {
     const { t } = useI18n();
-    const handleResult = useCallback((sum: number) => onRoll(sum), [onRoll]);
-    const { dice, rolling, roll } = useLocalRoll(handleResult);
+    const [clicked, setClicked] = useState(false);
+    const monster = roll.monster!;
+    const attackerId = roll.rollerId;
     const isAttacker = attackerId === me;
     const attacker = players[attackerId];
-    const passive = passiveBonus(players, attackerId);
-    const total = outcome ? outcome.roll : raw != null ? raw + passive.sum + modifierSum(mods, attackerId) : null;
+    const bonus = bonusSum(roll) + roll.modifiers.reduce((sum, m) => sum + m.value, 0);
+    const raw = rawOf(roll);
+    const total = roll.total ?? null;
+    const outcome = roll.outcome ? { kind: OUTCOME_KIND[roll.outcome], roll: total ?? 0 } : null;
     const zoneOf = (n: number) => (n <= monster.fightBackThreshold ? 'fail' : n >= monster.slayThreshold ? 'win' : 'mid');
-    const pWin = chanceAtLeast(monster.slayThreshold, passive.sum);
-    const pFail = chanceAtMost(monster.fightBackThreshold, passive.sum);
+    const pWin = chanceAtLeast(monster.slayThreshold, bonus);
+    const pFail = chanceAtMost(monster.fightBackThreshold, bonus);
     const art = getMonsterArt(monster.name);
 
     const fxClass = outcome ? OUTCOME_FX[outcome.kind] : '';
@@ -69,7 +70,7 @@ function MonsterScene({ players, me, attackerId, monster, raw, outcome, mods, on
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <span className="hts-label">{t.monster.ranges(passive.sum)}</span>
+                    <span className="hts-label">{t.monster.ranges(bonus)}</span>
                     <RollRangeBar zoneOf={zoneOf} mark={total} height={58} />
                     <div className="monster-scene-legend">
                         <span style={{ color: 'var(--hts-ember-text)' }}>{t.monster.failRange(monster.fightBackThreshold, pFail)}</span>
@@ -79,24 +80,21 @@ function MonsterScene({ players, me, attackerId, monster, raw, outcome, mods, on
                 </div>
 
                 <div className="monster-scene-roll hts-panel">
-                    {raw == null && isAttacker && !rolling && !dice ? (
+                    {!roll.dice && isAttacker && !clicked ? (
                         <>
-                            <p style={{ margin: 0, flex: 1, fontSize: 16, lineHeight: 1.5, color: '#cfc6b3' }}>
-                                {t.monster.intro}
-                            </p>
-                            <button type="button" className="hts-btn" style={{ height: 64, fontSize: 28 }} onClick={roll}>{t.roll.roll}</button>
+                            <p style={{ margin: 0, flex: 1, fontSize: 16, lineHeight: 1.5, color: '#cfc6b3' }}>{t.monster.intro}</p>
+                            <button type="button" className="hts-btn" style={{ height: 64, fontSize: 28 }} onClick={() => { setClicked(true); onRoll(); }}>{t.roll.roll}</button>
                         </>
                     ) : (
                         <>
-                            <DicePair dice={dice} rolling={rolling || (raw == null && !isAttacker)} size={60} />
+                            <RollNumbers roll={roll} rolling={!roll.dice} size={60} totalSize={80} />
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                <PassiveChips sources={passive.sources} />
-                                <ModifierChips mods={mods} players={players} targetId={attackerId} />
+                                <RollChips roll={roll} players={players} />
                                 <span className="hts-muted" style={{ fontSize: 14 }}>
-                                    {raw == null ? t.monster.rolling(attacker?.username ?? t.common.someone) : outcome ? t.monster.result(raw, outcome.roll) : t.monster.modsOpen(raw)}
+                                    {raw == null ? t.monster.rolling(attacker?.username ?? t.common.someone) : outcome ? t.monster.result(raw, total ?? raw) : t.monster.modsOpen(raw)}
                                 </span>
+                                {modifierWindow && <ModifierStatus window={modifierWindow} players={players} me={me} />}
                             </div>
-                            {total != null && <span className="hts-display hts-pop" style={{ fontSize: 72 }}>{total}</span>}
                         </>
                     )}
                 </div>

@@ -149,8 +149,8 @@ public class GameMonitoringStreamsProcessor {
         // SITUAÇÃO 3: Reviravolta de Sorte
         // Usa Processor API + loja de estado (ver LuckStreakProcessor). Com estado, mas sem
         // usar windowedBy do DSL: os próprios intervalos de sequência fazem o papel da "janela".
-        actionsIn
-                .filter((key, value) -> "process_hero_roll".equals(actionNameOf(value)))
+        // Os dados são rolados no servidor, então a fonte é o resultado publicado.
+        statesOut
                 .process(LuckStreakProcessor::new, STREAK_STORE_NAME)
                 .to("game-monitoring-alerts");
 

@@ -1,191 +1,151 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useState } from 'react';
 import { classInfo } from '@/utils/ClassInfo';
 import { useI18n } from '@/i18n';
-import { playSound } from '@/utils/SoundManager/SoundManager';
+import tableBackground from '../../assets/ingame.png';
 import challengeArt from '../../assets/cards/challenge.png';
 import { GameCard } from '../../common/GameCard';
-import { DicePair, useLocalRoll } from '../../common/PipDie';
-import type { CardData, PlayersMap } from '../../common/types';
-import { ModifierChips, modifierSum, PassiveChips, passiveBonus, type AppliedModifier } from './RollParts';
-import './duel.css';
-
-const INTRO_MS = 1500;
-const SPARKS = 14;
+import { DicePair } from '../../common/PipDie';
+import { Stage } from '../../common/Stage';
+import type { CardData, DuelData, PlayersMap, RollData } from '../../common/types';
+import ModifierPicker, { type ModifierPreview } from '../components/ModifierPicker';
+import { rawOf, signed } from './RollParts';
+import './stage.css';
 
 interface DuelSceneProps {
+    duel: DuelData;
     players: PlayersMap;
     me: string;
-    heroId: string;
-    challengerId: string;
-    card: CardData | null;
-    rolls: Record<string, number | null>;
-    winnerId: string | null;
-    mods: AppliedModifier[];
-    onRoll: (sum: number) => void;
+    hand: CardData[];
+    onRoll: () => void;
+    onPlayModifier: (cardId: number, value: number, targetId: string, guardianBonus: number) => void;
+    onPass: () => void;
 }
 
-type Side = 'hero' | 'challenger';
+type Side = 'left' | 'right';
 
-function Crown() {
-    return (
-        <svg className="duel-crown" viewBox="0 0 96 72" aria-hidden="true">
-            <path d="M8 62 4 18l24 20L48 6l20 32 24-20-4 44z" fill="#e9b949" stroke="#7a5410" strokeWidth="4" strokeLinejoin="round" />
-            <circle cx="48" cy="44" r="6" fill="#e8693f" />
-        </svg>
-    );
-}
-
-function DuelSide({ side, players, me, playerId, rolled, total, mods, result, canRoll, onRoll, card }: {
+/** One side of the duel: who rolls, the dice, every bonus/Modifier as a chip, and the total. */
+function DuelSide({ side, roll, players, me, role, preview, onRoll }: {
     side: Side;
+    roll: RollData;
     players: PlayersMap;
     me: string;
-    playerId: string;
-    rolled: number | null;
-    total: number | null;
-    mods: AppliedModifier[];
-    result: 'win' | 'lose' | null;
-    canRoll: boolean;
-    onRoll: (sum: number) => void;
-    card: React.ReactNode;
+    role: string;
+    preview: number | null;
+    onRoll: () => void;
 }) {
     const { t } = useI18n();
-    const handleResult = useCallback((sum: number) => onRoll(sum), [onRoll]);
-    const { dice, rolling, roll } = useLocalRoll(handleResult);
-    const player = players[playerId];
+    const [clicked, setClicked] = useState(false);
+    const player = players[roll.rollerId];
     const info = classInfo(player?.leader);
-    const passive = passiveBonus(players, playerId);
-    const isMine = playerId === me;
-    const align = side === 'hero' ? 'flex-start' : 'flex-end';
+    const isMine = roll.rollerId === me;
+    const raw = rawOf(roll);
+    const total = roll.total != null ? roll.total + (preview ?? 0) : null;
+    const extras = [...roll.bonuses.map((b) => b.value), ...roll.modifiers.map((m) => m.value), ...(preview ? [preview] : [])];
+    const reverse = side === 'right';
 
     return (
-        <section className={`duel-side duel-side--${side} ${result ? `duel-side--${result}` : ''}`} aria-label={t.duel.rollAria(player?.username ?? '')}>
-            <div className="duel-card-slot">
-                {result === 'win' && <Crown />}
-                <div className={`duel-card duel-card--${side}`}>{card}</div>
-                {result === 'lose' && <span className="duel-discard-stamp">{t.duel.discarded}</span>}
+        <div className="duel3-col" style={{ alignItems: reverse ? 'flex-end' : 'flex-start' }}>
+            <div className="duel3-who" style={{ flexDirection: reverse ? 'row-reverse' : 'row' }}>
+                {info && <img src={info.leaderArt} alt="" style={{ boxShadow: `0 0 0 2px ${info.tint}` }} />}
+                <div style={{ lineHeight: 1.1, textAlign: reverse ? 'right' : 'left' }}>
+                    <div className="duel3-name">{player?.username}{isMine ? t.common.youSuffix : ''}</div>
+                    <div className="duel3-role">{role}</div>
+                </div>
             </div>
-            <div className="duel-col" style={{ alignItems: align }}>
-                <div className="duel-who" style={{ flexDirection: side === 'hero' ? 'row' : 'row-reverse' }}>
-                    {info && <img src={info.leaderArt} alt="" style={{ boxShadow: `0 0 0 3px ${info.tint}` }} />}
-                    <div style={{ lineHeight: 1.1, textAlign: side === 'hero' ? 'left' : 'right' }}>
-                        <div className="duel-name">{player?.username}{isMine ? t.common.youSuffix : ''}</div>
-                        <div className="duel-role">{side === 'hero' ? t.duel.playedTheCard : t.duel.challenger}</div>
-                    </div>
-                </div>
-                <div className="duel-dice-area">
-                    {rolled == null && isMine && canRoll && !rolling && !dice ? (
-                        <button type="button" className="hts-btn duel-roll-btn" onClick={roll}>{t.roll.roll}</button>
-                    ) : rolled != null && !dice ? null : (
-                        <DicePair dice={dice} rolling={rolling || (rolled == null && !isMine)} size={84} />
-                    )}
-                    {rolled == null && !isMine && <span className="duel-waiting">{t.duel.rolling(player?.username ?? t.common.someone)}</span>}
-                    {rolled == null && isMine && !canRoll && <span className="duel-waiting">{t.duel.getReady}</span>}
-                </div>
-                <PassiveChips sources={passive.sources} align={align} />
-                <ModifierChips mods={mods} players={players} targetId={playerId} align={align} />
-                {total != null && (
-                    <div className="duel-total-row" style={{ flexDirection: side === 'hero' ? 'row' : 'row-reverse' }}>
-                        <span key={total} className="hts-display duel-total" data-side={side}>{total}</span>
-                        <span className="duel-dice-note">{t.duel.dice(rolled)}</span>
-                    </div>
+            <div className="duel3-dice">
+                {!roll.dice && isMine && !clicked ? (
+                    <button type="button" className="duel3-roll" onClick={() => { setClicked(true); onRoll(); }}>{t.engine.roll.rollNow}</button>
+                ) : (
+                    <DicePair dice={roll.dice ?? null} rolling={!roll.dice} size={72} />
                 )}
             </div>
-        </section>
+            <div className="duel3-mods" style={{ alignItems: reverse ? 'flex-end' : 'flex-start' }}>
+                {roll.bonuses.map((b, i) => <span key={`b${i}`} className="duel3-chip duel3-chip--plus">{t.engine.duel.bonusChip(signed(b.value), b.label)}</span>)}
+                {roll.modifiers.map((m, i) => (
+                    <span key={`m${i}`} className={`duel3-chip hts-pop ${m.value > 0 ? 'duel3-chip--plus' : 'duel3-chip--minus'}`}>
+                        {t.engine.duel.modChip(signed(m.value), m.playerId === me ? t.common.you : players[m.playerId]?.username ?? '')}
+                    </span>
+                ))}
+                {preview ? <span className="duel3-chip duel3-chip--preview">{t.engine.duel.previewChip(signed(preview))}</span> : null}
+            </div>
+            {total != null && raw != null && (
+                <div className="duel3-total" style={{ flexDirection: reverse ? 'row-reverse' : 'row' }}>
+                    <span key={total} className={`duel3-number duel3-number--${side} hts-pop`}>{total}</span>
+                    <span className="duel3-break">{t.engine.duel.breakdown(raw, extras.map(signed).join(' '))}</span>
+                </div>
+            )}
+        </div>
     );
 }
 
-/** Full-screen challenge: both players roll, highest total wins, ties favor the challenger. */
-function DuelScene({ players, me, heroId, challengerId, card, rolls, winnerId, mods, onRoll }: DuelSceneProps) {
+/** The challenge, laid out like the design: card and roll on each side, VS in the middle, Modifier window below. */
+function DuelScene({ duel, players, me, hand, onRoll, onPlayModifier, onPass }: DuelSceneProps) {
     const { t } = useI18n();
-    const [intro, setIntro] = useState(true);
-
-    useEffect(() => {
-        playSound('challenge');
-        const t = setTimeout(() => setIntro(false), INTRO_MS);
-        return () => clearTimeout(t);
-    }, []);
-
-    const heroRoll = rolls[heroId] ?? null;
-    const challengerRoll = rolls[challengerId] ?? null;
-    const heroTotal = heroRoll != null ? heroRoll + passiveBonus(players, heroId).sum + modifierSum(mods, heroId) : null;
-    const challengerTotal = challengerRoll != null ? challengerRoll + passiveBonus(players, challengerId).sum + modifierSum(mods, challengerId) : null;
-    const heroName = players[heroId]?.username ?? t.duel.heroFallback;
-    const challengerName = players[challengerId]?.username ?? t.duel.challengerFallback;
-    const heroResult = winnerId ? (winnerId === heroId ? 'win' : 'lose') : null;
-    const challengerResult = winnerId ? (winnerId === challengerId ? 'win' : 'lose') : null;
-
-    // Tug of war: how far the totals lean to each side (50% = even).
-    const lean = heroTotal != null && challengerTotal != null
-        ? Math.round((heroTotal / Math.max(1, heroTotal + challengerTotal)) * 100)
-        : heroTotal != null ? 62 : challengerTotal != null ? 38 : 50;
+    const [preview, setPreview] = useState<ModifierPreview | null>(null);
+    const owner = players[duel.ownerId];
+    const challenger = players[duel.challengerId];
+    const ownerTint = classInfo(owner?.leader)?.tint ?? '#6fb4e8';
+    const winnerId = duel.winnerId ?? null;
+    const ownerPreview = preview?.targetId === duel.ownerId ? preview.value : null;
+    const challengerPreview = preview?.targetId === duel.challengerId ? preview.value : null;
+    const ownerTotal = duel.ownerRoll.total != null ? duel.ownerRoll.total + (ownerPreview ?? 0) : null;
+    const challengerTotal = duel.challengerRoll.total != null ? duel.challengerRoll.total + (challengerPreview ?? 0) : null;
+    const challengerName = challenger?.username ?? '';
+    const ownerName = owner?.username ?? '';
 
     let verdict = t.duel.verdictDefault;
-    if (winnerId) verdict = winnerId === heroId ? t.duel.verdictHero(heroName) : t.duel.verdictChallenger(challengerName);
-    else if (heroRoll != null && challengerRoll != null) verdict = t.duel.modsOpen;
+    let verdictTone = 'neutral';
+    if (winnerId) {
+        verdict = winnerId === duel.ownerId ? t.duel.verdictHero(ownerName) : t.duel.verdictChallenger(challengerName);
+        verdictTone = winnerId === duel.ownerId ? 'blue' : 'ember';
+    } else if (ownerTotal != null && challengerTotal != null) {
+        const ownerWins = ownerTotal > challengerTotal;
+        verdict = ownerWins ? t.engine.duel.previewWin(ownerTotal, challengerTotal) : t.engine.duel.previewLose(challengerName, ownerTotal, challengerTotal);
+        verdictTone = ownerWins ? 'blue' : 'ember';
+    }
 
     return (
-        <div
-            className={`scene duel2 ${intro ? 'duel2--intro' : ''} ${winnerId ? 'duel2--resolved' : ''}`}
-            role="dialog"
-            aria-modal="true"
-            aria-label={t.duel.aria(challengerName, heroName)}
-        >
-            <div className="duel2-bg duel2-bg--hero" aria-hidden="true" />
-            <div className="duel2-bg duel2-bg--challenger" aria-hidden="true" />
-            <svg className="duel2-seam" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                <polyline points="57,0 52,22 58,30 47,55 54,62 43,100" />
-            </svg>
+        <Stage label={t.duel.aria(challengerName, ownerName)} className="duel3">
+            <div className="duel3-half duel3-half--left" aria-hidden="true" />
+            <div className="duel3-half duel3-half--right" aria-hidden="true" />
+            <img src={tableBackground} alt="" aria-hidden="true" className="duel3-bg" />
 
-            <div className="duel2-top">
-                <div className="duel2-banner">
+            <div className="duel3-banner-wrap">
+                <div className="duel3-banner">
                     <img src={challengeArt} alt="" />
-                    {t.duel.banner(challengerName, heroName)}
-                </div>
-                <div className="duel2-tug" role="img" aria-label={t.duel.totalsAria(heroName, String(heroTotal ?? '–'), challengerName, String(challengerTotal ?? '–'))}>
-                    <span className="duel2-tug-hero" style={{ width: `${lean}%` }} />
-                    <span className="duel2-tug-knot" style={{ left: `${lean}%` }} />
+                    {t.engine.duel.banner(duel.challengerId === me ? t.common.you : challengerName, duel.ownerId === me ? '' : ownerName, duel.card.cardName ?? '')}
                 </div>
             </div>
 
-            <DuelSide
-                side="hero"
-                players={players}
-                me={me}
-                playerId={heroId}
-                rolled={heroRoll}
-                total={heroTotal}
-                mods={mods}
-                result={heroResult}
-                canRoll={!intro}
-                onRoll={onRoll}
-                card={card ? <GameCard card={card} width={240} /> : <div className="duel-card-placeholder">{t.duel.cardPlaceholder}</div>}
-            />
-            <DuelSide
-                side="challenger"
-                players={players}
-                me={me}
-                playerId={challengerId}
-                rolled={challengerRoll}
-                total={challengerTotal}
-                mods={mods}
-                result={challengerResult}
-                canRoll={!intro}
-                onRoll={onRoll}
-                card={<img src={challengeArt} alt="Challenge" className="duel-challenge-img" />}
-            />
-
-            <div className="duel2-vs" aria-hidden="true">
-                <div className="duel2-rays">
-                    {Array.from({ length: SPARKS }).map((_, i) => (
-                        <span key={i} style={{ transform: `rotate(${(360 / SPARKS) * i}deg)` }} />
-                    ))}
+            <section className="duel3-side duel3-side--left" aria-label={t.duel.rollAria(ownerName)}>
+                <div className={`duel3-card ${winnerId && winnerId !== duel.ownerId ? 'duel3-card--lost' : ''}`} style={{ boxShadow: `0 0 0 3px ${ownerTint}, 0 24px 50px rgba(0,0,0,.6)` }}>
+                    <GameCard card={duel.card} width={220} />
                 </div>
-                <span className="hts-display">VS</span>
+                <DuelSide side="left" roll={duel.ownerRoll} players={players} me={me} role={t.duel.playedTheCard} preview={ownerPreview} onRoll={onRoll} />
+            </section>
+
+            <section className="duel3-side duel3-side--right" aria-label={t.duel.rollAria(challengerName)}>
+                <img src={challengeArt} alt="Challenge" className="duel3-card duel3-card--challenge" />
+                <DuelSide side="right" roll={duel.challengerRoll} players={players} me={me} role={t.duel.challenger} preview={challengerPreview} onRoll={onRoll} />
+            </section>
+
+            <div className="duel3-vs" aria-hidden="true">VS</div>
+            <div className="duel3-verdict-wrap" role="status">
+                <span className={`duel3-verdict duel3-verdict--${verdictTone}`}>{verdict}</span>
             </div>
 
-            {intro && <div className="duel2-stamp hts-display" aria-hidden="true">{t.duel.stamp}</div>}
-            <div className={`duel2-verdict ${winnerId ? 'duel2-verdict--final' : ''}`} role="status">{verdict}</div>
-        </div>
+            <ModifierPicker
+                window={duel.modifierWindow}
+                rolls={[duel.ownerRoll, duel.challengerRoll]}
+                hand={hand}
+                players={players}
+                me={me}
+                placement="embedded"
+                onPlay={onPlayModifier}
+                onPass={onPass}
+                onPreview={setPreview}
+            />
+        </Stage>
     );
 }
 

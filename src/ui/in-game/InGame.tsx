@@ -3,22 +3,22 @@ import { useNavigate, useParams } from 'react-router-dom';
 import WebSocketContext from '@/utils/WebSocketContext';
 import { getMonsterArt } from '@/utils/CardArt';
 import { classInfo, type HeroClassId } from '@/utils/ClassInfo';
-import { monsterRequirement, useI18n } from '@/i18n';
-import type { Dict } from '@/i18n/pt';
+import { useI18n } from '@/i18n';
 import tableBackground from '../assets/ingame.png';
 import { CardInspector, type InspectorAction } from '../common/CardInspector';
-import { ChatPanel, type ChatMessage } from '../common/ChatPanel';
-import { SELECTING_STATES, type CardData, type MonsterData } from '../common/types';
-import ActionHistoryPanel from './components/ActionHistoryPanel';
+import { ChatPanel } from '../common/ChatPanel';
+import type { CardData, DuelData, MonsterData, RollData } from '../common/types';
 import ModifierPicker from './components/ModifierPicker';
 import ActionPanel from './board/ActionPanel';
 import Arena from './board/Arena';
+import ChoiceSheet, { ChoiceWaiting } from './board/ChoiceSheet';
 import OpponentRail from './board/OpponentRail';
-import { HandReveal, MatchEnd, PartyViewer, RulesSheet, TurnBanner } from './board/Overlays';
+import { DiscardViewer, HandReveal, HistoryPanel, MatchEnd, PartyViewer, RulesSheet, SettingsSheet, TurnBanner } from './board/Overlays';
 import PlayerZone, { isPlayableFromHand } from './board/PlayerZone';
-import TargetSheet from './board/TargetSheet';
 import TopBar from './board/TopBar';
+import { tagStyle } from './board/boardTypes';
 import FxLayer from './fx/FxLayer';
+import ChallengeDock from './rolls/ChallengeDock';
 import DuelScene from './rolls/DuelScene';
 import MonsterScene from './rolls/MonsterScene';
 import RollDock from './rolls/RollDock';
@@ -26,9 +26,9 @@ import InitiativeScreen from './screens/InitiativeScreen';
 import LeaderDraftScreen from './screens/LeaderDraftScreen';
 import { readLoggedUserId, useMatchSession } from './useMatchSession';
 import './board/board.css';
+import './board/table.css';
 
 const BANNER_MS = 1600;
-const BUBBLE_MS = 4500;
 const ATTACK_COST = 2;
 const SETUP_STATES = ['', 'ORDER_SELECTION', 'PARTY_LEADER_SELECTION'];
 
@@ -38,21 +38,6 @@ type Inspecting =
     | { kind: 'leader'; leader: string }
     | { kind: 'monster'; monster: MonsterData };
 
-function phaseLabel(t: Dict, matchState: string, isMyTurn: boolean, ap: number, max: number, turnName: string): string {
-    switch (matchState) {
-        case 'GAMEPLAY': return isMyTurn ? t.phase.gameplayMine(ap, max) : t.phase.gameplayOther(turnName);
-        case 'WAITING_HERO_ROLL': return t.phase.heroRoll;
-        case 'CHALLENGE_WINDOW': return t.phase.challengeWindow;
-        case 'CHALLENGE_ROLL': return t.phase.challengeRoll;
-        case 'WAITING_MONSTER_ROLL': return t.phase.monster;
-        case 'SELECTING_CARDS':
-        case 'SELECTING_HAND_CARDS':
-        case 'SELECTING_PLAYER': return t.phase.selecting;
-        case 'FINISHED': return t.phase.finished;
-        default: return t.phase.resolving;
-    }
-}
-
 function InGame() {
     const socket = useContext(WebSocketContext);
     const navigate = useNavigate();
@@ -60,33 +45,19 @@ function InGame() {
     const { id } = useParams();
     const me = useMemo(readLoggedUserId, []);
     const s = useMatchSession(socket, id, me);
-    const { players, matchState, turn, actions } = s;
+    const { view, actions } = s;
+    const { players, matchState, currentPlayerTurn: turn, pending } = view;
 
     const [historyOpen, setHistoryOpen] = useState(false);
     const [rulesOpen, setRulesOpen] = useState(false);
+    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [discardOpen, setDiscardOpen] = useState(false);
     const [viewing, setViewing] = useState<string | null>(null);
     const [inspecting, setInspecting] = useState<Inspecting | null>(null);
     const [banner, setBanner] = useState<string | null>(null);
-    const [chatOpen, setChatOpen] = useState(false);
-    const [seenChat, setSeenChat] = useState(0);
-    const [bubbles, setBubbles] = useState<ChatMessage[]>([]);
+    // Hero rolls keep the table visible: the Modifier window opens from the dock's button.
+    const [trayFor, setTrayFor] = useState<string | null>(null);
     const lastTurn = useRef('');
-    const lastChatCount = useRef(0);
-
-    // New messages from others pop up as short bubbles while the chat is closed.
-    useEffect(() => {
-        const fresh = s.chat.slice(lastChatCount.current);
-        lastChatCount.current = s.chat.length;
-        if (chatOpen) {
-            setSeenChat(s.chat.length);
-            return;
-        }
-        const incoming = fresh.filter((m) => m.playerId !== me);
-        if (incoming.length === 0) return;
-        setBubbles((prev) => [...prev, ...incoming].slice(-3));
-        const t = setTimeout(() => setBubbles((prev) => prev.filter((b) => !incoming.includes(b))), BUBBLE_MS);
-        return () => clearTimeout(t);
-    }, [s.chat, chatOpen, me]);
 
     useEffect(() => {
         if (!me) navigate('/');
@@ -96,25 +67,24 @@ function InGame() {
         if (!turn || turn === lastTurn.current || SETUP_STATES.includes(matchState)) return;
         lastTurn.current = turn;
         setBanner(turn);
-        const t = setTimeout(() => setBanner(null), BANNER_MS);
-        return () => clearTimeout(t);
+        const timer = setTimeout(() => setBanner(null), BANNER_MS);
+        return () => clearTimeout(timer);
     }, [turn, matchState]);
 
-    const ids = Object.keys(players);
-    const order = useMemo(() => {
-        const all = Object.keys(players);
-        if (all.some((pid) => players[pid].orderRoll == null)) return all;
-        return [...all].sort((a, b) => (players[b].orderRoll ?? 0) - (players[a].orderRoll ?? 0));
-    }, [players]);
-    const opponents = order.filter((pid) => pid !== me);
+    const order = view.turnOrder.length > 0 ? view.turnOrder : Object.keys(players);
+    const opponents = useMemo(() => {
+        const start = order.indexOf(me);
+        return start < 0 ? order.filter((pid) => pid !== me) : [...order.slice(start + 1), ...order.slice(0, start)];
+    }, [order, me]);
     const mine = players[me];
     const isMyTurn = turn === me;
     const ap = mine?.currentAP ?? 0;
-    const canAct = isMyTurn && matchState === 'GAMEPLAY' && ap > 0;
-    const canAttack = isMyTurn && matchState === 'GAMEPLAY' && ap >= ATTACK_COST;
+    const ready = isMyTurn && matchState === 'GAMEPLAY' && view.idle;
+    const canAct = ready && ap > 0;
+    const canAttack = ready && ap >= ATTACK_COST;
     const turnName = players[turn]?.username || '…';
 
-    if (matchState === '' || matchState === 'ORDER_SELECTION' || matchState === 'PARTY_LEADER_SELECTION') {
+    if (SETUP_STATES.includes(matchState)) {
         return (
             <div className="hts-screen">
                 <img src={tableBackground} alt="" className="hts-screen-bg" style={{ opacity: 0.24 }} />
@@ -123,20 +93,36 @@ function InGame() {
                     <InitiativeScreen key={s.tieRound} players={players} me={me} tieRolls={s.tieRolls} onRoll={actions.rollOrder} />
                 )}
                 {matchState === 'PARTY_LEADER_SELECTION' && (
-                    <LeaderDraftScreen players={players} me={me} turn={turn} order={order} available={s.availableLeaders} onChoose={actions.chooseLeader} />
+                    <LeaderDraftScreen players={players} me={me} turn={turn} order={view.pickOrder} available={view.availablePartyLeaders} onChoose={actions.chooseLeader} />
                 )}
             </div>
         );
     }
 
-    const pendingCard = players[turn]?.pendingHeroCard || null;
-    const showDuel = !!s.duel && (matchState === 'CHALLENGE_ROLL' || !!s.duelWinner);
-    const showDock = !showDuel && !s.monsterRoll && !!turn
-        && (matchState === 'CHALLENGE_WINDOW' || (matchState === 'WAITING_HERO_ROLL' && !!pendingCard) || !!s.heroRoll);
-    const selecting = SELECTING_STATES.includes(matchState);
-    const myModifiers = (mine?.hand || []).some((c) => c.type === 'MODIFIER');
+    // What the roll area shows: the live pending roll, or the one that just ended (for a moment).
+    const linger = s.linger;
+    let heroRoll: RollData | null = null;
+    let attackRoll: RollData | null = null;
+    let duel: DuelData | null = null;
+    if (pending?.type === 'roll') {
+        if (pending.roll.kind === 'HERO') heroRoll = pending.roll;
+        else attackRoll = pending.roll;
+    } else if (pending?.type === 'duel') {
+        duel = pending;
+    } else if (!pending && linger) {
+        if (linger.type === 'roll') {
+            if (linger.roll.kind === 'HERO') heroRoll = linger.roll;
+            else attackRoll = linger.roll;
+        } else {
+            duel = linger.duel;
+        }
+    }
+    const modifierWindow = pending?.type === 'roll' || pending?.type === 'duel' ? pending.modifierWindow : undefined;
+    const windowRolls = pending?.type === 'roll' ? [pending.roll] : pending?.type === 'duel' ? [pending.ownerRoll, pending.challengerRoll] : [];
+    const canModify = !!modifierWindow && modifierWindow.holders.includes(me) && !modifierWindow.passed.includes(me);
+    const choice = pending?.type === 'choice' ? pending : null;
 
-    function inspectorProps(target: Inspecting): { card?: CardData; image?: string; title?: string; kicker?: string; hint?: string; actions: InspectorAction[] } {
+    function inspectorProps(target: Inspecting): { card?: CardData; monster?: MonsterData; image?: string; title?: string; kicker?: string; hint?: string; actions: InspectorAction[] } {
         const close = () => setInspecting(null);
         if (target.kind === 'leader') {
             const info = classInfo(target.leader);
@@ -145,12 +131,13 @@ function InGame() {
         }
         if (target.kind === 'monster') {
             const m = target.monster;
+            const onBoard = view.monsters.some((x) => x.id === m.id);
             return {
                 image: getMonsterArt(m.name),
                 title: m.name,
                 kicker: t.inspect.monsterKicker,
-                hint: t.inspect.monsterHint(monsterRequirement(t, m.partyRequirement), m.slayThreshold, m.fightBackThreshold),
-                actions: canAttack ? [{ label: t.board.attack(ATTACK_COST), onClick: () => { actions.attack(m.id); close(); } }] : [],
+                monster: m,
+                actions: canAttack && onBoard ? [{ label: t.board.attack(ATTACK_COST), onClick: () => { actions.attack(m.id); close(); } }] : [],
             };
         }
         const card = target.card;
@@ -158,13 +145,13 @@ function InGame() {
             const playable = canAct && isPlayableFromHand(card);
             return {
                 card,
-                hint: t.inspect.hints[card.type || ''] ?? '',
                 actions: playable ? [{ label: t.inspect.play, onClick: () => { actions.play(card.cardId); close(); } }] : [],
             };
         }
         if (target.kind === 'party') {
-            const used = mine?.usedCardIds?.includes(card.cardId) || s.locallyUsed.includes(card.cardId);
-            const canRoll = canAct && card.type === 'HERO' && !used;
+            const used = mine?.usedCardIds?.includes(card.cardId);
+            const sealed = card.item?.cardName === 'Sealing Key';
+            const canRoll = canAct && card.type === 'HERO' && !used && !sealed;
             return {
                 card,
                 hint: used ? t.inspect.partyUsed : t.inspect.partyRoll,
@@ -181,174 +168,156 @@ function InGame() {
 
             <TopBar
                 matchId={id}
+                round={view.round}
+                drawPileCount={view.drawPileCount}
+                discardCount={view.discardPile.length}
                 players={players}
                 order={order}
                 turn={turn}
                 me={me}
                 historyOpen={historyOpen}
-                chatOpen={chatOpen}
-                unread={chatOpen ? 0 : s.chat.slice(seenChat).filter((m) => m.playerId !== me).length}
-                onToggleHistory={() => { setHistoryOpen((v) => !v); setChatOpen(false); }}
-                onToggleChat={() => { setChatOpen((v) => !v); setHistoryOpen(false); setSeenChat(s.chat.length); setBubbles([]); }}
+                onToggleHistory={() => setHistoryOpen((v) => !v)}
                 onOpenRules={() => setRulesOpen(true)}
+                onOpenSettings={() => setSettingsOpen(true)}
             />
 
-            <OpponentRail players={players} ids={opponents} turn={turn} slain={s.slain} tags={s.tags} removal={s.removal} onOpen={setViewing} />
+            <OpponentRail players={players} ids={opponents} turn={turn} tags={s.tags} onOpen={setViewing} />
 
             <Arena
-                monsters={s.monsters}
+                monsters={view.monsters}
+                drawPileCount={view.drawPileCount}
+                discardPile={view.discardPile}
+                monsterDeckCount={view.monsterDeckCount}
                 canDraw={canAct}
                 canAttack={canAttack}
-                feed={s.feed}
                 onDraw={actions.draw}
                 onAttack={actions.attack}
                 onInspectMonster={(monster) => setInspecting({ kind: 'monster', monster })}
-                onOpenHistory={() => setHistoryOpen(true)}
-            />
-
-            <div className="bottom">
-                <PlayerZone
-                    player={mine}
-                    slainCount={s.slain[me] || 0}
-                    tags={s.tags[me] || []}
-                    removal={s.removal}
-                    handRemoval={s.handRemoval}
-                    canPlay={canAct}
-                    locallyUsed={s.locallyUsed}
-                    onPlay={actions.play}
-                    onInspectLeader={() => mine?.leader && setInspecting({ kind: 'leader', leader: mine.leader })}
-                    onInspectCard={(card, source) => setInspecting({ kind: source, card })}
-                />
-                <ActionPanel
-                    isMyTurn={isMyTurn}
-                    turnName={turnName}
-                    currentAP={ap}
-                    maxAP={mine?.maxAP ?? 3}
-                    phaseLabel={phaseLabel(t, matchState, isMyTurn, ap, mine?.maxAP ?? 3, turnName)}
-                    canDraw={canAct}
-                    onDraw={actions.draw}
-                    onOpenRules={() => setRulesOpen(true)}
-                />
-            </div>
-
-            <FxLayer events={s.fx} me={me} onDone={s.finishFx} />
-
-            {showDock && (
-                <RollDock
-                    key={`${turn}-${pendingCard?.cardId ?? 'card'}`}
-                    players={players}
-                    me={me}
-                    rollerId={turn}
-                    card={pendingCard}
-                    matchState={matchState}
-                    challengeFraction={s.challengeWindowMs ? s.challengeRemainingMs / s.challengeWindowMs : 0}
-                    challengeSeconds={s.challengeRemainingMs / 1000}
-                    canChallenge={!s.hasChallenged && !isMyTurn}
-                    result={s.heroRoll}
-                    mods={s.mods}
-                    onRoll={actions.rollHero}
-                    onChallenge={actions.challenge}
-                />
-            )}
-
-            {selecting && !isMyTurn && (
-                <div className="status-banner" role="status">{t.board.picking(turnName, pendingCard?.cardName)}</div>
-            )}
-            {selecting && isMyTurn && (
-                <TargetSheet
-                    mode={matchState as 'SELECTING_CARDS' | 'SELECTING_HAND_CARDS' | 'SELECTING_PLAYER'}
-                    players={players}
-                    me={me}
-                    source={mine?.pendingHeroCard || null}
-                    targets={s.targets}
-                    maxTargets={s.maxTargets}
-                    selectedPlayerId={s.selectedPlayerId}
-                    onToggleCard={actions.toggleCardTarget}
-                    onTogglePlayer={actions.togglePlayerTarget}
-                    onConfirm={actions.confirmTargets}
-                />
-            )}
-
-            {showDuel && s.duel && (
-                <DuelScene
-                    key={`${s.duel.heroId}-${s.duel.challengerId}`}
-                    players={players}
-                    me={me}
-                    heroId={s.duel.heroId}
-                    challengerId={s.duel.challengerId}
-                    card={players[s.duel.heroId]?.pendingHeroCard || null}
-                    rolls={s.duelRolls}
-                    winnerId={s.duelWinner}
-                    mods={s.mods}
-                    onRoll={actions.rollDuel}
-                />
-            )}
-
-            {s.monsterRoll && (
-                <MonsterScene
-                    key={s.monsterRoll.monster.id}
-                    players={players}
-                    me={me}
-                    attackerId={s.monsterRoll.attackerId}
-                    monster={s.monsterRoll.monster}
-                    raw={s.monsterRoll.raw}
-                    outcome={s.monsterRoll.outcome}
-                    mods={s.mods}
-                    onRoll={actions.rollMonster}
-                />
-            )}
-
-            {s.modifierWindow && myModifiers && (
-                <ModifierPicker
-                    key={s.modifierWindowSeq}
-                    window={s.modifierWindow}
-                    hand={mine?.hand || []}
-                    playersData={players}
-                    me={me}
-                    socket={socket}
-                    id={id}
-                    onPlay={actions.closeModifierWindow}
-                />
-            )}
-
-            {chatOpen && (
-                <div className="game-chat hts-rise">
+                onOpenDiscard={() => setDiscardOpen(true)}
+                side={(
                     <ChatPanel
                         messages={s.chat}
                         me={me}
                         colorFor={(pid) => classInfo(players[pid]?.leader)?.tint ?? 'var(--hts-gold)'}
                         onSend={actions.sendChat}
                         phrases={t.chat.gamePhrases}
-                        autoFocus
-                        onClose={() => setChatOpen(false)}
                     />
+                )}
+            />
+
+            <div className="bottom">
+                <PlayerZone
+                    player={mine}
+                    tags={s.tags[me] || []}
+                    canPlay={canAct}
+                    onPlay={actions.play}
+                    onInspectLeader={() => mine?.leader && setInspecting({ kind: 'leader', leader: mine.leader })}
+                    onInspectCard={(card, source) => setInspecting({ kind: source, card })}
+                    onInspectMonster={(monster) => setInspecting({ kind: 'monster', monster })}
+                />
+                <ActionPanel
+                    isMyTurn={isMyTurn && matchState === 'GAMEPLAY'}
+                    turnName={turnName}
+                    currentAP={ap}
+                    maxAP={mine?.maxAP ?? 3}
+                    idle={view.idle}
+                    canThiefSkill={mine?.leader === 'THIEF' && !mine.leaderSkillUsed}
+                    onDraw={actions.draw}
+                    onRedraw={actions.redraw}
+                    onLeaderSkill={actions.leaderSkill}
+                    onEndTurn={actions.endTurn}
+                />
+            </div>
+
+            <FxLayer events={s.fx} me={me} onDone={s.finishFx} />
+
+            {pending?.type === 'challenge_window' && (
+                <ChallengeDock pending={pending} players={players} me={me} onChallenge={actions.challenge} onPass={actions.pass} />
+            )}
+            {heroRoll && (
+                <RollDock
+                    key={heroRoll.rollId}
+                    roll={heroRoll}
+                    modifierWindow={modifierWindow}
+                    players={players}
+                    me={me}
+                    canModify={canModify}
+                    trayOpen={trayFor === heroRoll.rollId}
+                    onRoll={actions.roll}
+                    onOpenModifiers={() => setTrayFor(trayFor === heroRoll.rollId ? null : heroRoll.rollId)}
+                    onPass={actions.pass}
+                />
+            )}
+            {attackRoll && <MonsterScene key={attackRoll.rollId} roll={attackRoll} modifierWindow={modifierWindow} players={players} me={me} onRoll={actions.roll} />}
+            {duel && (
+                <DuelScene
+                    key={duel.ownerRoll.rollId}
+                    duel={duel}
+                    players={players}
+                    me={me}
+                    hand={mine?.hand || []}
+                    onRoll={actions.roll}
+                    onPlayModifier={actions.playModifier}
+                    onPass={actions.pass}
+                />
+            )}
+            {canModify && modifierWindow && !duel && (attackRoll || trayFor === heroRoll?.rollId) && (
+                <ModifierPicker
+                    window={modifierWindow}
+                    rolls={windowRolls}
+                    hand={mine?.hand || []}
+                    players={players}
+                    me={me}
+                    placement="dock"
+                    onPlay={actions.playModifier}
+                    onPass={actions.pass}
+                />
+            )}
+
+            {choice && choice.chooserId === me && <ChoiceSheet choice={choice} players={players} me={me} onAnswer={actions.answer} />}
+            {choice && choice.chooserId !== me && <ChoiceWaiting choice={choice} players={players} />}
+
+            {s.toasts.length > 0 && (
+                <div className="ks-toasts" role="status" aria-live="polite">
+                    {s.toasts.map((toast) => {
+                        const style = tagStyle(toast.situation);
+                        return (
+                            <div key={toast.key} className="ks-toast hts-rise" style={{ borderColor: style.bg }}>
+                                <span className="ks-toast-mark" style={{ background: style.bg, color: style.fg }}>{style.mark}</span>
+                                <span>{toast.render(t)}</span>
+                            </div>
+                        );
+                    })}
                 </div>
             )}
-            {!chatOpen && bubbles.length > 0 && (
-                <div className="chat-bubbles" aria-hidden="true">
-                    {bubbles.map((b) => (
-                        <div key={`${b.timestamp}-${b.playerId}`} className="chat-bubble">
-                            <b style={{ color: classInfo(players[b.playerId]?.leader)?.tint ?? 'var(--hts-gold)' }}>{b.username}</b>
-                            {b.text}
-                        </div>
-                    ))}
-                </div>
-            )}
-            {historyOpen && <ActionHistoryPanel history={s.history} playersData={players} onClose={() => setHistoryOpen(false)} />}
+            {historyOpen && <HistoryPanel log={view.log} players={players} onClose={() => setHistoryOpen(false)} />}
             {rulesOpen && <RulesSheet onClose={() => setRulesOpen(false)} />}
+            {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
+            {discardOpen && <DiscardViewer cards={view.discardPile} onClose={() => setDiscardOpen(false)} onInspect={(card) => setInspecting({ kind: 'other', card })} />}
             {viewing && players[viewing] && (
                 <PartyViewer
                     player={players[viewing]}
-                    slainCount={s.slain[viewing] || 0}
                     onClose={() => setViewing(null)}
                     onInspect={(card) => setInspecting({ kind: 'other', card })}
+                    onInspectMonster={(monster) => setInspecting({ kind: 'monster', monster })}
                 />
             )}
-            {s.revealed && <HandReveal username={s.revealed.username} cards={s.revealed.cards} onClose={actions.closeReveal} />}
+            {s.revealed && <HandReveal username={s.revealed.username} reason={s.revealed.reason} cards={s.revealed.cards} onClose={actions.closeReveal} />}
             {inspecting && <CardInspector {...inspectorProps(inspecting)} onClose={() => setInspecting(null)} />}
-            {banner && players[banner] && <TurnBanner name={players[banner].username} leader={players[banner].leader} isMe={banner === me} />}
-            {matchState === 'FINISHED' && <MatchEnd players={players} slain={s.slain} onLeave={() => navigate('/games')} />}
-            {ids.length === 0 && <p className="status-banner">{t.board.connecting}</p>}
+            {banner && players[banner] && matchState === 'GAMEPLAY' && <TurnBanner name={players[banner].username} leader={players[banner].leader} isMe={banner === me} />}
+            {matchState === 'FINISHED' && view.winner && !historyOpen && (
+                <MatchEnd
+                    players={players}
+                    winner={view.winner}
+                    round={view.round}
+                    startedAt={view.startedAt}
+                    log={view.log}
+                    highlights={s.highlights}
+                    onHistory={() => setHistoryOpen(true)}
+                    onLeave={() => navigate('/games')}
+                />
+            )}
+            {Object.keys(players).length === 0 && <p className="status-banner">{t.board.connecting}</p>}
         </div>
     );
 }

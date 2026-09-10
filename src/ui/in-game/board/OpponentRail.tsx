@@ -1,10 +1,12 @@
+import { getMonsterArt } from '@/utils/CardArt';
 import { CLASS_IDS, CLASS_INFO, classInfo, partyClasses, type HeroClassId } from '@/utils/ClassInfo';
 import { useI18n } from '@/i18n';
 import { GameCard } from '../../common/GameCard';
-import type { PlayersMap } from '../../common/types';
-import type { CardRemoval, PlayerTag } from './boardTypes';
+import type { MonsterData, PlayersMap } from '../../common/types';
+import { tagStyle, type PlayerTag } from './boardTypes';
 
 const MAX_MINIS = 6;
+const MONSTERS_TO_WIN = 3;
 
 export function ClassPips({ have, size = 18 }: { have: Set<string>; size?: number }) {
     const { t } = useI18n();
@@ -23,22 +25,42 @@ export function ClassPips({ have, size = 18 }: { have: Set<string>; size?: numbe
     );
 }
 
-export function SlainSlots({ count, width = 14 }: { count: number; width?: number }) {
+/** Slain monsters show their own art; the empty slots count down to the 3-monster win. */
+export function SlainMonsters({ slain, width = 16, vertical, onInspect }: { slain: MonsterData[]; width?: number; vertical?: boolean; onInspect?: (m: MonsterData) => void }) {
     const { t } = useI18n();
+    const height = Math.round(width * 1.72);
     return (
-        <div style={{ display: 'flex', gap: 3 }} role="img" aria-label={t.common.slainAria(count)}>
-            {[0, 1, 2].map((i) => (
-                <span
-                    key={i}
-                    style={{
-                        width,
-                        height: Math.round(width * 1.45),
-                        boxSizing: 'border-box',
-                        borderRadius: 3,
-                        ...(i < count ? { background: 'var(--hts-gold)' } : { border: '2px dashed rgba(243,234,214,.38)' }),
-                    }}
-                />
-            ))}
+        <div style={{ display: 'flex', flexDirection: vertical ? 'column' : 'row', gap: vertical ? 8 : 3 }} role="img" aria-label={t.common.slainAria(slain.length)}>
+            {Array.from({ length: MONSTERS_TO_WIN }).map((_, i) => {
+                const m = slain[i];
+                if (!m) {
+                    return <span key={i} style={{ width, height, boxSizing: 'border-box', borderRadius: 4, border: '2px dashed rgba(243,234,214,.32)' }} />;
+                }
+                const art = getMonsterArt(m.name);
+                const style = { width, height, borderRadius: 4, objectFit: 'cover' as const, objectPosition: 'top', border: '2px solid var(--hts-gold)', boxSizing: 'border-box' as const, padding: 0, background: 'var(--hts-gold)' };
+                const image = art ? <img src={art} alt="" style={{ ...style, display: 'block' }} title={m.name} /> : <span style={{ ...style, display: 'block' }} title={m.name} />;
+                return onInspect ? (
+                    <button key={m.id} type="button" className="slain-btn" onClick={() => onInspect(m)} aria-label={m.name}>{image}</button>
+                ) : <span key={m.id}>{image}</span>;
+            })}
+        </div>
+    );
+}
+
+export function PlayerTags({ tags, big }: { tags: PlayerTag[]; big?: boolean }) {
+    const { t } = useI18n();
+    if (tags.length === 0) return null;
+    return (
+        <div className={`ks-tags ${big ? 'ks-tags--big' : ''}`}>
+            {tags.slice(-3).map((tag) => {
+                const style = tagStyle(tag.tagType);
+                return (
+                    <span key={tag.key} className="ks-tag hts-pop" style={{ background: style.bg, color: style.fg }}>
+                        <span className="ks-tag-mark">{style.mark}</span>
+                        {tag.render(t)}
+                    </span>
+                );
+            })}
         </div>
     );
 }
@@ -47,13 +69,11 @@ interface OpponentRailProps {
     players: PlayersMap;
     ids: string[];
     turn: string;
-    slain: Record<string, number>;
     tags: Record<string, PlayerTag[]>;
-    removal: CardRemoval | null;
     onOpen: (playerId: string) => void;
 }
 
-function OpponentRail({ players, ids, turn, slain, tags, removal, onOpen }: OpponentRailProps) {
+function OpponentRail({ players, ids, turn, tags, onOpen }: OpponentRailProps) {
     const { t } = useI18n();
     if (ids.length === 0) return null;
     return (
@@ -61,10 +81,10 @@ function OpponentRail({ players, ids, turn, slain, tags, removal, onOpen }: Oppo
             {ids.map((pid) => {
                 const p = players[pid];
                 const info = classInfo(p.leader);
-                const heroes = (p.party || []).filter((c) => c.type !== 'MONSTER');
-                const slainCount = slain[pid] || 0;
+                const heroes = p.party || [];
+                const slain = p.slain || [];
                 const have = partyClasses(p.leader, p.party);
-                const threat = slainCount >= 2 || have.size >= 5;
+                const threat = slain.length >= 2 || have.size >= 5;
                 return (
                     <button
                         key={pid}
@@ -86,32 +106,22 @@ function OpponentRail({ players, ids, turn, slain, tags, removal, onOpen }: Oppo
                             </div>
                             <span className="plaque-hand" title={t.board.handCount}>
                                 <svg width="13" height="16" viewBox="0 0 14 16" aria-hidden="true"><rect x="1" y="1" width="12" height="14" rx="2" fill="#f3ead6" /><rect x="3.5" y="3.5" width="7" height="9" rx="1" fill="none" stroke="#8e897e" /></svg>
-                                {p.hand?.length ?? 0}
+                                {p.handCount ?? 0}
                             </span>
                         </div>
                         <div className="plaque-heroes">
                             {heroes.slice(0, MAX_MINIS).map((card) => (
-                                <GameCard
-                                    key={card.cardId}
-                                    card={card}
-                                    width={38}
-                                    className={removal?.cardId === card.cardId ? (removal.kind === 'steal' ? 'hts-steal' : 'hts-destroy') : 'hts-fade'}
-                                    dimmed={p.usedCardIds?.includes(card.cardId)}
-                                />
+                                <GameCard key={card.cardId} card={card} width={38} className="hts-fade" dimmed={p.usedCardIds?.includes(card.cardId)} />
                             ))}
                             {heroes.length > MAX_MINIS && <span className="plaque-more">+{heroes.length - MAX_MINIS}</span>}
                             {heroes.length === 0 && <span className="plaque-empty">{t.board.noHeroes}</span>}
                         </div>
                         <div className="plaque-foot">
                             <ClassPips have={have} />
-                            <SlainSlots count={slainCount} />
+                            <SlainMonsters slain={slain} />
                         </div>
-                        {(tags[pid] || []).length > 0 && (
-                            <div className="plaque-tags">
-                                {tags[pid].slice(-2).map((tag) => <span key={tag.key} className="plaque-tag">{tag.render(t)}</span>)}
-                            </div>
-                        )}
-                        {threat && <span className="plaque-threat">{slainCount >= 2 ? t.board.oneMonsterLeft : t.board.classesShort(have.size)}</span>}
+                        <PlayerTags tags={tags[pid] || []} />
+                        {threat && <span className="plaque-threat">{slain.length >= 2 ? t.board.oneMonsterLeft : t.board.classesShort(have.size)}</span>}
                     </button>
                 );
             })}

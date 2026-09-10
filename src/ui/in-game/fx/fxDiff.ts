@@ -75,9 +75,13 @@ export function diffMatchStates(prev: PlayersMap, next: PlayersMap): Omit<FxEven
     });
 
     Object.entries(next).forEach(([playerId, p]) => {
-        (p.hand || []).forEach((card) => {
-            if (!before.has(card.cardId)) draws[playerId] = (draws[playerId] || 0) + 1;
+        // Opponents' hands are hidden: a Hero that appears from nowhere was played from their hand.
+        (p.party || []).forEach((card) => {
+            if (!before.has(card.cardId)) events.push({ kind: 'play', from: playerId, to: playerId, card });
         });
+        const own = (p.hand || []).filter((card) => !before.has(card.cardId)).length;
+        const hidden = (p.hand || []).length === 0 ? Math.max(0, (p.handCount ?? 0) - (prev[playerId]?.handCount ?? 0)) : 0;
+        if (own + hidden > 0) draws[playerId] = own + hidden;
     });
     Object.entries(draws).forEach(([playerId, count]) => {
         events.push({ kind: 'draw', to: playerId, count: Math.min(count, MAX_DRAWS_ANIMATED) });

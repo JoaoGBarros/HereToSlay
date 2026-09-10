@@ -1,7 +1,8 @@
-import { useCallback } from 'react';
+import { useState } from 'react';
+import { playSound } from '@/utils/SoundManager/SoundManager';
 import { PLAYER_COLORS } from '@/utils/ClassInfo';
 import { useI18n } from '@/i18n';
-import { DicePair, useLocalRoll } from '../../common/PipDie';
+import { DicePair } from '../../common/PipDie';
 import type { PlayersMap } from '../../common/types';
 import { Avatar } from '../../common/Widgets';
 import './screens.css';
@@ -11,15 +12,22 @@ interface InitiativeScreenProps {
     me: string;
     /** Rolls from the round that just tied, kept so players can see why they roll again. */
     tieRolls: Record<string, number | null> | null;
-    onRoll: (sum: number) => void;
+    onRoll: () => void;
 }
 
 function InitiativeScreen({ players, me, tieRolls, onRoll }: InitiativeScreenProps) {
     const { t } = useI18n();
     const ids = Object.keys(players);
     const myRoll = players[me]?.orderRoll ?? null;
-    const handleResult = useCallback((sum: number) => onRoll(sum), [onRoll]);
-    const { dice, rolling, roll } = useLocalRoll(handleResult);
+    // The engine throws the dice; we tumble until the result arrives.
+    const [requested, setRequested] = useState(false);
+    const rolling = requested && myRoll == null;
+    const dice = players[me]?.orderDice ?? null;
+    const roll = () => {
+        playSound('diceRoll');
+        setRequested(true);
+        onRoll();
+    };
 
     const ranked = ids
         .filter((pid) => players[pid].orderRoll != null)
@@ -60,8 +68,8 @@ function InitiativeScreen({ players, me, tieRolls, onRoll }: InitiativeScreenPro
                                 </div>
                             </div>
                             <div className="init-felt">
-                                {isMe && (rolling || dice) ? (
-                                    <DicePair dice={dice} rolling={rolling} size={60} />
+                                {isMe && (rolling || (dice && value != null)) ? (
+                                    <DicePair dice={value != null ? dice : null} rolling={rolling} size={60} />
                                 ) : waitingMine ? (
                                     <button type="button" className="hts-btn" onClick={roll}>{t.initiative.roll}</button>
                                 ) : value == null ? (
@@ -72,8 +80,8 @@ function InitiativeScreen({ players, me, tieRolls, onRoll }: InitiativeScreenPro
                             </div>
                             <div className="init-footer">
                                 {isMe ? (
-                                    <span className={`hts-display ${value != null ? 'hts-pop' : ''}`} style={{ fontSize: 60, color: value != null || dice ? 'var(--hts-text)' : '#3a474c' }}>
-                                        {value ?? (dice ? dice[0] + dice[1] : '–')}
+                                    <span className={`hts-display ${value != null ? 'hts-pop' : ''}`} style={{ fontSize: 60, color: value != null ? 'var(--hts-text)' : '#3a474c' }}>
+                                        {value ?? '–'}
                                     </span>
                                 ) : <span />}
                                 {previous != null && value == null && <span className="hts-muted" style={{ fontWeight: 700 }}>{t.initiative.before(previous)}</span>}

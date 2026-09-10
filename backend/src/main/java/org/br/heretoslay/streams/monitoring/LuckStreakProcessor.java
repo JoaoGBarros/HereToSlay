@@ -50,22 +50,22 @@ public class LuckStreakProcessor implements Processor<String, String, String, St
      */
     @Override
     public void process(Record<String, String> record) {
-        JSONObject action;
+        JSONObject inner;
         try {
-            action = new JSONObject(record.value());
+            inner = new JSONObject(record.value()).optJSONObject("payload");
         } catch (Exception e) {
             return;
         }
-        if (!"process_hero_roll".equals(action.optString("action"))) return;
+        // Hero effect rolls are rolled by the engine and published as dice_roll/hero_roll.
+        if (inner == null || !"dice_roll".equals(inner.optString("type")) || !"hero_roll".equals(inner.optString("subtype"))) return;
 
         // Extrai dados do jogador e resultado do roll
-        String playerId = action.optString("playerId", null);
-        JSONObject payload = action.optJSONObject("payload");
-        if (playerId == null || payload == null || !payload.has("roll")) return;
+        String playerId = inner.optString("playerId", null);
+        if (playerId == null || !inner.has("diceRoll")) return;
 
         // Determina se o roll foi bem-sucedido (quente) ou não (frio)
         String matchId = record.key();
-        int roll = payload.optInt("roll", -1);
+        int roll = inner.optInt("diceRoll", -1);
         boolean success = roll >= HOT_THRESHOLD;
 
         // Obtém a sequência anterior do jogador e a atualiza

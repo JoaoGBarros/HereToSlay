@@ -1,28 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { playBackgroundMusic, playClassSound, playSound, type ClassSoundType } from '@/utils/SoundManager/SoundManager';
-import { parseMessage, SELECTING_STATES, sendMessage, type CardData, type EngineMessage, type MonsterData, type PlayersMap, type Socket } from '../common/types';
+import { EMPTY_VIEW, parseMessage, sendMessage, type CardData, type MatchView, type RecentResult, type SocketRef } from '../common/types';
 import { appendChat, type ChatMessage } from '../common/ChatPanel';
-import type { ActionHistoryEntry } from './components/ActionHistoryPanel';
-import type { ModifierWindowState } from './components/ModifierPicker';
-import type { CardRemoval, FeedEvent, FeedTone, HandRemoval, PlayerTag } from './board/boardTypes';
-import type { HeroRollResult } from './rolls/RollDock';
-import type { MonsterOutcome } from './rolls/MonsterScene';
-import type { AppliedModifier } from './rolls/RollParts';
+import type { PlayerTag } from './board/boardTypes';
 import { diffMatchStates, type FxEvent } from './fx/fxDiff';
 import type { Dict } from '@/i18n/pt';
 
-const LINGER_MS = 2600;
-const REMOVAL_MS = 850;
-const TAG_MS = 20000;
-const FEED_LIMIT = 30;
+const LINGER_MS = 2800;
+const TAG_MS = 30000;
+const TOAST_MS = 5000;
+const TOAST_LIMIT = 2;
 const FX_LIMIT = 12;
 const SETUP_STATES = ['', 'ORDER_SELECTION', 'PARTY_LEADER_SELECTION'];
 
-export interface MonsterRollState {
-    monster: MonsterData;
-    attackerId: string;
-    raw: number | null;
-    outcome: { kind: MonsterOutcome; roll: number } | null;
+export interface Highlight {
+    key: string;
+    playerId: string;
+    tagType: string;
+}
+
+/** A match-wide Kafka Streams highlight that isn't about one player (chain reactions, turning points). */
+export interface Toast {
+    key: string;
+    situation: string;
+    render: (t: Dict) => string;
+}
+
+export interface Revealed {
+    ownerId: string;
+    username: string;
+    reason: string;
+    cards: CardData[];
 }
 
 export function readLoggedUserId(): string {
@@ -34,54 +42,22 @@ export function readLoggedUserId(): string {
     }
 }
 
-/** All match state and engine messages for one client. Rendering lives in InGame. */
-export function useMatchSession(socket: Socket, matchId: string | undefined, me: string) {
-    const [players, setPlayers] = useState<PlayersMap>({});
-    const [matchState, setMatchState] = useState('');
-    const [turn, setTurn] = useState('');
-    const [availableLeaders, setAvailableLeaders] = useState<string[]>([]);
-    const [monsters, setMonsters] = useState<MonsterData[]>([]);
-    const [pendingMonsterAttack, setPendingMonsterAttack] = useState<{ monsterId: number; playerId: string } | null>(null);
-    const [challengeWindowMs, setChallengeWindowMs] = useState(0);
-    const [challengeRemainingMs, setChallengeRemainingMs] = useState(0);
-    const [hasChallenged, setHasChallenged] = useState(false);
-    const [modifierWindow, setModifierWindow] = useState<ModifierWindowState | null>(null);
-    const [modifierWindowSeq, setModifierWindowSeq] = useState(0);
-    const [mods, setMods] = useState<AppliedModifier[]>([]);
-    const [duel, setDuel] = useState<{ heroId: string; challengerId: string } | null>(null);
-    const [duelRolls, setDuelRolls] = useState<Record<string, number | null>>({});
-    const [duelWinner, setDuelWinner] = useState<string | null>(null);
-    const [heroRoll, setHeroRoll] = useState<HeroRollResult | null>(null);
-    const [monsterRoll, setMonsterRoll] = useState<MonsterRollState | null>(null);
-    const [targets, setTargets] = useState<Record<string, number[]>>({});
-    const [maxTargets, setMaxTargets] = useState(0);
-    const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
-    const [tags, setTags] = useState<Record<string, PlayerTag[]>>({});
-    const [history, setHistory] = useState<ActionHistoryEntry[]>([]);
-    const [feed, setFeed] = useState<FeedEvent[]>([]);
-    const [slain, setSlain] = useState<Record<string, number>>({});
-    const [removal, setRemoval] = useState<CardRemoval | null>(null);
-    const [handRemoval, setHandRemoval] = useState<HandRemoval | null>(null);
-    const [revealed, setRevealed] = useState<{ username: string; cards: CardData[] } | null>(null);
+/** The match as this client sees it. The engine decides everything; this hook only mirrors and sends intents. */
+export function useMatchSession(socket: SocketRef, matchId: string | undefined, me: string) {
+    const [view, setView] = useState<MatchView>(EMPTY_VIEW);
+    const [linger, setLinger] = useState<RecentResult | null>(null);
     const [tieRolls, setTieRolls] = useState<Record<string, number | null> | null>(null);
     const [tieRound, setTieRound] = useState(0);
-    const [locallyUsed, setLocallyUsed] = useState<number[]>([]);
+    const [tags, setTags] = useState<Record<string, PlayerTag[]>>({});
+    const [highlights, setHighlights] = useState<Highlight[]>([]);
+    const [revealed, setRevealed] = useState<Revealed | null>(null);
+    const [toasts, setToasts] = useState<Toast[]>([]);
     const [chat, setChat] = useState<ChatMessage[]>([]);
     const [fx, setFx] = useState<FxEvent[]>([]);
-    const matchStateRef = useRef('');
-
-    const playersRef = useRef(players);
-    const monstersRef = useRef(monsters);
+    const viewRef = useRef<MatchView>(EMPTY_VIEW);
+    const lastRecent = useRef(0);
     const seq = useRef(0);
-    const attackResolved = useRef(false);
     const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
-
-    useEffect(() => {
-        playersRef.current = players;
-    }, [players]);
-    useEffect(() => {
-        monstersRef.current = monsters;
-    }, [monsters]);
 
     const later = useCallback((fn: () => void, ms: number) => {
         timers.current.push(setTimeout(fn, ms));
@@ -100,20 +76,12 @@ export function useMatchSession(socket: Socket, matchId: string | undefined, me:
         setFx((prev) => prev.filter((e) => e.id !== id));
     }, []);
 
-    const pushFeed = useCallback((render: (t: Dict) => string, tone: FeedTone) => {
-        seq.current += 1;
-        const entry = { id: seq.current, render, tone };
-        setFeed((prev) => [entry, ...prev].slice(0, FEED_LIMIT));
-    }, []);
-
-    const nameOf = useCallback((pid?: string) => (pid && playersRef.current[pid]?.username) || '', []);
-
     const send = useCallback((message: Record<string, unknown>) => {
         sendMessage(socket, { ...message, id: matchId });
     }, [socket, matchId]);
 
-    const sendAction = useCallback((action: string, payload?: Record<string, unknown>, extra?: Record<string, unknown>) => {
-        send({ type: 'match', subtype: 'action', action, ...(payload ? { payload } : {}), ...(extra || {}) });
+    const sendAction = useCallback((action: string, payload?: Record<string, unknown>) => {
+        send({ type: 'match', subtype: 'action', action, payload: payload ?? {} });
     }, [send]);
 
     useEffect(() => {
@@ -123,24 +91,39 @@ export function useMatchSession(socket: Socket, matchId: string | undefined, me:
     }, []);
 
     useEffect(() => {
-        if (!socket) return;
+        const ws = socket;
+        if (!ws) return;
 
-        const applyState = (payload: EngineMessage) => {
-            const nextPlayers: PlayersMap = payload.players || {};
-            const nextState: string = payload.matchState || '';
-            if (!SETUP_STATES.includes(matchStateRef.current) && !SETUP_STATES.includes(nextState)) {
-                pushFx(diffMatchStates(playersRef.current, nextPlayers));
+        const applyState = (next: MatchView) => {
+            const prev = viewRef.current;
+            if (!SETUP_STATES.includes(prev.matchState) && !SETUP_STATES.includes(next.matchState)) {
+                pushFx(diffMatchStates(prev.players, next.players));
             }
-            matchStateRef.current = nextState;
-            playersRef.current = nextPlayers;
-            setPlayers(nextPlayers);
-            setMatchState(nextState);
-            setTurn(payload.currentPlayerTurn || '');
-            setAvailableLeaders(payload.availablePartyLeaders || []);
-            setChallengeWindowMs(payload.challengeWindowTime || 0);
-            setHasChallenged((payload.challengerSet || []).map(String).includes(me));
-            setMonsters(payload.monsters || []);
-            setPendingMonsterAttack(payload.pendingMonsterAttack || null);
+            // A finished roll or duel stays on screen for a moment so everyone sees how it ended.
+            if (next.recent && next.recent.seq !== lastRecent.current) {
+                const isFirstState = prev.matchState === '';
+                lastRecent.current = next.recent.seq;
+                if (!isFirstState) {
+                    const result = next.recent;
+                    setLinger(result);
+                    later(() => setLinger((current) => (current?.seq === result.seq ? null : current)), LINGER_MS);
+                }
+            }
+            viewRef.current = next;
+            setView(next);
+        };
+
+        const addTag = (playerId: string, tagType: string, targetName: string) => {
+            const render = (t: Dict) => {
+                if (tagType === 'FOCUSING') return t.tags.FOCUSING(targetName || t.common.someone);
+                const fixed = t.tags[tagType as Exclude<keyof Dict['tags'], 'FOCUSING'>];
+                return typeof fixed === 'string' ? fixed : String(tagType);
+            };
+            seq.current += 1;
+            const key = `${tagType}-${seq.current}`;
+            setTags((prev) => ({ ...prev, [playerId]: [...(prev[playerId] || []), { key, render, tagType }] }));
+            setHighlights((prev) => [...prev, { key, playerId, tagType }]);
+            later(() => setTags((prev) => ({ ...prev, [playerId]: (prev[playerId] || []).filter((tag) => tag.key !== key) })), TAG_MS);
         };
 
         const handle = (event: MessageEvent) => {
@@ -151,75 +134,14 @@ export function useMatchSession(socket: Socket, matchId: string | undefined, me:
             if (type === 'match') {
                 switch (subtype) {
                     case 'match_state':
-                    case 'order_finalized':
-                        applyState(payload);
+                        applyState(payload as MatchView);
                         return;
-                    case 'order_selection_tie': {
-                        const previous: Record<string, number | null> = {};
-                        Object.entries(playersRef.current).forEach(([pid, p]) => { previous[pid] = p.orderRoll; });
-                        setTieRolls(previous);
+                    case 'order_selection_tie':
+                        setTieRolls(payload?.rolls || null);
                         setTieRound((r) => r + 1);
-                        applyState(payload);
-                        return;
-                    }
-                    case 'challenge_window_open':
-                        pushFeed((t) => t.feed.challengeWindow, 'sky');
-                        return;
-                    case 'timer_update':
-                        setChallengeRemainingMs(payload?.remainingTime || 0);
                         return;
                     case 'duel_start':
-                        setDuel({ heroId: String(payload.heroPlayer), challengerId: String(payload.challenger) });
-                        setDuelRolls({});
-                        setDuelWinner(null);
-                        setMods([]);
-                        if (payload.matchState) setMatchState(payload.matchState);
-                    {
-                        const challenger = nameOf(payload.challenger);
-                        const hero = nameOf(payload.heroPlayer);
-                        pushFeed((t) => t.feed.challenge(challenger || t.common.someone, hero || t.common.someone), 'ember');
-                    }
-                        return;
-                    case 'duel_result':
-                        setDuelWinner(String(data.winner));
-                    {
-                        const winner = nameOf(data.winner);
-                        pushFeed((t) => t.feed.duelWon(winner || t.common.someone), 'gold');
-                    }
-                        later(() => {
-                            setDuel(null);
-                            setDuelWinner(null);
-                            setDuelRolls({});
-                        }, LINGER_MS);
-                        return;
-                    case 'modifier_window_open':
-                        setModifierWindow(payload);
-                        setModifierWindowSeq((s) => s + 1);
-                        return;
-                    case 'modifier_window_closed':
-                        setModifierWindow(null);
-                        setHeroRoll((h) => (h ? { ...h, resolved: true } : h));
-                        later(() => setHeroRoll(null), LINGER_MS);
-                        return;
-                    case 'modifier_played': {
-                        seq.current += 1;
-                        const mod = { id: seq.current, playerId: String(payload.playerId), targetPlayerId: String(payload.targetPlayerId), value: Number(payload.value) };
-                        setMods((prev) => [...prev, mod]);
-                        pushFx([{ kind: 'modifier', from: mod.playerId, to: mod.targetPlayerId, value: mod.value }]);
-                        const signedValue = mod.value > 0 ? `+${mod.value}` : `−${Math.abs(mod.value)}`;
-                        const caster = nameOf(mod.playerId);
-                        const target = nameOf(mod.targetPlayerId);
-                        pushFeed((t) => t.feed.modifier(caster || t.common.someone, signedValue, target || t.common.someone), mod.value > 0 ? 'jade' : 'ember');
-                        return;
-                    }
-                    case 'select_effect_target':
-                    case 'select_hand_target':
-                        setTargets(payload?.target || {});
-                        setMaxTargets(payload?.maxTargets || 0);
-                        return;
-                    case 'select_player_target':
-                        setSelectedPlayerId(payload?.target ? String(payload.target) : null);
-                        setMaxTargets(payload?.maxTargets || 1);
+                        playSound('challenge');
                         return;
                     case 'chat_message':
                         setChat((prev) => appendChat(prev, payload));
@@ -227,65 +149,25 @@ export function useMatchSession(socket: Socket, matchId: string | undefined, me:
                     case 'chat_history':
                         setChat(Array.isArray(payload) ? payload : []);
                         return;
-                    case 'hand_revealed': {
-                        if (String(payload.viewerPlayerId) !== me) return;
-                        const owner = Object.values(playersRef.current).find((p) => p.username === payload.revealedPlayerUsername);
-                        const ids: number[] = payload.cardIds || [];
-                        const cards = ids.map((cid) => owner?.hand?.find((c) => c.cardId === cid) || { cardId: cid, cardName: `#${cid}` });
-                        setRevealed({ username: payload.revealedPlayerUsername, cards });
+                    case 'modifier_played':
+                        pushFx([{ kind: 'modifier', from: String(payload.playerId), to: String(payload.targetPlayerId), value: Number(payload.value) }]);
                         return;
-                    }
+                    case 'hand_revealed':
+                        if (String(payload.viewerPlayerId) !== me) return;
+                        setRevealed({
+                            ownerId: String(payload.revealedPlayerId),
+                            username: String(payload.revealedPlayerUsername || ''),
+                            reason: String(payload.reason || ''),
+                            cards: payload.cards || [],
+                        });
+                        return;
                     default:
                         return;
                 }
             }
 
-            if (type === 'dice_roll' && subtype === 'hero_roll') {
-                setMods([]);
-                setHeroRoll({ raw: Number(data.diceRoll), min: Number(data.minValue), resolved: false });
-                return;
-            }
-
-            if (type === 'roll_result') {
-                if (subtype === 'duel_roll') setDuelRolls(payload || {});
-                if (subtype === 'monster_roll') {
-                    setMods([]);
-                    setMonsterRoll((m) => (m ? { ...m, raw: Number(payload.roll) } : m));
-                }
-                return;
-            }
-
-            if (type === 'animation') {
-                if (subtype === 'monster_attack_start') {
-                    const monster = monstersRef.current.find((m) => m.id === payload.monsterId);
-                    if (monster) setMonsterRoll({ monster, attackerId: String(payload.playerId), raw: null, outcome: null });
-                    return;
-                }
-                if (subtype === 'monster_slain' || subtype === 'monster_fight_back' || subtype === 'monster_survives') {
-                    const kind = subtype as MonsterOutcome;
-                    attackResolved.current = true;
-                    setMonsterRoll((m) => (m ? { ...m, outcome: { kind, roll: Number(payload.roll) } } : m));
-                    const who = nameOf(payload.playerId);
-                    if (kind === 'monster_slain') {
-                        setSlain((prev) => ({ ...prev, [payload.playerId]: (prev[payload.playerId] || 0) + 1 }));
-                        pushFeed((t) => t.feed.slain(who || t.common.someone, payload.monsterName, payload.roll), 'jade');
-                    } else if (kind === 'monster_fight_back') {
-                        pushFeed((t) => t.feed.fightBack(payload.monsterName, who || t.common.someone, payload.roll), 'ember');
-                    } else {
-                        pushFeed((t) => t.feed.survives(payload.monsterName, who || t.common.someone, payload.roll), 'sky');
-                    }
-                    later(() => setMonsterRoll(null), LINGER_MS);
-                    return;
-                }
-                if (subtype === 'destroy_card' || subtype === 'steal_card') {
-                    setRemoval({ cardId: payload.cardId, kind: subtype === 'steal_card' ? 'steal' : 'destroy' });
-                    later(() => setRemoval(null), REMOVAL_MS);
-                    return;
-                }
-                if ((subtype === 'steal_hand_card' || subtype === 'discard_card') && String(payload?.targetPlayerId) === me) {
-                    setHandRemoval({ cardId: payload.cardId, kind: subtype === 'steal_hand_card' ? 'stolen' : 'discarded' });
-                    later(() => setHandRemoval(null), REMOVAL_MS);
-                }
+            if (type === 'dice_roll') {
+                playSound('diceRoll');
                 return;
             }
 
@@ -296,102 +178,56 @@ export function useMatchSession(socket: Socket, matchId: string | undefined, me:
             }
 
             if (type === 'monitoring_alert') {
-                if (data.situation === 'ACTION_HISTORY') {
-                    setHistory(data.extra?.history || []);
+                if (data.situation === 'ACTION_HISTORY') return;
+                const extra = data.extra || {};
+                const taggedPlayerId = extra.taggedPlayerId ? String(extra.taggedPlayerId) : '';
+                const tagType = extra.tagType ? String(extra.tagType) : '';
+                const targetName = extra.targetId ? viewRef.current.players[String(extra.targetId)]?.username || '' : '';
+                if (taggedPlayerId && tagType) {
+                    addTag(taggedPlayerId, tagType, targetName);
                     return;
                 }
-                const extra = data.extra || {};
                 const situation = String(data.situation || '');
-                const alertName = nameOf(extra.taggedPlayerId ?? extra.targetPlayerId);
-                const alertTarget = nameOf(extra.targetId);
-                const alertCount = Number(extra.drawStreak ?? extra.failStreak ?? extra.actionCount ?? extra.attackCount ?? extra.targetCount ?? 0);
+                const name = viewRef.current.players[String(extra.targetPlayerId ?? '')]?.username || '';
+                const count = Number(extra.actionCount ?? extra.attackCount ?? extra.targetCount ?? 0);
                 const fallback = data.message ? String(data.message) : '';
-                pushFeed((t) => {
-                    const render = t.feed.alerts[situation];
-                    if (!render) return fallback || t.feed.highlight;
-                    return render({ name: alertName || t.common.someone, n: alertCount, target: alertTarget || t.common.someone });
-                }, 'gold');
-                const taggedPlayerId = extra.taggedPlayerId;
-                const tagType = extra.tagType;
-                if (taggedPlayerId && tagType) {
-                    const render = (t: Dict) => {
-                        if (tagType === 'FOCUSING') return t.tags.FOCUSING(alertTarget || t.common.someone);
-                        const fixed = t.tags[tagType as Exclude<keyof Dict['tags'], 'FOCUSING'>];
-                        return typeof fixed === 'string' ? fixed : String(tagType);
-                    };
-                    seq.current += 1;
-                    const key = `${tagType}-${seq.current}`;
-                    setTags((prev) => ({ ...prev, [taggedPlayerId]: [...(prev[taggedPlayerId] || []), { key, render }] }));
-                    later(() => setTags((prev) => ({ ...prev, [taggedPlayerId]: (prev[taggedPlayerId] || []).filter((t) => t.key !== key) })), TAG_MS);
-                }
+                seq.current += 1;
+                const key = `${situation}-${seq.current}`;
+                const render = (t: Dict) => {
+                    const fn = t.feed.alerts[situation];
+                    return fn ? fn({ name: name || t.common.someone, n: count, target: name || t.common.someone }) : fallback || t.feed.highlight;
+                };
+                setToasts((prev) => [...prev.filter((x) => x.situation !== situation), { key, situation, render }].slice(-TOAST_LIMIT));
+                later(() => setToasts((prev) => prev.filter((x) => x.key !== key)), TOAST_MS);
             }
         };
 
-        socket.addEventListener('message', handle);
+        ws.addEventListener('message', handle);
         sendMessage(socket, { type: 'match', subtype: 'get_match_state', id: matchId });
         sendMessage(socket, { type: 'match', subtype: 'get_chat_history', id: matchId });
-        return () => socket.removeEventListener('message', handle);
-    }, [socket, matchId, me, later, nameOf, pushFeed, pushFx]);
-
-    // Selection resets once the effect resolves; the picker asks for current targets when it opens.
-    useEffect(() => {
-        if (SELECTING_STATES.includes(matchState)) {
-            if (matchState !== 'SELECTING_PLAYER') send({ type: 'match', subtype: 'get_selected_targets' });
-            return;
-        }
-        setTargets({});
-        setSelectedPlayerId(null);
-        setMaxTargets(0);
-    }, [matchState, send]);
-
-    useEffect(() => {
-        if (matchState !== 'CHALLENGE_WINDOW') setChallengeRemainingMs(0);
-    }, [matchState]);
-
-    useEffect(() => {
-        setLocallyUsed([]);
-    }, [turn]);
-
-    // Rejoining mid-attack: rebuild the attack scene from the match state (but never reopen a resolved one).
-    useEffect(() => {
-        if (matchState !== 'WAITING_MONSTER_ROLL') {
-            attackResolved.current = false;
-            setMonsterRoll((m) => (m && !m.outcome ? null : m));
-            return;
-        }
-        if (!pendingMonsterAttack || monsterRoll || attackResolved.current) return;
-        const monster = monsters.find((m) => m.id === pendingMonsterAttack.monsterId);
-        if (monster) setMonsterRoll({ monster, attackerId: String(pendingMonsterAttack.playerId), raw: null, outcome: null });
-    }, [matchState, pendingMonsterAttack, monsters, monsterRoll]);
+        return () => ws.removeEventListener('message', handle);
+    }, [socket, matchId, me, later, pushFx]);
 
     const actions = {
-        rollOrder: (roll: number) => send({ type: 'match', subtype: 'order_selection', payload: { roll } }),
+        rollOrder: () => send({ type: 'match', subtype: 'order_selection', payload: { roll: 0 } }),
         chooseLeader: (leader: string) => send({ type: 'match', subtype: 'choose_party_leader', payload: { party_leader: leader } }),
         draw: () => sendAction('draw_card'),
-        play: (cardId: number) => {
-            sendAction('play_card', { card_id: cardId });
-            setLocallyUsed((prev) => [...prev, cardId]);
-        },
+        play: (cardId: number) => sendAction('play_card', { card_id: cardId }),
         useHero: (cardId: number) => sendAction('use_card', { card_id: cardId }),
-        rollHero: (roll: number) => sendAction('process_hero_roll', { roll }),
-        challenge: () => send({ type: 'match', subtype: 'challenge' }),
-        rollDuel: (roll: number) => send({ type: 'match', subtype: 'process_challenge_roll', payload: { roll } }),
         attack: (monsterId: number) => sendAction('attempt_slay_monster', { monster_id: monsterId }),
-        rollMonster: (roll: number) => send({ type: 'match', subtype: 'process_monster_roll', payload: { roll } }),
-        toggleCardTarget: (playerId: string, cardId: number, isSelected: boolean) =>
-            sendAction(isSelected ? 'deselect_effect_target' : 'select_effect_target', { card_id: cardId, player_id: playerId }),
-        togglePlayerTarget: (playerId: string, isSelected: boolean) =>
-            sendAction(isSelected ? 'deselect_effect_player' : 'select_effect_player', undefined, { targetPlayerId: playerId }),
-        confirmTargets: () => sendAction('apply_card_effects'),
-        closeModifierWindow: () => setModifierWindow(null),
+        redraw: () => sendAction('redraw_hand'),
+        leaderSkill: () => sendAction('leader_skill'),
+        endTurn: () => sendAction('end_turn'),
+        roll: () => sendAction('roll'),
+        pass: () => sendAction('pass'),
+        challenge: () => sendAction('challenge'),
+        answer: (choiceId: string, selection: string[], playerId?: string) =>
+            sendAction('select_effect_target', { choice_id: choiceId, selection, ...(playerId ? { player_id: playerId } : {}) }),
+        playModifier: (cardId: number, value: number, targetId: string, guardianBonus: number) =>
+            sendAction('play_modifier', { card_id: cardId, chosen_value: value, target_player_id: targetId, guardian_bonus: guardianBonus }),
         closeReveal: () => setRevealed(null),
         sendChat: (text: string) => send({ type: 'match', subtype: 'chat', payload: { text } }),
     };
 
-    return {
-        players, matchState, turn, availableLeaders, monsters, challengeWindowMs, challengeRemainingMs, hasChallenged,
-        modifierWindow, modifierWindowSeq, mods, duel, duelRolls, duelWinner, heroRoll, monsterRoll,
-        targets, maxTargets, selectedPlayerId, tags, history, feed, slain, removal, handRemoval, revealed,
-        tieRolls, tieRound, locallyUsed, pendingMonsterAttack, chat, fx, finishFx, actions,
-    };
+    return { view, linger, tieRolls, tieRound, tags, highlights, toasts, revealed, chat, fx, finishFx, actions };
 }
