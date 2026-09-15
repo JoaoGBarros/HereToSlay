@@ -54,6 +54,17 @@ export function GameCard({ card, width, faceDown, selected, selectable, dimmed, 
         </div>
     );
 
+    // An equipped Item hangs off the bottom of its Hero; tiny cards only get a colored corner.
+    const item = !faceDown && card?.item ? (
+        width < 70 ? (
+            <span className={`hts-card-item-dot ${card.item.cursed ? 'hts-card-item-dot--cursed' : ''}`} title={card.item.cardName} />
+        ) : (
+            <span className={`hts-card-item ${card.item.cursed ? 'hts-card-item--cursed' : ''}`} style={{ fontSize: Math.max(10, width * 0.095) }} title={card.item.cardName}>
+                {card.item.cardName}
+            </span>
+        )
+    ) : null;
+
     const common = {
         className: classes,
         style: { width, height, ...style },
@@ -64,6 +75,7 @@ export function GameCard({ card, width, faceDown, selected, selectable, dimmed, 
         return (
             <button type="button" {...common} onClick={onClick} aria-label={label} aria-pressed={selectable ? !!selected : undefined}>
                 {face}
+                {item}
                 {children}
             </button>
         );
@@ -71,6 +83,7 @@ export function GameCard({ card, width, faceDown, selected, selectable, dimmed, 
     return (
         <div {...common} role="img" aria-label={label}>
             {face}
+            {item}
             {children}
         </div>
     );
