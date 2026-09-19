@@ -4,8 +4,9 @@ import WebSocketContext from '@/utils/WebSocketContext';
 import { PLAYER_COLORS } from '@/utils/ClassInfo';
 import { appendChat, ChatPanel, type ChatMessage } from '../../common/ChatPanel';
 import { parseMessage, sendMessage } from '../../common/types';
-import { LanguageSwitch, useI18n } from '@/i18n';
-import { Avatar, SoundToggle, TimerRing } from '../../common/Widgets';
+import { useI18n } from '@/i18n';
+import { Avatar, TimerRing } from '../../common/Widgets';
+import { SettingsButton } from '../../common/SettingsButton';
 import tableBackground from '../../assets/ingame.png';
 import './Lobby.css';
 
@@ -51,7 +52,8 @@ function Lobby() {
     }, [me, navigate]);
 
     useEffect(() => {
-        if (!socket || !id) return;
+        const ws = socket;
+        if (!ws || !id) return;
         const handleMessage = (event: MessageEvent) => {
             const data = parseMessage(event);
             if (data?.type !== 'lobby') return;
@@ -88,9 +90,9 @@ function Lobby() {
             }
         };
         // Listen first so the join reply is never missed.
-        socket.addEventListener('message', handleMessage);
+        ws.addEventListener('message', handleMessage);
         sendMessage(socket, { type: 'lobby', subtype: 'join', payload: { lobbyId: Number(id) } });
-        return () => socket.removeEventListener('message', handleMessage);
+        return () => ws.removeEventListener('message', handleMessage);
     }, [id, socket, navigate]);
 
     const lobbyId = Number(id);
@@ -135,8 +137,7 @@ function Lobby() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span className="hts-chip hts-chip--muted">{t.lobby.playersChip(seats.length, totalSeats, minPlayers)}</span>
-                    <LanguageSwitch />
-                    <SoundToggle />
+                    <SettingsButton />
                 </div>
             </header>
 

@@ -36,12 +36,8 @@
     min-height: 0;
     display: flex;
     flex-wrap: wrap;
-    align-content: flex-start;
     gap: 32px;
     padding: 32px 40px;
-    /* When the panels wrap (narrow/short windows) the page must scroll so the
-       create form stays reachable instead of being clipped by the screen. */
-    overflow-y: auto;
 }
 .tavern-list { flex: 999 1 600px; min-width: 0; display: flex; flex-direction: column; gap: 20px; min-height: 0; }
 .tavern-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
@@ -72,7 +68,14 @@
 }
 .tavern-row:hover { transform: translateX(4px); border-color: rgba(233, 185, 73, 0.55); background: #1f2c31; }
 .tavern-row-num {
-    width: 56px;
+    width: auto;
+    min-width: 56px;
+    max-width: 150px;
+    padding: 0 10px;
+    box-sizing: border-box;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
     height: 56px;
     flex: none;
     border-radius: 14px;
@@ -128,22 +131,4 @@
     font-size: 14px;
     line-height: 1.4;
     color: var(--hts-gold-text);
-}
-
-@media (max-width: 900px) {
-    .tavern-screen { height: 100dvh; }
-    .tavern-header {
-        height: auto;
-        min-height: 64px;
-        flex-wrap: wrap;
-        gap: 10px 16px;
-        padding: 10px 16px;
-    }
-    .tavern-main { gap: 20px; padding: 20px 16px; }
-    .tavern-search { width: 100%; margin-left: 0; }
-    .tavern-create { flex-basis: 100%; max-width: none; }
-    .tavern-create-form { padding: 20px; }
-    .tavern-row { gap: 12px; padding: 12px 14px; }
-    .tavern-row-num { width: 44px; height: 44px; font-size: 22px; }
-    .tavern-row .hts-chip { display: none; }
 }

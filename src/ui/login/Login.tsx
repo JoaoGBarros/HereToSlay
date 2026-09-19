@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import WebSocketContext from '@/utils/WebSocketContext';
 import { CLASS_IDS, CLASS_INFO } from '@/utils/ClassInfo';
 import { parseMessage, sendMessage } from '../common/types';
-import { LanguageSwitch, useI18n } from '@/i18n';
-import { SoundToggle } from '../common/Widgets';
+import { useI18n } from '@/i18n';
+import { SettingsButton } from '../common/SettingsButton';
 import loginBackground from '../assets/login-background.png';
 import './Login.css';
 
@@ -16,7 +16,8 @@ function Login() {
     const { t } = useI18n();
 
     useEffect(() => {
-        if (!socket) return;
+        const ws = socket;
+        if (!ws) return;
         const handleMessage = (event: MessageEvent) => {
             const data = parseMessage(event);
             if (data?.type === 'auth' && data.subtype === 'login_success') {
@@ -24,8 +25,8 @@ function Login() {
                 navigate('/games');
             }
         };
-        socket.addEventListener('message', handleMessage);
-        return () => socket.removeEventListener('message', handleMessage);
+        ws.addEventListener('message', handleMessage);
+        return () => ws.removeEventListener('message', handleMessage);
     }, [socket, navigate]);
 
     function handleSubmit(e: React.FormEvent) {
@@ -42,7 +43,7 @@ function Login() {
             <img src={loginBackground} alt="" className="hts-screen-bg login-bg" />
             <div className="login-scrim" aria-hidden="true" />
 
-            <div className="login-sound"><LanguageSwitch /><SoundToggle /></div>
+            <div className="login-sound"><SettingsButton /></div>
 
             <main className="login-main hts-rise">
                 <div>

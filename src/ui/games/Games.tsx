@@ -3,9 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import WebSocketContext from '@/utils/WebSocketContext';
 import type { LobbyStatus } from './enum/StatusEnum';
 import { parseMessage, sendMessage } from '../common/types';
-import { LanguageSwitch, useI18n } from '@/i18n';
+import { useI18n } from '@/i18n';
 import type { Dict } from '@/i18n/pt';
-import { MotionToggle, SoundToggle } from '../common/Widgets';
+import { SettingsButton } from '../common/SettingsButton';
 import tableBackground from '../assets/ingame.png';
 import './Games.css';
 
@@ -84,7 +84,8 @@ function Games() {
     }, [user, navigate]);
 
     useEffect(() => {
-        if (!socket) return;
+        const ws = socket;
+        if (!ws) return;
         const handleMessage = (event: MessageEvent) => {
             const data = parseMessage(event);
             if (data?.type !== 'lobby') return;
@@ -94,9 +95,9 @@ function Games() {
                 navigate(`/lobby/${data.payload.lobbyId}`);
             }
         };
-        socket.addEventListener('message', handleMessage);
+        ws.addEventListener('message', handleMessage);
         sendMessage(socket, { type: 'lobby', subtype: 'list' });
-        return () => socket.removeEventListener('message', handleMessage);
+        return () => ws.removeEventListener('message', handleMessage);
     }, [socket, navigate]);
 
     const visible = lobbies.filter((lobby) => {
@@ -133,9 +134,7 @@ function Games() {
                     <span className="hts-chip hts-chip--gold">{t.tavern.badge}</span>
                 </div>
                 <div className="tavern-user">
-                    <LanguageSwitch />
-                    <MotionToggle />
-                    <SoundToggle />
+                    <SettingsButton />
                     <div className="tavern-user-chip">
                         <span className="tavern-user-initial" aria-hidden="true">{(user?.username || '?').charAt(0).toUpperCase()}</span>
                         <span style={{ fontWeight: 800 }}>{user?.username || t.tavern.guest}</span>
@@ -182,7 +181,7 @@ function Games() {
                             const full = lobby.playerAmount >= lobby.maxPlayers;
                             return (
                                 <li key={lobby.id} className="tavern-row">
-                                    <span className="tavern-row-num hts-display">{String(lobby.id).padStart(2, '0')}</span>
+                                    <span className="tavern-row-num hts-display" title={String(lobby.id)} style={{ fontSize: String(lobby.id).length > 4 ? 16 : 26 }}>{String(lobby.id).padStart(2, '0')}</span>
                                     <div className="tavern-row-info">
                                         <span className="tavern-row-name">{lobby.name}</span>
                                         <span className="hts-muted" style={{ fontSize: 14 }}>{t.tavern.players(lobby.playerAmount, lobby.maxPlayers)}</span>
