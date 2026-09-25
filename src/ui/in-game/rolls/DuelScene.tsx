@@ -86,8 +86,10 @@ function DuelScene({ duel, players, me, hand, onRoll, onPlayModifier, onPass }: 
     const challenger = players[duel.challengerId];
     const ownerTint = classInfo(owner?.leader)?.tint ?? '#6fb4e8';
     const winnerId = duel.winnerId ?? null;
-    const ownerPreview = preview?.targetId === duel.ownerId ? preview.value : null;
-    const challengerPreview = preview?.targetId === duel.challengerId ? preview.value : null;
+    // A Modifier preview only counts while the window is still open.
+    const live = duel.modifierWindow ? preview : null;
+    const ownerPreview = live?.targetId === duel.ownerId ? live.value : null;
+    const challengerPreview = live?.targetId === duel.challengerId ? live.value : null;
     const ownerTotal = duel.ownerRoll.total != null ? duel.ownerRoll.total + (ownerPreview ?? 0) : null;
     const challengerTotal = duel.challengerRoll.total != null ? duel.challengerRoll.total + (challengerPreview ?? 0) : null;
     const challengerName = challenger?.username ?? '';

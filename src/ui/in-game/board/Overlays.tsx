@@ -84,7 +84,7 @@ export function RulesSheet({ onClose }: { onClose: () => void }) {
                 ))}
                 <section>
                     <h3 className="rules-title">{t.overlays.termsTitle}</h3>
-                    <ul className="rules-list">{t.overlays.terms.map(([k, d]) => <li key={k}><b style={{ color: 'var(--hts-gold-text)' }}>{k}</b> — {d}</li>)}</ul>
+                    <ul className="rules-list">{t.overlays.terms.map(([k, d]) => <li key={k}><b style={{ color: 'var(--hts-gold-text)' }}>{k}</b>: {d}</li>)}</ul>
                 </section>
             </div>
         </Sheet>

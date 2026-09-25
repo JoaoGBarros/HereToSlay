@@ -21,7 +21,7 @@ import FxLayer from './fx/FxLayer';
 import ChallengeDock from './rolls/ChallengeDock';
 import DuelScene from './rolls/DuelScene';
 import MonsterScene from './rolls/MonsterScene';
-import RollDock from './rolls/RollDock';
+import HeroRollScene from './rolls/HeroRollScene';
 import InitiativeScreen from './screens/InitiativeScreen';
 import LeaderDraftScreen from './screens/LeaderDraftScreen';
 import { readLoggedUserId, useMatchSession } from './useMatchSession';
@@ -55,8 +55,6 @@ function InGame() {
     const [viewing, setViewing] = useState<string | null>(null);
     const [inspecting, setInspecting] = useState<Inspecting | null>(null);
     const [banner, setBanner] = useState<string | null>(null);
-    // Hero rolls keep the table visible: the Modifier window opens from the dock's button.
-    const [trayFor, setTrayFor] = useState<string | null>(null);
     const lastTurn = useRef('');
 
     useEffect(() => {
@@ -235,16 +233,15 @@ function InGame() {
                 <ChallengeDock pending={pending} players={players} me={me} onChallenge={actions.challenge} onPass={actions.pass} />
             )}
             {heroRoll && (
-                <RollDock
+                <HeroRollScene
                     key={heroRoll.rollId}
                     roll={heroRoll}
                     modifierWindow={modifierWindow}
                     players={players}
                     me={me}
-                    canModify={canModify}
-                    trayOpen={trayFor === heroRoll.rollId}
+                    hand={mine?.hand || []}
                     onRoll={actions.roll}
-                    onOpenModifiers={() => setTrayFor(trayFor === heroRoll.rollId ? null : heroRoll.rollId)}
+                    onPlayModifier={actions.playModifier}
                     onPass={actions.pass}
                 />
             )}
@@ -261,7 +258,7 @@ function InGame() {
                     onPass={actions.pass}
                 />
             )}
-            {canModify && modifierWindow && !duel && (attackRoll || trayFor === heroRoll?.rollId) && (
+            {canModify && modifierWindow && attackRoll && (
                 <ModifierPicker
                     window={modifierWindow}
                     rolls={windowRolls}

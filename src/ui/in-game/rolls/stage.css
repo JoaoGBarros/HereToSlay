@@ -165,107 +165,6 @@
 .duel3-verdict--blue { background: rgba(111, 180, 232, 0.16); color: #a9d3f3; border: 1px solid rgba(111, 180, 232, 0.5); }
 .duel3-verdict--ember { background: rgba(232, 105, 63, 0.16); color: #f0a88c; border: 1px solid rgba(232, 105, 63, 0.5); }
 
-/* ---------- Hero roll dock ---------- */
-.dock2 {
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 372px;
-    margin: 0 auto;
-    width: fit-content;
-    max-width: calc(100vw - 40px);
-    z-index: 30 !important;
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    padding: 16px 20px;
-    border-radius: 20px;
-    background: rgba(21, 30, 33, 0.98);
-    border: 2px solid #e9b949;
-    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
-}
-.dock2--win { border-color: #5cc28a; }
-.dock2--fail { border-color: #e8693f; }
-.dock2-card { flex: none; border-radius: 8px; }
-.dock2-info { width: 300px; display: flex; flex-direction: column; gap: 6px; }
-.dock2-who { font-weight: 800; font-size: 17px; }
-.dock2-what { font-size: 14px; color: #b9b2a3; }
-.dock2-strip { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 2px; margin-top: 4px; }
-.dock2-cell { height: 18px; border-radius: 4px; background: #3a474c; font-size: 10px; font-weight: 800; color: rgba(243, 234, 214, 0.7); display: grid; place-items: center; transition: transform 0.2s; }
-.dock2-cell--win { background: #5cc28a; color: #06180d; }
-.dock2-cell--mark { box-shadow: 0 0 0 2px #f3ead6; transform: scaleY(1.5); }
-.dock2-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
-.dock2-felt {
-    width: 300px;
-    height: 150px;
-    box-sizing: border-box;
-    border-radius: 14px;
-    background: #1d3a2c;
-    box-shadow: inset 0 0 24px rgba(0, 0, 0, 0.6);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-}
-.dock2-felt--row { flex-direction: row; gap: 14px; padding: 0 14px; }
-.dock2-need { font-size: 14px; font-weight: 700; color: #cfe6d8; }
-.dock2-roll {
-    padding: 12px 24px;
-    border: 0;
-    border-radius: 12px;
-    background: #e9b949;
-    color: #1a1206;
-    font: 800 22px var(--hts-font-display);
-    box-shadow: 0 5px 0 #7a5410;
-    cursor: pointer;
-}
-.dock2-live { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.dock2-total { font: 800 52px/1 var(--hts-font-display); }
-.dock2-total s { font-size: 30px; color: #8fb8a0; }
-.dock2-status { font-size: 12px; font-weight: 700; color: #cfe6d8; text-align: center; max-width: 150px; }
-.dock2-result {
-    width: 300px;
-    height: 150px;
-    box-sizing: border-box;
-    border-radius: 14px;
-    border: 2px solid;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-}
-.dock2-result--win { background: rgba(92, 194, 138, 0.14); border-color: #5cc28a; }
-.dock2-result--fail { background: rgba(232, 105, 63, 0.14); border-color: #e8693f; }
-.dock2-result-title { font: 800 40px/1 var(--hts-font-display); }
-.dock2-result--win .dock2-result-title { color: #9ee6bd; }
-.dock2-result--fail .dock2-result-title { color: #f0a88c; }
-.dock2-result-sub { font-size: 13px; font-weight: 700; color: #f3ead6; }
-.dock2-actions { display: flex; flex-direction: column; gap: 8px; }
-.dock2-mod {
-    height: 44px;
-    padding: 0 16px;
-    border: 0;
-    border-radius: 12px;
-    background: #e9b949;
-    color: #1a1206;
-    font-weight: 800;
-    font-size: 14px;
-    cursor: pointer;
-}
-.dock2-mod[aria-pressed='true'] { box-shadow: 0 0 0 3px rgba(233, 185, 73, 0.4); }
-.dock2-pass {
-    height: 38px;
-    border-radius: 12px;
-    border: 1px solid rgba(243, 234, 214, 0.25);
-    background: transparent;
-    color: #f3ead6;
-    font-weight: 800;
-    font-size: 14px;
-    cursor: pointer;
-}
-
 /* ---------- Targeting ---------- */
 .tg3-bg { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.25; filter: blur(3px); pointer-events: none; }
 .tg3-shade { position: absolute; inset: 0; background: rgba(8, 11, 13, 0.7); pointer-events: none; }
@@ -396,3 +295,71 @@
 .vic3-ghost:hover { background: rgba(243, 234, 214, 0.08); }
 .vic3-cta { height: 56px; padding: 0 32px; border: 0; border-radius: 14px; background: #e9b949; color: #1a1206; font: 800 24px var(--hts-font-display); box-shadow: 0 6px 0 #7a5410; cursor: pointer; }
 .vic3-cta:hover { background: #f3c75c; }
+
+/* ---------- Hero effect roll (scene) ---------- */
+.hero3 { background: #0d1315; }
+.hero3-glow { position: absolute; inset: 0; pointer-events: none; }
+.hero3-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 18px 6px 6px;
+    border-radius: 999px;
+    background: rgba(13, 19, 21, 0.88);
+    border: 1px solid;
+    font-weight: 800;
+    font-size: 15px;
+    color: #f3ead6;
+}
+.hero3-banner img { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; object-position: 50% 22%; }
+.hero3-card-slot { position: absolute; left: 70px; top: 82px; width: 250px; height: 350px; }
+.hero3-card { width: 250px; height: 350px; border-radius: 14px; transition: filter 0.5s, transform 0.5s cubic-bezier(.2, .8, .2, 1); }
+.hero3-card .hts-card { box-shadow: none; }
+.hero3-card--win { transform: scale(1.04) rotate(-1.5deg); }
+.hero3-card--fail { filter: grayscale(1) brightness(0.5); transform: rotate(1.5deg); }
+.hero3-stamp { position: absolute; left: 50%; top: 52%; transform: translate(-50%, -50%) rotate(-10deg); display: grid; place-items: center; animation: hero3-slam 0.45s cubic-bezier(.2, 1.4, .4, 1) both; }
+.hero3-stamp b { position: relative; padding: 10px 22px; border-radius: 14px; font: 800 46px/1 var(--hts-font-display); letter-spacing: 1px; border: 4px solid; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6); }
+.hero3-stamp--win b { background: #5cc28a; color: #06180d; border-color: #e8ffef; }
+.hero3-stamp--fail b { background: #e8693f; color: #1a0c06; border-color: #ffe3d6; }
+.hero3-rays { position: absolute; width: 0; height: 0; }
+.hero3-rays i { position: absolute; left: -3px; top: -170px; width: 6px; height: 120px; border-radius: 3px; background: linear-gradient(to top, rgba(158, 230, 189, 0), rgba(158, 230, 189, 0.85)); transform-origin: 3px 170px; animation: hero3-ray 0.9s ease-out both; }
+@keyframes hero3-slam { from { opacity: 0; transform: translate(-50%, -50%) rotate(-10deg) scale(2.4); } to { opacity: 1; transform: translate(-50%, -50%) rotate(-10deg) scale(1); } }
+@keyframes hero3-ray { from { opacity: 0; } 40% { opacity: 1; } to { opacity: 0.35; } }
+.hts-reduced-motion .hero3-stamp, .hts-reduced-motion .hero3-rays i { animation: none; }
+.hero3-mid { position: absolute; left: 360px; top: 92px; width: 430px; display: flex; flex-direction: column; gap: 16px; }
+.hero3-effect { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px; border-radius: 16px; background: #f3ead6; color: #2b2118; box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45); }
+.hero3-effect-label { font-size: 12px; font-weight: 800; letter-spacing: 1.3px; text-transform: uppercase; color: #7a5c2e; }
+.hero3-effect p { margin: 0; font-size: 19px; line-height: 1.4; font-weight: 700; }
+.hero3-roll { position: absolute; left: 830px; top: 92px; width: 560px; display: flex; flex-direction: column; gap: 22px; }
+.hero3-dice { display: flex; align-items: center; gap: 28px; min-height: 130px; }
+.hero3-roll-btn {
+    height: 96px;
+    padding: 0 40px;
+    border: 0;
+    border-radius: 20px;
+    background: #e9b949;
+    color: #1a1206;
+    font: 800 34px var(--hts-font-display);
+    box-shadow: 0 8px 0 #7a5410, 0 0 50px rgba(233, 185, 73, 0.4);
+    cursor: pointer;
+    animation: hts-glow 2.4s ease-in-out infinite;
+}
+.hero3-roll-btn:active { transform: translateY(4px); box-shadow: 0 4px 0 #7a5410; }
+.hero3-total { display: flex; flex-direction: column; gap: 4px; }
+.hero3-number { font: 800 128px/0.85 var(--hts-font-display); }
+.hero3-number--idle { color: #f3ead6; }
+.hero3-number--win { color: #9ee6bd; text-shadow: 0 0 40px rgba(92, 194, 138, 0.5); }
+.hero3-number--fail { color: #f0a88c; }
+.hero3-track { display: grid; grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 4px; }
+.hero3-cell { position: relative; height: 48px; border-radius: 8px; background: #2a3438; color: #8e897e; display: grid; place-items: center; font: 800 20px var(--hts-font-display); transition: transform 0.25s; }
+.hero3-cell--win { background: rgba(92, 194, 138, 0.28); color: #9ee6bd; }
+.hero3-cell--mark { background: #f3ead6; color: #1a1206; transform: translateY(-8px) scale(1.12); box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5); }
+.hero3-goal { position: absolute; top: -26px; left: 50%; transform: translateX(-50%); padding: 2px 8px; border-radius: 999px; background: #5cc28a; color: #06180d; font: 800 13px var(--hts-font-ui); font-style: normal; white-space: nowrap; }
+.hero3-status { align-self: flex-start; padding: 10px 18px; border-radius: 14px; font-weight: 800; font-size: 16px; }
+.hero3-status--idle { background: rgba(13, 19, 21, 0.85); color: #f3d48a; border: 1px solid rgba(233, 185, 73, 0.45); }
+.hero3-status--win { background: rgba(92, 194, 138, 0.16); color: #9ee6bd; border: 1px solid rgba(92, 194, 138, 0.5); }
+.hero3-status--fail { background: rgba(232, 105, 63, 0.16); color: #f0a88c; border: 1px solid rgba(232, 105, 63, 0.5); }
+/* Without a Modifier window the scene moves down to the middle of the screen. */
+.hero3-body { position: absolute; inset: 0; transform-origin: 50% 0; transition: transform 0.45s cubic-bezier(.2, .8, .2, 1); }
+.hero3-body--solo { transform: translateY(170px); }
+.hts-reduced-motion .hero3-body { transition: none; }

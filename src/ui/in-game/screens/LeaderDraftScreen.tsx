@@ -81,7 +81,7 @@ function LeaderDraftScreen({ players, me, turn, order, available, onChoose }: Le
                                 type="button"
                                 role="radio"
                                 aria-checked={selected}
-                                aria-label={`${CLASS_INFO[id].leaderName} — ${t.classes[id].label}${unavailable ? t.draft.unavailableSuffix : ''}`}
+                                aria-label={`${CLASS_INFO[id].leaderName}: ${t.classes[id].label}${unavailable ? t.draft.unavailableSuffix : ''}`}
                                 className={`draft-card ${selected ? 'draft-card--on' : ''} ${unavailable ? 'draft-card--off' : ''}`}
                                 onClick={() => preview(id)}
                             >

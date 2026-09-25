@@ -68,7 +68,7 @@ function CardDetails({ card, monster }: { card?: CardData | null; monster?: Mons
                 <div className="hts-inspector-keys">
                     <span className="hts-label">{t.inspect.keywords}</span>
                     {keywords.map((k) => (
-                        <span key={k}><b>{k}</b> — {t.engine.keywords[k]}</span>
+                        <span key={k}><b>{k}</b>: {t.engine.keywords[k]}</span>
                     ))}
                 </div>
             )}

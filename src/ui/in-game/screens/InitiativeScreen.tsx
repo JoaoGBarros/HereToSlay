@@ -102,7 +102,7 @@ function InitiativeScreen({ players, me, tieRolls, onRoll }: InitiativeScreenPro
                         return (
                             <li key={i} className={`prep-ladder-slot ${pid && i === 0 && allRolled ? 'prep-ladder-slot--first' : ''}`}>
                                 <span className="hts-display" style={{ fontSize: 22, color: 'var(--hts-dim)' }}>{i + 1}º</span>
-                                <span style={{ fontWeight: 800 }}>{pid ? players[pid].username : '—'}</span>
+                                <span style={{ fontWeight: 800 }}>{pid ? players[pid].username : '…'}</span>
                                 <span className="prep-ladder-tag">{pid ? (i === 0 && allRolled ? t.initiative.startsPlaying : players[pid].orderRoll) : t.initiative.waiting}</span>
                             </li>
                         );
