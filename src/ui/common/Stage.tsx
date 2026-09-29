@@ -1,11 +1,19 @@
-import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import ReactDOM from 'react-dom';
 
 export const STAGE_W = 1440;
 export const STAGE_H = 900;
 
-function fit(): number {
-    return Math.min(window.innerWidth / STAGE_W, window.innerHeight / STAGE_H);
+/** A column kept beside every full-screen scene (the match chat), so talking never stops. */
+export interface StageSideValue {
+    width: number;
+    node: ReactNode;
+}
+
+export const StageSide = createContext<StageSideValue | null>(null);
+
+function fit(sideWidth: number): number {
+    return Math.min((window.innerWidth - sideWidth) / STAGE_W, window.innerHeight / STAGE_H);
 }
 
 /**
@@ -19,17 +27,24 @@ export function Stage({ children, background = '#0d1315', label, className = '',
     className?: string;
     style?: CSSProperties;
 }) {
-    const [scale, setScale] = useState(fit);
+    const side = useContext(StageSide);
+    const sideWidth = side?.width ?? 0;
+    const [scale, setScale] = useState(() => fit(sideWidth));
     useEffect(() => {
-        const onResize = () => setScale(fit());
+        const onResize = () => setScale(fit(sideWidth));
+        onResize();
         window.addEventListener('resize', onResize);
         return () => window.removeEventListener('resize', onResize);
-    }, []);
+    }, [sideWidth]);
     return ReactDOM.createPortal(
         <div className={`stage-backdrop ${className}`} style={{ background }} role="dialog" aria-modal="true" aria-label={label}>
-            <div className="stage" style={{ width: STAGE_W, height: STAGE_H, transform: `translate(-50%, -50%) scale(${scale})`, ...style }}>
+            <div
+                className="stage"
+                style={{ width: STAGE_W, height: STAGE_H, left: `calc((100% - ${sideWidth}px) / 2)`, transform: `translate(-50%, -50%) scale(${scale})`, ...style }}
+            >
                 {children}
             </div>
+            {side && <div className="stage-side" style={{ width: sideWidth }}>{side.node}</div>}
         </div>,
         document.body,
     );

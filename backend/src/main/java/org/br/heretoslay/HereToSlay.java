@@ -54,9 +54,24 @@ public class HereToSlay extends WebSocketServer {
     @Override
     public void onClose(WebSocket conn, int code, String reason, boolean remote) {
         System.out.println("onClose");
+        Player player = authService.getPlayerByConnection(conn);
         // Forget the connection so a reloaded page can re-bind the same player
         // instead of state broadcasts resolving to this dead socket.
         authService.handleDisconnect(conn);
+        if (player != null) reportDisconnect(player.getId().toString());
+    }
+
+    /** Tells the engine the player dropped, for every match they are in; it gives them time to come back. */
+    private void reportDisconnect(String playerId) {
+        matchRosterCache.forEach((matchId, roster) -> {
+            if (!roster.contains(playerId)) return;
+            JSONObject notice = new JSONObject()
+                    .put("type", "match")
+                    .put("subtype", "player_disconnected")
+                    .put("id", Long.parseLong(matchId))
+                    .put("playerId", playerId);
+            producer.send(new ProducerRecord<>("game-actions-in", matchId, notice.toString()));
+        });
     }
 
     @Override

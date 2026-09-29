@@ -42,6 +42,8 @@ export interface PlayerData {
     protectedFromSteal: boolean;
     protectedFromDestroy: boolean;
     unchallengeable: boolean;
+    /** Why the player is out of the match (no_show, disconnected, surrender), or null while playing. */
+    leftReason?: string | null;
 }
 
 export type PlayersMap = Record<string, PlayerData>;
@@ -173,9 +175,15 @@ export interface MatchView {
     discardPile: CardData[];
     log: LogEntry[];
     idle: boolean;
+    /** Players who have opened the match (LOADING phase). */
+    loaded?: string[];
+    /** Players whose connection dropped and who still have time to come back. */
+    disconnected?: string[];
+    /** Time left on the current setup timer (loading, initiative, Party Leader). */
+    setupRemainingMs?: number;
     pending?: Pending;
     recent?: RecentResult;
-    winner?: { playerId: string; reason: 'monsters' | 'classes' };
+    winner?: { playerId: string | null; reason: 'monsters' | 'classes' | 'last_standing' | 'not_enough_players' };
 }
 
 export const EMPTY_VIEW: MatchView = {

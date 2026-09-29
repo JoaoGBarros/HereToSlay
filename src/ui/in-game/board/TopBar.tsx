@@ -1,6 +1,7 @@
 import { classInfo } from '@/utils/ClassInfo';
 import type { PlayersMap } from '../../common/types';
 import { useI18n } from '@/i18n';
+import SurrenderButton from './SurrenderButton';
 
 interface TopBarProps {
     matchId?: string;
@@ -15,9 +16,11 @@ interface TopBarProps {
     onToggleHistory: () => void;
     onOpenRules: () => void;
     onOpenSettings: () => void;
+    onSurrender: () => void;
+    canSurrender: boolean;
 }
 
-function TopBar({ matchId, round, drawPileCount, discardCount, players, order, turn, me, historyOpen, onToggleHistory, onOpenRules, onOpenSettings }: TopBarProps) {
+function TopBar({ matchId, round, drawPileCount, discardCount, players, order, turn, me, historyOpen, onToggleHistory, onOpenRules, onOpenSettings, onSurrender, canSurrender }: TopBarProps) {
     const { t } = useI18n();
     return (
         <header className="topbar">
@@ -35,7 +38,7 @@ function TopBar({ matchId, round, drawPileCount, discardCount, players, order, t
                     const info = classInfo(p.leader);
                     const active = pid === turn;
                     return (
-                        <li key={pid} className={`topbar-pill ${active ? 'topbar-pill--active' : ''}`} aria-current={active ? 'true' : undefined}>
+                        <li key={pid} className={`topbar-pill ${active ? 'topbar-pill--active' : ''} ${p.leftReason ? 'topbar-pill--left' : ''}`} aria-current={active ? 'true' : undefined}>
                             {info ? <img src={info.leaderArt} alt="" /> : <span className="topbar-pill-dot" />}
                             <span>{p.username}{pid === me ? t.common.youSuffix : ''}</span>
                             {i < order.length - 1 && <span className="topbar-arrow" aria-hidden="true">›</span>}
@@ -51,6 +54,7 @@ function TopBar({ matchId, round, drawPileCount, discardCount, players, order, t
                 <button type="button" className="hts-icon-btn" aria-label={t.board.rules} title={t.board.rules} onClick={onOpenRules}>
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z" /><path d="M4 19V5" /></svg>
                 </button>
+                {canSurrender && <SurrenderButton onSurrender={onSurrender} />}
                 <button type="button" className="hts-icon-btn" aria-label={t.engine.board.settings} title={t.engine.board.settings} onClick={onOpenSettings}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                         <circle cx="12" cy="12" r="3" />

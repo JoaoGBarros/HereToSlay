@@ -17,6 +17,8 @@ export const TAG_STYLE: Record<string, { bg: string; fg: string; mark: string }>
     FOCUSED: { bg: '#d9474f', fg: '#1a0607', mark: '◎' },
     FOCUSING: { bg: '#d9474f', fg: '#1a0607', mark: '➶' },
     TURNING_POINT: { bg: '#e9b949', fg: '#1a1206', mark: 'TP' },
+    CHOICE: { bg: '#6fb4e8', fg: '#06131d', mark: '➜' },
+    PRESENCE: { bg: '#b9b2a3', fg: '#0d1315', mark: '⏻' },
     CHAIN_REACTION: { bg: '#e8693f', fg: '#1a0c06', mark: '⚡' },
     FOCUSED_TARGET: { bg: '#d9474f', fg: '#1a0607', mark: '◎' },
 };

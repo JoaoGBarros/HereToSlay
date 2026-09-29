@@ -320,7 +320,7 @@
 .modtray-hint { margin: 0; padding: 14px; border-radius: 14px; background: var(--hts-surface); font-size: 15px; line-height: 1.45; color: #cfc6b3; }
 
 /* Match-wide Kafka Streams highlights */
-.ks-toasts { position: fixed; top: 68px; left: 50%; transform: translateX(-50%); z-index: 820; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.ks-toasts { position: fixed; top: 76px; right: 356px; align-items: flex-end; z-index: 960; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
 .ks-toast {
     display: flex;
     align-items: center;
@@ -335,3 +335,42 @@
     color: var(--hts-text);
 }
 .ks-toast-mark { display: grid; place-items: center; min-width: 34px; height: 34px; padding: 0 6px; border-radius: 10px; font: 800 16px var(--hts-font-display); }
+
+/* ---------- Presence and surrender ---------- */
+.surrender-btn { color: #f0a88c; }
+.surrender-btn--floating { position: fixed; top: 16px; right: 16px; z-index: 50; width: auto; padding: 0 14px; gap: 8px; display: flex; font: 800 14px var(--hts-font-ui); }
+.setup-clock {
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 16px 6px 6px;
+    border-radius: 999px;
+    background: rgba(13, 19, 21, 0.9);
+    border: 1px solid rgba(233, 185, 73, 0.45);
+    font-weight: 800;
+    font-size: 15px;
+    color: #f3d48a;
+}
+.plaque--left { opacity: 0.45; filter: grayscale(0.8); }
+.presence-badge {
+    position: absolute;
+    left: 10px;
+    top: -12px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: #3a474c;
+    color: #f3ead6;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    animation: hts-glow 2.4s ease-in-out infinite;
+}
+.presence-badge--left { background: #2a3438; color: #b9b2a3; animation: none; }
+.topbar-pill--left { opacity: 0.4; text-decoration: line-through; }
+.left-banner { display: flex; align-items: center; gap: 14px; z-index: 970; }

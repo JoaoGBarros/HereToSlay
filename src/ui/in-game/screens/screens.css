@@ -123,3 +123,8 @@
 .draft-skill { padding: 18px; border-radius: 16px; background: var(--hts-parchment); color: var(--hts-parchment-ink); }
 .draft-skill p { margin: 6px 0 0; font-size: 21px; line-height: 1.4; font-weight: 700; }
 .draft-notes { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; line-height: 1.45; color: #cfc6b3; }
+
+/* Loading: one light per player, gold until they arrive, green when ready. */
+.loading-dot { width: 26px; height: 26px; border-radius: 50%; background: #e9b949; box-shadow: 0 0 0 6px rgba(233, 185, 73, 0.18); animation: hts-glow 1.6s ease-in-out infinite; }
+.loading-dot--ready { background: #5cc28a; box-shadow: 0 0 0 6px rgba(92, 194, 138, 0.2); animation: none; }
+.hts-reduced-motion .loading-dot { animation: none; }

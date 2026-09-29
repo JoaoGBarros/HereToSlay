@@ -363,3 +363,26 @@
 .hero3-body { position: absolute; inset: 0; transform-origin: 50% 0; transition: transform 0.45s cubic-bezier(.2, .8, .2, 1); }
 .hero3-body--solo { transform: translateY(170px); }
 .hts-reduced-motion .hero3-body { transition: none; }
+
+/* The match chat stays beside every full-screen scene. */
+.stage-side {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    box-sizing: border-box;
+    padding: 16px 16px 16px 0;
+    display: flex;
+    z-index: 2;
+}
+.stage-side .chat { flex: 1; }
+
+/* Watching someone else choose: same screen, read-only. */
+.tg3-watching { align-self: flex-start; padding: 5px 12px; border-radius: 999px; background: rgba(233, 185, 73, 0.16); border: 1px solid rgba(233, 185, 73, 0.5); color: #f3d48a; font-size: 13px; font-weight: 800; }
+.tg3-waiting { display: flex; align-items: center; height: 56px; padding: 0 24px; border-radius: 14px; border: 1px dashed rgba(233, 185, 73, 0.6); color: #f3d48a; font: 800 18px var(--hts-font-ui); }
+.tg3 button:disabled { cursor: default; }
+.tg3 .tg3-hero:disabled:hover, .tg3 .tg3-player:disabled:hover { transform: none; }
+.tg3 .tg3-hero--on:disabled { transform: translateY(-8px); }
+
+/* A match that ended without a winner. */
+.vic3-cancel { position: absolute; left: 120px; top: 260px; width: 900px; display: flex; flex-direction: column; gap: 20px; }

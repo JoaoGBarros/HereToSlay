@@ -70,10 +70,11 @@ interface OpponentRailProps {
     ids: string[];
     turn: string;
     tags: Record<string, PlayerTag[]>;
+    disconnected: string[];
     onOpen: (playerId: string) => void;
 }
 
-function OpponentRail({ players, ids, turn, tags, onOpen }: OpponentRailProps) {
+function OpponentRail({ players, ids, turn, tags, disconnected, onOpen }: OpponentRailProps) {
     const { t } = useI18n();
     if (ids.length === 0) return null;
     return (
@@ -89,7 +90,7 @@ function OpponentRail({ players, ids, turn, tags, onOpen }: OpponentRailProps) {
                     <button
                         key={pid}
                         type="button"
-                        className={`plaque ${pid === turn ? 'plaque--turn' : ''} ${threat ? 'plaque--threat' : ''}`}
+                        className={`plaque ${pid === turn ? 'plaque--turn' : ''} ${threat ? 'plaque--threat' : ''} ${p.leftReason ? 'plaque--left' : ''}`}
                         onClick={() => onOpen(pid)}
                         data-fx-player={pid}
                         aria-label={t.board.viewParty(p.username)}
@@ -121,6 +122,11 @@ function OpponentRail({ players, ids, turn, tags, onOpen }: OpponentRailProps) {
                             <SlainMonsters slain={slain} />
                         </div>
                         <PlayerTags tags={tags[pid] || []} />
+                        {(p.leftReason || disconnected.includes(pid)) && (
+                            <span className={`presence-badge ${p.leftReason ? 'presence-badge--left' : ''}`}>
+                                {p.leftReason ? t.engine.presence.badgeLeft : t.engine.presence.badgeOffline}
+                            </span>
+                        )}
                         {threat && <span className="plaque-threat">{slain.length >= 2 ? t.board.oneMonsterLeft : t.board.classesShort(have.size)}</span>}
                     </button>
                 );

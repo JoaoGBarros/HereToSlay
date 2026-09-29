@@ -38,16 +38,38 @@ public class MatchService {
         match.publishState();
     }
 
-    /** The gateways learn who is in each match from this topic, to deliver match-wide monitoring alerts. */
-    private void publishRoster(Match match) {
+    /** How often running matches say they are still alive, so the lobby can tell them from lost ones. */
+    private static final long ROSTER_HEARTBEAT_MS = 5 * 60_000;
+
+    /**
+     * Who is in each match. The gateways use it to deliver match-wide alerts; the lobby uses
+     * `active` (players who have not left) to keep each player at one table at a time.
+     */
+    public void publishRoster(Match match) {
         JSONObject players = new JSONObject();
         match.getPlayers().forEach((playerId, p) -> players.put(playerId, new JSONObject().put("username", p.getUsername())));
-        JSONObject roster = new JSONObject().put("matchId", match.getMatchId()).put("players", players);
+        JSONObject roster = new JSONObject()
+                .put("matchId", match.getMatchId())
+                .put("players", players)
+                .put("active", new JSONArray(match.activePlayerIds()))
+                .put("finished", match.isFinished())
+                .put("ts", System.currentTimeMillis());
         this.kafkaProducer.send(new ProducerRecord<>("match-state-store", match.getMatchId().toString(), roster.toString()));
+    }
+
+    private void startRosterHeartbeat() {
+        java.util.concurrent.Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(() -> {
+            try {
+                matches.values().stream().filter(m -> !m.isFinished()).forEach(this::publishRoster);
+            } catch (RuntimeException e) {
+                e.printStackTrace();
+            }
+        }, ROSTER_HEARTBEAT_MS, ROSTER_HEARTBEAT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
     }
 
     private MatchService() {
         initKafka();
+        startRosterHeartbeat();
         new Thread(this::startKafkaConsumer).start();
     }
 
@@ -112,9 +134,18 @@ public class MatchService {
 
         Match match = matches.get(id);
         if (match == null) return;
+        // Any message from the player shows they are connected; the gateway's drop notice is the exception.
+        if (!type.equals("player_disconnected")) match.markSeen(playerId);
         switch (type) {
             case "get_match_state":
+                match.markLoaded(playerId);
                 match.publishState();
+                break;
+            case "player_disconnected":
+                match.markDisconnected(playerId);
+                break;
+            case "surrender":
+                match.surrender(playerId);
                 break;
             case "order_selection":
                 int roll = json.getJSONObject("payload").getInt("roll");

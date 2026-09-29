@@ -35,12 +35,12 @@ import java.util.function.Consumer;
  */
 public class Match implements Table {
 
-    public enum Phase { ORDER_SELECTION, PARTY_LEADER_SELECTION, GAMEPLAY, FINISHED }
+    public enum Phase { LOADING, ORDER_SELECTION, PARTY_LEADER_SELECTION, GAMEPLAY, FINISHED }
 
     private static final long CHOICE_MS = 60_000;
     private static final long CHALLENGE_WINDOW_MS = 8_000;
-    private static final long MODIFIER_WINDOW_MS = 10_000;
-    private static final long MODIFIER_EXTEND_MS = 3_000;
+    private static final long MODIFIER_WINDOW_MS = 15_000;
+    private static final long MODIFIER_EXTEND_MS = 5_000;
     private static final long ROLL_WAIT_MS = 25_000;
     private static final int STARTING_HAND = 5;
     private static final int REDRAW_HAND = 5;
@@ -48,13 +48,25 @@ public class Match implements Table {
     private static final int MONSTERS_TO_WIN = 3;
     private static final int CLASSES_TO_WIN = 6;
     private static final int LOG_LIMIT = 80;
+    /** How long the match waits for everyone to open it before starting without the missing players. */
+    private static final long LOADING_MS = 30_000;
+    /** Initiative rolls itself for whoever has not rolled. */
+    private static final long ORDER_ROLL_MS = 10_000;
+    /** A Party Leader is drawn at random for whoever has not picked. */
+    private static final long LEADER_PICK_MS = 20_000;
+    /** How long a dropped player has to come back before leaving the match. */
+    private static final long DISCONNECT_GRACE_MS = 60_000;
 
     private final Long matchId;
     private final Map<String, PlayerState> players = new LinkedHashMap<>();
     private final List<String> pickOrder = new ArrayList<>();
     private final List<String> turnOrder = new ArrayList<>();
     private final List<String> availableLeaders = new ArrayList<>();
-    private Phase phase = Phase.ORDER_SELECTION;
+    private Phase phase = Phase.LOADING;
+    private final Set<String> loaded = new HashSet<>();
+    private final Map<String, Long> disconnectedUntil = new LinkedHashMap<>();
+    private long setupToken;
+    private long setupDeadline;
     private int leaderPickIndex;
     private int turnIndex;
     private int round;
@@ -92,6 +104,9 @@ public class Match implements Table {
         void toAll(Long matchId, String message);
 
         void toPlayers(Long matchId, List<String> playerIds, String message);
+
+        /** Who is still playing changed (someone left, or the match ended). */
+        default void rosterChanged(Match match) { }
     }
 
     /** A Hero, Item or Magic card on its way to the table. */
@@ -158,6 +173,11 @@ public class Match implements Table {
             public void toPlayers(Long id, List<String> playerIds, String message) {
                 MatchService.getInstance().publishToPlayers(id, playerIds, message);
             }
+
+            @Override
+            public void rosterChanged(Match match) {
+                MatchService.getInstance().publishRoster(match);
+            }
         });
     }
 
@@ -175,9 +195,17 @@ public class Match implements Table {
         }
         drawPile = CardCatalog.shuffledDeck();
         monsterDeck = MonsterCatalog.shuffledDeck();
+        scheduleSetup(LOADING_MS, this::startWithoutMissingPlayers);
     }
 
     public Long getMatchId() { return matchId; }
+
+    public synchronized boolean isFinished() { return phase == Phase.FINISHED; }
+
+    /** Players who have not left the match. */
+    public synchronized List<String> activePlayerIds() {
+        return active().stream().map(PlayerState::getId).toList();
+    }
 
     @JsonIgnore
     public Map<String, PlayerState> getPlayers() { return players; }
@@ -187,24 +215,58 @@ public class Match implements Table {
     // =====================================================================
 
     public synchronized void processOrderSelectionRoll(String playerId, int ignoredClientRoll) {
-        PlayerState p = players.get(playerId);
-        if (phase != Phase.ORDER_SELECTION || p == null || p.getOrderRoll() != null) return;
-        int[] dice = Roll.throwDice();
-        p.setOrderRoll(dice[0] + dice[1], dice);
-        if (players.values().stream().allMatch(x -> x.getOrderRoll() != null)) finishOrderSelection();
+        rollInitiative(playerId);
         publishState();
     }
 
     public synchronized boolean choosePartyLeader(String playerId, String leader) {
-        if (phase != Phase.PARTY_LEADER_SELECTION) return false;
-        if (!playerId.equals(pickOrder.get(leaderPickIndex)) || !availableLeaders.contains(leader)) return false;
-        players.get(playerId).setLeader(HeroClass.valueOf(leader));
-        availableLeaders.remove(leader);
-        log("leader_chosen", new JSONObject().put("actor", playerId).put("leader", leader));
-        leaderPickIndex++;
-        if (leaderPickIndex >= pickOrder.size()) startGame();
+        boolean picked = pickLeader(playerId, leader);
         publishState();
-        return true;
+        return picked;
+    }
+
+    /** The player opened the match screen. Once everyone has, the initiative roll begins. */
+    public synchronized void markLoaded(String playerId) {
+        markSeen(playerId);
+        PlayerState p = players.get(playerId);
+        if (p == null || p.isGone()) return;
+        loaded.add(playerId);
+        if (phase == Phase.LOADING && active().stream().allMatch(x -> loaded.contains(x.getId()))) beginOrderSelection();
+    }
+
+    /** Any message from the player: if they had dropped, they are back in time. */
+    public synchronized void markSeen(String playerId) {
+        if (disconnectedUntil.remove(playerId) == null) return;
+        broadcast(event("player_reconnected", new JSONObject().put("playerId", playerId)));
+        publishState();
+    }
+
+    /** The gateway lost the player's connection: they have a grace period to come back. */
+    public synchronized void markDisconnected(String playerId) {
+        PlayerState p = players.get(playerId);
+        if (p == null || p.isGone() || phase == Phase.FINISHED) return;
+        long until = System.currentTimeMillis() + DISCONNECT_GRACE_MS;
+        disconnectedUntil.put(playerId, until);
+        broadcast(event("player_disconnected", new JSONObject().put("playerId", playerId).put("graceMs", DISCONNECT_GRACE_MS)));
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                synchronized (Match.this) {
+                    Long current = disconnectedUntil.get(playerId);
+                    if (current == null || current != until) return;
+                    disconnectedUntil.remove(playerId);
+                    removePlayer(playerId, "disconnected");
+                    publishState();
+                }
+            }
+        }, DISCONNECT_GRACE_MS);
+        publishState();
+    }
+
+    /** The player gives up: they leave the match right away and the others carry on. */
+    public synchronized void surrender(String playerId) {
+        removePlayer(playerId, "surrender");
+        publishState();
     }
 
     public synchronized void challengeHero(String playerId) {
@@ -226,7 +288,7 @@ public class Match implements Table {
     }
 
     public synchronized void performAction(String playerId, String action, JSONObject json) {
-        if (phase != Phase.GAMEPLAY || !players.containsKey(playerId)) return;
+        if (phase != Phase.GAMEPLAY || !players.containsKey(playerId) || players.get(playerId).isGone()) return;
         JSONObject payload = json.optJSONObject("payload");
         if (payload == null) payload = new JSONObject();
         try {
@@ -270,18 +332,98 @@ public class Match implements Table {
     // Setup
     // =====================================================================
 
+    /** Players still in the match. */
+    private List<PlayerState> active() {
+        return players.values().stream().filter(p -> !p.isGone()).toList();
+    }
+
+    /** Timers for the setup phases: only the latest one counts. */
+    private void scheduleSetup(long delayMs, Runnable task) {
+        long token = ++setupToken;
+        setupDeadline = System.currentTimeMillis() + delayMs;
+        timer.schedule(new TimerTask() {
+            @Override
+            public void run() {
+                synchronized (Match.this) {
+                    if (token != setupToken || phase == Phase.FINISHED || phase == Phase.GAMEPLAY) return;
+                    try {
+                        task.run();
+                    } catch (RuntimeException e) {
+                        e.printStackTrace();
+                    }
+                    publishState();
+                }
+            }
+        }, delayMs);
+    }
+
+    private void startWithoutMissingPlayers() {
+        if (phase != Phase.LOADING) return;
+        for (PlayerState p : new ArrayList<>(active())) {
+            if (!loaded.contains(p.getId())) removePlayer(p.getId(), "no_show");
+        }
+        if (phase == Phase.LOADING) beginOrderSelection();
+    }
+
+    private void beginOrderSelection() {
+        phase = Phase.ORDER_SELECTION;
+        scheduleSetup(ORDER_ROLL_MS, this::rollForEveryoneMissing);
+    }
+
+    private void rollForEveryoneMissing() {
+        if (phase != Phase.ORDER_SELECTION) return;
+        for (PlayerState p : new ArrayList<>(active())) {
+            if (phase == Phase.ORDER_SELECTION && p.getOrderRoll() == null) rollInitiative(p.getId());
+        }
+    }
+
+    private void rollInitiative(String playerId) {
+        PlayerState p = players.get(playerId);
+        if (phase != Phase.ORDER_SELECTION || p == null || p.isGone() || p.getOrderRoll() != null) return;
+        int[] dice = Roll.throwDice();
+        p.setOrderRoll(dice[0] + dice[1], dice);
+        if (active().stream().allMatch(x -> x.getOrderRoll() != null)) finishOrderSelection();
+    }
+
+    private boolean pickLeader(String playerId, String leader) {
+        if (phase != Phase.PARTY_LEADER_SELECTION || leaderPickIndex >= pickOrder.size()) return false;
+        if (!playerId.equals(pickOrder.get(leaderPickIndex)) || !availableLeaders.contains(leader)) return false;
+        players.get(playerId).setLeader(HeroClass.valueOf(leader));
+        availableLeaders.remove(leader);
+        log("leader_chosen", new JSONObject().put("actor", playerId).put("leader", leader));
+        leaderPickIndex++;
+        nextLeaderPick();
+        return true;
+    }
+
+    /** Moves past players who left; starts the game after the last pick, else gives the next picker their time. */
+    private void nextLeaderPick() {
+        while (leaderPickIndex < pickOrder.size() && players.get(pickOrder.get(leaderPickIndex)).isGone()) leaderPickIndex++;
+        if (leaderPickIndex >= pickOrder.size()) {
+            startGame();
+            return;
+        }
+        scheduleSetup(LEADER_PICK_MS, () -> {
+            if (phase != Phase.PARTY_LEADER_SELECTION || availableLeaders.isEmpty()) return;
+            String picker = pickOrder.get(leaderPickIndex);
+            pickLeader(picker, availableLeaders.get(new java.security.SecureRandom().nextInt(availableLeaders.size())));
+        });
+    }
+
     private void finishOrderSelection() {
+        List<PlayerState> rolled = active();
         Set<Integer> rolls = new HashSet<>();
-        players.values().forEach(p -> rolls.add(p.getOrderRoll()));
-        if (rolls.size() < players.size()) {
+        rolled.forEach(p -> rolls.add(p.getOrderRoll()));
+        if (rolls.size() < rolled.size()) {
             JSONObject previous = new JSONObject();
-            players.values().forEach(p -> previous.put(p.getId(), p.getOrderRoll()));
-            players.values().forEach(p -> p.setOrderRoll(null, null));
+            rolled.forEach(p -> previous.put(p.getId(), p.getOrderRoll()));
+            rolled.forEach(p -> p.setOrderRoll(null, null));
             broadcast(event("order_selection_tie", new JSONObject().put("rolls", previous)));
+            scheduleSetup(ORDER_ROLL_MS, this::rollForEveryoneMissing);
             return;
         }
         pickOrder.clear();
-        players.values().stream()
+        rolled.stream()
                 .sorted((a, b) -> Integer.compare(b.getOrderRoll(), a.getOrderRoll()))
                 .forEach(p -> pickOrder.add(p.getId()));
         // Whoever picks their Party Leader last goes first; play continues in pick order.
@@ -291,9 +433,12 @@ public class Match implements Table {
         phase = Phase.PARTY_LEADER_SELECTION;
         leaderPickIndex = 0;
         broadcast(event("order_finalized", new JSONObject().put("turnOrder", new JSONArray(turnOrder))));
+        nextLeaderPick();
     }
 
     private void startGame() {
+        setupToken++;
+        turnOrder.removeIf(id -> players.get(id).isGone());
         for (String id : turnOrder) {
             for (int i = 0; i < STARTING_HAND; i++) drawRaw(players.get(id));
         }
@@ -433,11 +578,98 @@ public class Match implements Table {
             return;
         }
         p.onTurnEnd();
-        turnIndex = (turnIndex + 1) % turnOrder.size();
-        if (turnIndex == 0) round++;
+        advanceTurn();
         current().onTurnStart();
         broadcast(new JSONObject().put("type", "animation").put("subtype", "end_turn").toString());
         log("turn_start", new JSONObject().put("actor", current().getId()).put("round", round));
+    }
+
+    /** Next seat in turn order, skipping anyone who left the match. */
+    private void advanceTurn() {
+        for (int i = 0; i < turnOrder.size(); i++) {
+            turnIndex = (turnIndex + 1) % turnOrder.size();
+            if (turnIndex == 0) round++;
+            if (!current().isGone()) return;
+        }
+    }
+
+    /**
+     * Takes a player out of the match (didn't load, dropped for too long, or surrendered). They stay
+     * in the player list so effects already in motion never lose track of them, but turns, targets,
+     * Challenges and Modifiers skip them, their cards go to the discard pile and whatever was waiting
+     * on them resolves by itself. The last player standing wins.
+     */
+    private void removePlayer(String playerId, String reason) {
+        PlayerState p = players.get(playerId);
+        if (p == null || p.isGone() || phase == Phase.FINISHED) return;
+        p.leave(reason);
+        disconnectedUntil.remove(playerId);
+        log("left", new JSONObject().put("actor", playerId).put("reason", reason));
+        output.rosterChanged(this);
+        broadcast(event("player_left", new JSONObject().put("playerId", playerId).put("reason", reason)));
+
+        List<PlayerState> remaining = active();
+        if (remaining.size() < 2) {
+            // Before the game starts nobody wins by default; once it is on, the last one standing does.
+            if (phase == Phase.LOADING || remaining.isEmpty()) finish(null, "not_enough_players");
+            else finish(remaining.get(0).getId(), "last_standing");
+            return;
+        }
+        switch (phase) {
+            case LOADING -> {
+                if (!remaining.isEmpty() && remaining.stream().allMatch(x -> loaded.contains(x.getId()))) beginOrderSelection();
+            }
+            case ORDER_SELECTION -> {
+                if (remaining.stream().allMatch(x -> x.getOrderRoll() != null)) finishOrderSelection();
+            }
+            case PARTY_LEADER_SELECTION -> {
+                if (leaderPickIndex < pickOrder.size() && pickOrder.get(leaderPickIndex).equals(playerId)) nextLeaderPick();
+            }
+            case GAMEPLAY -> leaveGameplay(p);
+            default -> { }
+        }
+    }
+
+    private void leaveGameplay(PlayerState p) {
+        String playerId = p.getId();
+        // Whatever was waiting on them resolves on its own.
+        if (choice != null && choice.getChooserId().equals(playerId)) autoAnswer(choice);
+        if (challengeWindow != null && challengeWindow.play.ownerId.equals(playerId)) {
+            // A card they were playing never resolves.
+            challengeWindow.play.blocked = true;
+            challengeWindow = null;
+            timerToken++;
+            waiting = false;
+        }
+        if (challengeWindow != null && challengeWindow.eligible.contains(playerId)) pass(playerId);
+        if (roll != null && roll.getRollerId().equals(playerId) && !roll.isRolled()) rollDice(playerId);
+        if (duel != null) {
+            if (duel.ownerRoll.getRollerId().equals(playerId) && !duel.ownerRoll.isRolled()) rollDice(playerId);
+            if (duel != null && duel.challengerRoll.getRollerId().equals(playerId) && !duel.challengerRoll.isRolled()) rollDice(playerId);
+        }
+        // Their cards leave the table.
+        new ArrayList<>(p.getHand()).forEach(this::discard);
+        p.getHand().clear();
+        for (GameCard hero : new ArrayList<>(p.getParty())) {
+            p.getParty().remove(hero);
+            discard(hero);
+        }
+        p.getSlain().clear();
+        // Without their Modifiers the window may have nobody left to wait for.
+        if (modifierWindow != null) closeModifierWindowIfAllPassed();
+        // On their turn: no points left, so the turn passes as soon as nothing is pending.
+        if (current() == p) p.spend(p.getActionPoints());
+        pump();
+    }
+
+    private void autoAnswer(Choice c) {
+        if (c.getOptions().stream().anyMatch(o -> "no".equals(o.optString("id")))) {
+            answer(c, List.of("no"));
+            return;
+        }
+        List<JSONObject> shuffled = new ArrayList<>(c.getOptions());
+        Collections.shuffle(shuffled);
+        answer(c, shuffled.subList(0, Math.max(c.getMin(), 0)).stream().map(o -> o.getString("id")).toList());
     }
 
     private void finish(String playerId, String reason) {
@@ -452,8 +684,10 @@ public class Match implements Table {
         roll = null;
         modifierWindow = null;
         timerToken++;
-        log("won", new JSONObject().put("actor", playerId).put("reason", reason));
-        broadcast(event("match_finished", new JSONObject().put("winner", playerId).put("reason", reason)));
+        setupToken++;
+        if (playerId != null) log("won", new JSONObject().put("actor", playerId).put("reason", reason));
+        broadcast(event("match_finished", new JSONObject().put("winner", playerId == null ? JSONObject.NULL : playerId).put("reason", reason)));
+        output.rosterChanged(this);
     }
 
     // =====================================================================
@@ -562,6 +796,9 @@ public class Match implements Table {
         duel = new Duel(play, challengerId, ownerRoll, challengerRoll);
         suspend();
         schedule(ROLL_WAIT_MS, this::autoRollPending);
+        // Someone who already left rolls at once, so the duel never waits on them.
+        if (players.get(play.ownerId).isGone()) rollDice(play.ownerId);
+        if (duel != null && players.get(challengerId).isGone()) rollDice(challengerId);
     }
 
     private void resolveDuel() {
@@ -871,19 +1108,26 @@ public class Match implements Table {
             return;
         }
         Choice c = new Choice(newId(), chooserId, prompt, params, min, max, options, source, onAnswer);
+        if (players.get(chooserId) == null || players.get(chooserId).isGone()) {
+            List<JSONObject> shuffled = new ArrayList<>(options);
+            Collections.shuffle(shuffled);
+            onAnswer.accept(shuffled.subList(0, Math.max(min, 0)).stream().map(o -> o.getString("id")).toList());
+            return;
+        }
         c.setDeadline(System.currentTimeMillis() + CHOICE_MS);
         choice = c;
         suspend();
         schedule(CHOICE_MS, () -> {
-            if (choice != c) return;
-            List<JSONObject> shuffled = new ArrayList<>(options);
-            Collections.shuffle(shuffled);
-            answer(c, shuffled.subList(0, Math.max(min, 0)).stream().map(o -> o.getString("id")).toList());
+            if (choice == c) autoAnswer(c);
         });
     }
 
     @Override
     public void confirm(String chooserId, String prompt, JSONObject params, GameCard source, Consumer<Boolean> onAnswer) {
+        if (players.get(chooserId) == null || players.get(chooserId).isGone()) {
+            onAnswer.accept(false);
+            return;
+        }
         List<JSONObject> options = List.of(new JSONObject().put("id", "yes"), new JSONObject().put("id", "no"));
         Choice c = new Choice(newId(), chooserId, prompt, params, 1, 1, options, source, sel -> onAnswer.accept("yes".equals(sel.get(0))));
         c.setDeadline(System.currentTimeMillis() + CHOICE_MS);
@@ -928,7 +1172,10 @@ public class Match implements Table {
         List<PlayerState> result = new ArrayList<>();
         List<String> order = turnOrder.isEmpty() ? new ArrayList<>(players.keySet()) : turnOrder;
         int start = order.indexOf(id);
-        for (int i = 1; i < order.size(); i++) result.add(players.get(order.get((start + i) % order.size())));
+        for (int i = 1; i < order.size(); i++) {
+            PlayerState other = players.get(order.get((start + i) % order.size()));
+            if (!other.isGone()) result.add(other);
+        }
         return result;
     }
 
@@ -1187,11 +1434,14 @@ public class Match implements Table {
                 .put("drawPileCount", drawPile.size())
                 .put("discardPile", discard)
                 .put("log", new JSONArray(log))
-                .put("idle", idle());
+                .put("idle", idle())
+                .put("loaded", new JSONArray(loaded))
+                .put("disconnected", new JSONArray(disconnectedUntil.keySet()));
+        if (phase != Phase.GAMEPLAY && phase != Phase.FINISHED) state.put("setupRemainingMs", Math.max(0, setupDeadline - now));
         JSONObject pending = pendingFor(viewer, now);
         if (pending != null) state.put("pending", pending);
         if (recent != null) state.put("recent", recent);
-        if (winnerId != null) state.put("winner", new JSONObject().put("playerId", winnerId).put("reason", winReason));
+        if (phase == Phase.FINISHED) state.put("winner", new JSONObject().put("playerId", winnerId == null ? JSONObject.NULL : winnerId).put("reason", winReason));
         return state;
     }
 }

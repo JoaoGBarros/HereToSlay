@@ -188,7 +188,7 @@ export function HistoryPanel({ log, players, onClose }: { log: LogEntry[]; playe
 
 interface MatchEndProps {
     players: PlayersMap;
-    winner: { playerId: string; reason: 'monsters' | 'classes' };
+    winner: { playerId: string | null; reason: 'monsters' | 'classes' | 'last_standing' | 'not_enough_players' };
     round: number;
     startedAt?: number;
     log: LogEntry[];
@@ -202,7 +202,7 @@ const MINUTE_MS = 60000;
 /** End of match, laid out like the design: winner and trophies, standings, Kafka Streams highlights, stats. */
 export function MatchEnd({ players, winner, round, startedAt, log, highlights, onHistory, onLeave }: MatchEndProps) {
     const { t } = useI18n();
-    const champion = players[winner.playerId];
+    const champion = winner.playerId ? players[winner.playerId] : undefined;
     const info = classInfo(champion?.leader);
     const minutes = startedAt ? Math.max(1, Math.round((Date.now() - startedAt) / MINUTE_MS)) : null;
     const standings = Object.entries(players)
@@ -217,6 +217,19 @@ export function MatchEnd({ players, winner, round, startedAt, log, highlights, o
     ];
     const badges = highlights.filter((h, i) => highlights.findIndex((x) => x.tagType === h.tagType && x.playerId === h.playerId) === i).slice(0, 6);
 
+    if (!winner.playerId) {
+        return (
+            <Stage label={t.engine.end.cancelledTitle} className="vic3">
+                <img src={victoryBackground} alt="" aria-hidden="true" className="vic3-bg" />
+                <section className="vic3-cancel hts-rise">
+                    <h1 className="vic3-name" style={{ fontSize: 72 }}>{t.engine.end.cancelledTitle}</h1>
+                    <p style={{ margin: 0, fontSize: 20, color: '#cfc6b3' }}>{t.engine.end.cancelledBody}</p>
+                    <button type="button" className="vic3-cta" style={{ alignSelf: 'flex-start' }} onClick={onLeave}>{t.engine.end.back}</button>
+                </section>
+            </Stage>
+        );
+    }
+
     return (
         <Stage label={t.overlays.endAria} className="vic3">
             <img src={victoryBackground} alt="" aria-hidden="true" className="vic3-bg" />
@@ -230,7 +243,7 @@ export function MatchEnd({ players, winner, round, startedAt, log, highlights, o
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 14, paddingTop: 24, minWidth: 0 }}>
                     <span className="vic3-kicker">{t.engine.end.victory}</span>
                     <h1 className="vic3-name">{champion?.username}</h1>
-                    <span className="vic3-reason">{winner.reason === 'monsters' ? t.engine.end.byMonsters : t.engine.end.byClasses}</span>
+                    <span className="vic3-reason">{winner.reason === 'monsters' ? t.engine.end.byMonsters : winner.reason === 'classes' ? t.engine.end.byClasses : t.engine.end.byLastStanding}</span>
                     {winner.reason === 'monsters' ? (
                         <div style={{ display: 'flex', gap: 8, marginTop: 6 }}>
                             {(champion?.slain || []).map((m) => <img key={m.id} src={getMonsterArt(m.name)} alt={m.name} className="vic3-monster" />)}

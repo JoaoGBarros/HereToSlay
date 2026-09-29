@@ -25,6 +25,8 @@ public class PlayerState {
     private int[] orderDice;
     private final Set<Long> usedHeroes = new HashSet<>();
     private boolean leaderSkillUsed;
+    /** Why the player is out of the match (no_show, disconnected, surrender), or null while playing. */
+    private String leftReason;
 
     // "Until the end of your turn"
     private int turnRollBonus;
@@ -122,6 +124,10 @@ public class PlayerState {
     }
 
     /** @param full true for the owner (sees the hand), false for everyone else (card backs only). */
+    public boolean isGone() { return leftReason != null; }
+    public String getLeftReason() { return leftReason; }
+    public void leave(String reason) { this.leftReason = reason; }
+
     public JSONObject toJson(boolean full) {
         JSONArray handJson = new JSONArray();
         hand.forEach(c -> handJson.put(full ? c.toJson() : c.hiddenJson()));
@@ -145,7 +151,8 @@ public class PlayerState {
                 .put("rollBonusSources", new JSONArray(turnBonusSources))
                 .put("protectedFromSteal", protectedFromSteal)
                 .put("protectedFromDestroy", !canHeroBeDestroyed())
-                .put("unchallengeable", unchallengeableThisTurn);
+                .put("unchallengeable", unchallengeableThisTurn)
+                .put("leftReason", leftReason == null ? JSONObject.NULL : leftReason);
         if (orderDice != null) json.put("orderDice", new JSONArray(orderDice));
         return json;
     }
