@@ -1,5 +1,5 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import WebSocketContext from '@/utils/WebSocketContext';
 import type { LobbyStatus } from './enum/StatusEnum';
 import { parseMessage, sendMessage } from '../common/types';
@@ -18,6 +18,16 @@ interface LobbySummary {
 }
 
 type Filter = 'all' | 'open' | 'live';
+
+/** Why the lobby would not seat the player: still in a running match, or the table filled up. */
+export interface SeatRefusal {
+    reason: 'in_match' | 'full';
+    matchId?: number;
+}
+
+function readRefusal(payload: { reason?: string; matchId?: number } | undefined): SeatRefusal {
+    return payload?.reason === 'in_match' ? { reason: 'in_match', matchId: payload.matchId } : { reason: 'full' };
+}
 
 const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 6;
@@ -64,8 +74,10 @@ function Stepper({ label, value, onChange, min, max }: { label: string; value: n
 function Games() {
     const socket = useContext(WebSocketContext);
     const navigate = useNavigate();
+    const location = useLocation();
     const { t } = useI18n();
     const [lobbies, setLobbies] = useState<LobbySummary[]>([]);
+    const [refusal, setRefusal] = useState<SeatRefusal | null>((location.state as { refusal?: SeatRefusal } | null)?.refusal ?? null);
     const [filter, setFilter] = useState<Filter>('all');
     const [search, setSearch] = useState('');
     const [lobbyName, setLobbyName] = useState('');
@@ -93,6 +105,8 @@ function Games() {
                 setLobbies(data.payload || []);
             } else if (data.subtype === 'create_success' && data.payload?.lobbyId != null) {
                 navigate(`/lobby/${data.payload.lobbyId}`);
+            } else if (data.subtype === 'create_fail') {
+                setRefusal(readRefusal(data.payload));
             }
         };
         ws.addEventListener('message', handleMessage);
@@ -149,6 +163,16 @@ function Games() {
                         <h1 id="mesas-h" className="hts-display" style={{ fontSize: 52 }}>{t.tavern.title}</h1>
                         <p className="hts-muted" style={{ margin: '6px 0 0', fontSize: 16 }}>{t.tavern.subtitle}</p>
                     </div>
+
+                    {refusal && (
+                        <div className="tavern-refusal" role="alert">
+                            <span>{refusal.reason === 'in_match' ? t.tavern.refused.inMatch(refusal.matchId ?? '') : t.tavern.refused.full}</span>
+                            {refusal.reason === 'in_match' && refusal.matchId != null && (
+                                <button type="button" className="hts-btn hts-btn--sm" onClick={() => navigate(`/match/${refusal.matchId}`)}>{t.tavern.refused.back}</button>
+                            )}
+                            <button type="button" className="hts-icon-btn" aria-label={t.tavern.refused.dismiss} onClick={() => setRefusal(null)}>×</button>
+                        </div>
+                    )}
 
                     <div className="tavern-toolbar">
                         <div role="tablist" aria-label={t.tavern.filtersAria} className="tavern-tabs">

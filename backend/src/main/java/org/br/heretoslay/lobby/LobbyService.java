@@ -21,6 +21,11 @@ public class LobbyService {
     private KafkaProducer<String, String> kafkaProducer;
     private final Map<String, String> playerUsernames = new ConcurrentHashMap<>();
     private final ObjectMapper mapper = new ObjectMapper();
+    /** Players still playing each running match, from the engine's rosters on match-state-store. */
+    private final Map<String, java.util.Set<String>> activeMatchPlayers = new ConcurrentHashMap<>();
+    private final Map<String, Long> activeMatchSeen = new ConcurrentHashMap<>();
+    /** A match that has not said it is alive for this long was lost (engine restart) and no longer holds anyone. */
+    private static final long MATCH_STALE_MS = 15 * 60_000;
 
     public static LobbyService getInstance() {
         if(instance == null) {
@@ -31,6 +36,79 @@ public class LobbyService {
 
     private LobbyService() {
         initKafka();
+        new Thread(this::watchRunningMatches).start();
+    }
+
+    /** Keeps track of who is in a running match, so they cannot sit at another table meanwhile. */
+    private void watchRunningMatches() {
+        Properties props = new Properties();
+        String kafkaServer = System.getenv("KAFKA_BOOTSTRAP_SERVERS");
+        if (kafkaServer == null) kafkaServer = "localhost:9092";
+        props.put("bootstrap.servers", kafkaServer);
+        props.put("group.id", "lobby-match-watch-" + UUID.randomUUID());
+        props.put("auto.offset.reset", "earliest");
+        props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
+            consumer.subscribe(Collections.singletonList("match-state-store"));
+            while (true) {
+                for (ConsumerRecord<String, String> record : consumer.poll(Duration.ofMillis(500))) {
+                    try {
+                        if (record.key() == null) continue;
+                        if (record.value() == null) {
+                            activeMatchPlayers.remove(record.key());
+                            continue;
+                        }
+                        JSONObject roster = new JSONObject(record.value());
+                        JSONArray active = roster.optJSONArray("active");
+                        if (roster.optBoolean("finished", false) || active == null) {
+                            activeMatchPlayers.remove(record.key());
+                            continue;
+                        }
+                        java.util.Set<String> ids = new java.util.HashSet<>();
+                        for (int i = 0; i < active.length(); i++) ids.add(active.getString(i));
+                        activeMatchPlayers.put(record.key(), ids);
+                        activeMatchSeen.put(record.key(), roster.optLong("ts", record.timestamp()));
+                    } catch (Exception e) {
+                        System.err.println("Erro ao ler partida em andamento: " + e.getMessage());
+                    }
+                }
+            }
+        }
+    }
+
+    /** The running match this player is still in, or null. */
+    private String runningMatchOf(String playerId) {
+        long now = System.currentTimeMillis();
+        for (Map.Entry<String, java.util.Set<String>> entry : activeMatchPlayers.entrySet()) {
+            long seen = activeMatchSeen.getOrDefault(entry.getKey(), 0L);
+            if (now - seen > MATCH_STALE_MS) continue;
+            if (entry.getValue().contains(playerId)) return entry.getKey();
+        }
+        return null;
+    }
+
+    /** Tells the player they cannot sit down: they are still in a running match. */
+    private boolean refuseIfPlaying(String playerId, String subtype) {
+        String matchId = runningMatchOf(playerId);
+        if (matchId == null) return false;
+        sendToPlayer(playerId, new JSONObject()
+                .put("type", "lobby")
+                .put("subtype", subtype)
+                .put("payload", new JSONObject().put("reason", "in_match").put("matchId", Long.parseLong(matchId))));
+        return true;
+    }
+
+    /** One table per player: sitting somewhere new takes them out of any other table they were at. */
+    private void leaveOtherTables(String playerId, Long keepLobbyId) {
+        for (Lobby other : lobbies.values()) {
+            if (other.getId().equals(keepLobbyId) || !other.getPlayers().contains(playerId)) continue;
+            other.removePlayer(playerId);
+            if (other.getPlayers().size() < other.getMinPlayers()) other.setStatus(LobbyStatus.WAITING_FOR_PLAYERS);
+            broadcastLobbyUpdate(other);
+            checkAndHandleCountdown(other);
+            persistStateToKafka(other);
+        }
     }
 
     private void initKafka() {
@@ -223,6 +301,7 @@ public class LobbyService {
 
         switch (type) {
             case "create":
+                if (refuseIfPlaying(playerId, "create_fail")) return;
                 int maxPlayers = json.getJSONObject("payload").getInt("maxPlayers");
                 int minPlayers = json.getJSONObject("payload").getInt("minPlayers");
                 String name = json.getJSONObject("payload").getString("name");
@@ -273,15 +352,17 @@ public class LobbyService {
                 Lobby lobbyToJoin = lobbies.get(joinLobbyId);
 
                 if (lobbyToJoin != null) {
+                    if (refuseIfPlaying(playerId, "join_fail")) return;
                     if(lobbyToJoin.getPlayers().size() >= lobbyToJoin.getMaxPlayers() && !lobbyToJoin.getPlayers().contains(playerId)) {
                         JSONObject fullResponse = new JSONObject();
                         fullResponse.put("type", "lobby");
                         fullResponse.put("subtype", "join_fail");
-                        fullResponse.put("payload", new JSONObject().put("reason", "Lobby is full"));
+                        fullResponse.put("payload", new JSONObject().put("reason", "full"));
                         sendToPlayer(playerId, fullResponse);
                         return;
                     }
 
+                    leaveOtherTables(playerId, joinLobbyId);
                     lobbyToJoin.addPlayer(playerId);
 
                     if(lobbyToJoin.getPlayers().size() < lobbyToJoin.getMinPlayers()) {

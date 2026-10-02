@@ -72,6 +72,10 @@ function Lobby() {
                 case 'leave_response':
                     navigate('/games');
                     return;
+                case 'join_fail':
+                    // The tavern says why: still in a running match, or the table is full.
+                    navigate('/games', { state: { refusal: data.payload?.reason === 'in_match' ? { reason: 'in_match', matchId: data.payload.matchId } : { reason: 'full' } } });
+                    return;
                 case 'countdown_update':
                     setCountdown(data.payload.timeLeft);
                     setMinPlayers(data.payload.minPlayers);
