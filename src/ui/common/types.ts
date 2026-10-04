@@ -103,8 +103,10 @@ export interface ChoicePending {
     max: number;
     remainingMs: number;
     source?: CardData;
-    /** Only sent to the chooser. */
+    /** The chooser gets the real options; the others get them too, face down when they are private. */
     options?: ChoiceOption[];
+    /** What the chooser has marked so far. */
+    preview?: string[];
 }
 
 export interface ChallengeWindowPending {

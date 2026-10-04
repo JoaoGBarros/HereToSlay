@@ -26,7 +26,20 @@ export interface Toast {
     key: string;
     situation: string;
     render: (t: Dict) => string;
+    announcement?: Announcement;
     notice?: PresenceNotice;
+}
+
+/** What someone picked for a card effect, as the rest of the table may know it. */
+export interface Announcement {
+    key: string;
+    ts: number;
+    chooserId: string;
+    prompt: string;
+    card: string;
+    count: number;
+    target?: string;
+    picked: { playerId?: string; cardName?: string; ownerId?: string }[];
 }
 
 /** A player dropped, came back or left the match. */
@@ -65,6 +78,7 @@ export function useMatchSession(socket: SocketRef, matchId: string | undefined, 
     const [highlights, setHighlights] = useState<Highlight[]>([]);
     const [revealed, setRevealed] = useState<Revealed | null>(null);
     const [toasts, setToasts] = useState<Toast[]>([]);
+    const [announcements, setAnnouncements] = useState<Announcement[]>([]);
     const [notices, setNotices] = useState<PresenceNotice[]>([]);
     const [chat, setChat] = useState<ChatMessage[]>([]);
     const [fx, setFx] = useState<FxEvent[]>([]);
@@ -182,6 +196,25 @@ export function useMatchSession(socket: SocketRef, matchId: string | undefined, 
                         later(() => setToasts((prev) => prev.filter((x) => x.key !== key)), ANNOUNCE_TOAST_MS);
                         return;
                     }
+                    case 'choice_made': {
+                        seq.current += 1;
+                        const key = `choice-${seq.current}`;
+                        const entry: Announcement = {
+                            key,
+                            ts: Date.now(),
+                            chooserId: String(payload.chooserId),
+                            prompt: String(payload.prompt),
+                            card: String(payload.card || ''),
+                            count: Number(payload.count || 0),
+                            target: payload.target != null ? String(payload.target) : undefined,
+                            picked: Array.isArray(payload.picked) ? payload.picked : [],
+                        };
+                        setAnnouncements((prev) => [...prev, entry].slice(-ANNOUNCE_LIMIT));
+                        // Shown briefly on top too, so nobody misses it while looking at the board.
+                        setToasts((prev) => [...prev, { key, situation: 'CHOICE', render: () => '', announcement: entry }].slice(-TOAST_LIMIT));
+                        later(() => setToasts((prev) => prev.filter((x) => x.key !== key)), ANNOUNCE_TOAST_MS);
+                        return;
+                    }
                     case 'modifier_played':
                         pushFx([{ kind: 'modifier', from: String(payload.playerId), to: String(payload.targetPlayerId), value: Number(payload.value) }]);
                         return;
@@ -255,6 +288,7 @@ export function useMatchSession(socket: SocketRef, matchId: string | undefined, 
         pass: () => sendAction('pass'),
         challenge: () => sendAction('challenge'),
         surrender: () => send({ type: 'match', subtype: 'surrender' }),
+        previewChoice: (choiceId: string, selection: string[]) => sendAction('preview_choice', { choice_id: choiceId, selection }),
         answer: (choiceId: string, selection: string[], playerId?: string) =>
             sendAction('select_effect_target', { choice_id: choiceId, selection, ...(playerId ? { player_id: playerId } : {}) }),
         playModifier: (cardId: number, value: number, targetId: string, guardianBonus: number) =>
@@ -263,5 +297,5 @@ export function useMatchSession(socket: SocketRef, matchId: string | undefined, 
         sendChat: (text: string) => send({ type: 'match', subtype: 'chat', payload: { text } }),
     };
 
-    return { view, linger, tieRolls, tieRound, tags, highlights, toasts, notices, revealed, chat, fx, finishFx, actions };
+    return { view, linger, tieRolls, tieRound, tags, highlights, toasts, announcements, notices, revealed, chat, fx, finishFx, actions };
 }

@@ -41,6 +41,8 @@ public class Match implements Table {
     private static final long CHALLENGE_WINDOW_MS = 8_000;
     private static final long MODIFIER_WINDOW_MS = 15_000;
     private static final long MODIFIER_EXTEND_MS = 5_000;
+    /** Choices whose picked cards are secret (face-down, the top of the deck, a private hand): others only learn how many. */
+    private static final Set<String> SECRET_PROMPTS = Set.of("pull_card", "keep_from_top", "top_order", "give_card", "take_from_hand");
     private static final long ROLL_WAIT_MS = 25_000;
     private static final int STARTING_HAND = 5;
     private static final int REDRAW_HAND = 5;
@@ -295,6 +297,7 @@ public class Match implements Table {
             switch (action) {
                 case "play_modifier" -> playModifier(playerId, payload);
                 case "select_effect_target" -> answerChoice(playerId, payload);
+                case "preview_choice" -> previewChoice(playerId, payload);
                 case "roll" -> rollDice(playerId);
                 case "pass" -> pass(playerId);
                 case "challenge" -> challenge(playerId);
@@ -1138,6 +1141,17 @@ public class Match implements Table {
         });
     }
 
+    /** The chooser's marks so far, so everyone watching sees the same screen move. */
+    private void previewChoice(String playerId, JSONObject payload) {
+        Choice c = choice;
+        if (c == null || !c.getChooserId().equals(playerId)) return;
+        if (!payload.optString("choice_id", c.getId()).equals(c.getId())) return;
+        JSONArray raw = payload.optJSONArray("selection");
+        List<String> selection = new ArrayList<>();
+        if (raw != null) for (int i = 0; i < raw.length(); i++) selection.add(String.valueOf(raw.get(i)));
+        c.setPreview(selection);
+    }
+
     private void answerChoice(String playerId, JSONObject payload) {
         Choice c = choice;
         if (c == null || !c.getChooserId().equals(playerId)) return;
@@ -1150,12 +1164,39 @@ public class Match implements Table {
     }
 
     private void answer(Choice c, List<String> selection) {
+        announceChoice(c, selection);
         choice = null;
         timerToken++;
         // The answer may open a follow-up choice, which suspends the flow again.
         waiting = false;
         c.getOnAnswer().accept(selection);
         pump();
+    }
+
+    /** Tells the whole table what was chosen, keeping secret cards secret. */
+    private void announceChoice(Choice c, List<String> selection) {
+        String prompt = c.getPrompt();
+        if (selection.isEmpty() || prompt.startsWith("view_") || prompt.startsWith("notice_")) return;
+        if (selection.contains("yes") || selection.contains("no")) return;
+        JSONObject payload = new JSONObject()
+                .put("chooserId", c.getChooserId())
+                .put("prompt", prompt)
+                .put("card", c.getSource() == null ? "" : c.getSource().getName())
+                .put("count", selection.size());
+        if (c.getParams().has("target")) payload.put("target", c.getParams().get("target"));
+        JSONArray picked = new JSONArray();
+        if (!SECRET_PROMPTS.contains(prompt)) {
+            for (JSONObject option : c.getOptions()) {
+                if (!selection.contains(option.getString("id"))) continue;
+                JSONObject entry = new JSONObject();
+                if (option.has("username")) entry.put("playerId", option.getString("id"));
+                if (option.has("card")) entry.put("cardName", option.getJSONObject("card").optString("cardName"));
+                if (option.has("ownerId")) entry.put("ownerId", option.getString("ownerId"));
+                picked.put(entry);
+            }
+        }
+        payload.put("picked", picked);
+        broadcast(event("choice_made", payload));
     }
 
     // =====================================================================

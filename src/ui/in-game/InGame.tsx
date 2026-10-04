@@ -16,7 +16,7 @@ import OpponentRail from './board/OpponentRail';
 import { DiscardViewer, HandReveal, HistoryPanel, MatchEnd, PartyViewer, RulesSheet, SettingsSheet, TurnBanner } from './board/Overlays';
 import PlayerZone, { isPlayableFromHand } from './board/PlayerZone';
 import TopBar from './board/TopBar';
-import { renderNotice } from './board/announce';
+import { renderAnnouncement, renderNotice } from './board/announce';
 import SurrenderButton from './board/SurrenderButton';
 import LoadingScreen from './screens/LoadingScreen';
 import SetupClock from './screens/SetupClock';
@@ -101,6 +101,7 @@ function InGame() {
             {s.toasts.map((toast) => {
                 const style = tagStyle(toast.situation);
                 let text = toast.render(t);
+                if (toast.announcement) text = renderAnnouncement(t, toast.announcement, players);
                 if (toast.notice) text = renderNotice(t, toast.notice, players);
                 return (
                     <div key={toast.key} className="ks-toast hts-rise" style={{ borderColor: style.bg }}>
@@ -199,9 +200,10 @@ function InGame() {
         return { card, actions: [] };
     }
 
-    // Players dropping, coming back or leaving show up in the chat as table lines.
+    // Choices made by anyone show up in the chat as table lines, between what players typed.
     const chatMessages = [
         ...s.chat,
+        ...s.announcements.map((a) => ({ playerId: SYSTEM_ID, username: t.engine.announce.table, text: renderAnnouncement(t, a, players), timestamp: a.ts })),
         ...s.notices.map((n) => ({ playerId: SYSTEM_ID, username: t.engine.announce.table, text: renderNotice(t, n, players), timestamp: n.ts })),
     ].sort((a, b) => a.timestamp - b.timestamp);
     const chatPanel = (
@@ -321,8 +323,11 @@ function InGame() {
                     />
                 )}
 
-                {choice && choice.chooserId === me && <ChoiceSheet choice={choice} players={players} me={me} onAnswer={actions.answer} />}
-                {choice && choice.chooserId !== me && <ChoiceWaiting choice={choice} players={players} />}
+                {/* Everyone sees the selection screen; the others watch it read-only. */}
+                {choice && (choice.chooserId === me || choice.options) && (
+                    <ChoiceSheet choice={choice} players={players} me={me} onAnswer={actions.answer} onPreview={actions.previewChoice} />
+                )}
+                {choice && choice.chooserId !== me && !choice.options && <ChoiceWaiting choice={choice} players={players} />}
 
                 {toastsNode}
                 {historyOpen && <HistoryPanel log={view.log} players={players} onClose={() => setHistoryOpen(false)} />}
