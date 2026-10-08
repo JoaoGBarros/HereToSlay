@@ -113,8 +113,15 @@ public class GameMonitoringStreamsProcessor {
         builder.addStateStore(firstBloodStore);
 
         // Operações sem estado: análise e validação dos dois tópicos brutos que este serviço observa.
+        // preview_choice só espelha as marcações de quem escolhe; não é uma jogada e não conta para nenhum destaque.
         KStream<String, String> actionsIn = builder.stream("game-actions-in", Consumed.with(Serdes.String(), Serdes.String()))
-                .filter((key, value) -> isValidJson(value));
+                .filter((key, value) -> isValidJson(value))
+                .filter((key, value) -> !"preview_choice".equals(actionNameOf(value)));
+
+        // Só jogadas de verdade: o que o jogador escolhe fazer. Fica de fora tudo que o
+        // cliente manda sozinho (get_match_state, get_chat_history, chat) e as respostas
+        // a algo que a partida pediu (pass, roll, select_effect_target, end_turn).
+        KStream<String, String> plays = actionsIn.filter((key, value) -> isPlay(value));
 
         KStream<String, String> statesOut = builder.stream("game-state-out", Consumed.with(Serdes.String(), Serdes.String()))
                 .filter((key, value) -> isValidJson(value));
@@ -155,8 +162,8 @@ public class GameMonitoringStreamsProcessor {
                 .to("game-monitoring-alerts");
 
         // SITUAÇÃO 4: Reação em Cadeia
-        // Detecta 3+ ações na mesma partida resolvidas dentro de uma janela curta (35s, tumbling).
-        actionsIn
+        // Detecta 3+ jogadas na mesma partida resolvidas dentro de uma janela curta (35s, tumbling).
+        plays
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
                 .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofSeconds(35), Duration.ZERO))
                 .count()
@@ -167,8 +174,8 @@ public class GameMonitoringStreamsProcessor {
 
         // SITUAÇÃO 5: Comprador Frequente
         // Usa Processor API + loja de estado. Rastreia sequências de draw_card consecutivos
-        // por jogador. Qualquer outra ação do mesmo jogador zera a sequência.
-        actionsIn
+        // por jogador. Qualquer outra jogada do mesmo jogador zera a sequência.
+        plays
                 .process(FrequentBuyerProcessor::new, BUYER_STREAK_STORE_NAME)
                 .to("game-monitoring-alerts");
 
@@ -210,9 +217,9 @@ public class GameMonitoringStreamsProcessor {
                 .to("game-monitoring-alerts");
 
         // SITUAÇÃO 9: Combo
-        // Com estado via DSL: mesmo jogador realizando 3 ações em rajada dentro de uma
+        // Com estado via DSL: mesmo jogador fazendo 3 jogadas em rajada dentro de uma
         // janela curta (6s, tumbling). Chave composta "matchId|playerId".
-        actionsIn
+        plays
                 .filter((key, value) -> actorOf(value) != null)
                 .map((key, value) -> KeyValue.pair(key + "|" + actorOf(value), value))
                 .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
@@ -249,6 +256,20 @@ public class GameMonitoringStreamsProcessor {
         try {
             new JSONObject(value);
             return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** Jogadas que contam para os destaques. */
+    private static final java.util.Set<String> PLAYS = java.util.Set.of(
+            "draw_card", "play_card", "use_card", "attempt_slay_monster", "redraw_hand",
+            "leader_skill", "play_modifier", "challenge");
+
+    private static boolean isPlay(String value) {
+        try {
+            JSONObject json = new JSONObject(value);
+            return "action".equals(json.optString("subtype")) && PLAYS.contains(json.optString("action"));
         } catch (Exception e) {
             return false;
         }
