@@ -31,7 +31,7 @@ function Sheet({ label, onClose, children, width = 1100 }: { label: string; onCl
     useEscape(onClose);
     return ReactDOM.createPortal(
         <div className="hts-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label={label}>
-            <div className="sheet hts-panel hts-rise" style={{ width: `min(${width}px, calc(100vw - 48px))` }} onClick={(e) => e.stopPropagation()}>
+            <div className="sheet hts-panel hts-rise" style={{ width: `min(${width}px, calc(var(--app-w) - 48px))` }} onClick={(e) => e.stopPropagation()}>
                 <button type="button" className="hts-icon-btn sheet-close" aria-label={t.common.close} onClick={onClose}>✕</button>
                 {children}
             </div>

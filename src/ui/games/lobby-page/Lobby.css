@@ -1,4 +1,4 @@
-.lobby-screen { height: 100vh; display: flex; flex-direction: column; }
+.lobby-screen { height: var(--app-h); display: flex; flex-direction: column; }
 .lobby-header {
     position: relative;
     height: 76px;
@@ -72,4 +72,4 @@
     color: var(--hts-muted);
     font-size: 24px;
 }
-.lobby-side { flex: 1 1 320px; max-width: 420px; height: calc(100vh - 124px); min-height: 420px; }
+.lobby-side { flex: 1 1 320px; max-width: 420px; height: calc(var(--app-h) - 124px); min-height: 420px; }

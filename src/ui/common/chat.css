@@ -76,8 +76,8 @@
     right: 20px;
     top: 64px;
     z-index: 820;
-    width: min(360px, calc(100vw - 40px));
-    height: min(520px, calc(100vh - 100px));
+    width: min(360px, calc(var(--app-w) - 40px));
+    height: min(520px, calc(var(--app-h) - 100px));
     box-shadow: 0 30px 60px rgba(0, 0, 0, 0.55);
     border-radius: 20px;
 }

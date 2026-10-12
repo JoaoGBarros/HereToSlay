@@ -1,14 +1,15 @@
 .prep-screen {
     position: relative;
     z-index: 1;
-    min-height: 100vh;
+    min-height: var(--app-h);
     box-sizing: border-box;
     padding: 30px 48px 36px;
     display: flex;
     flex-direction: column;
     gap: 22px;
 }
-.prep-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; }
+/* The right side leaves room for the floating Surrender button (top-right corner). */
+.prep-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; padding-right: 130px; }
 .prep-lead { margin: 0; max-width: 760px; font-size: 17px; line-height: 1.45; color: #cfc6b3; }
 .prep-banner {
     align-self: center;

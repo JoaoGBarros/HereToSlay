@@ -16,7 +16,7 @@
     font-family: var(--hts-font-ui);
 }
 .modwin--embedded { position: absolute; left: 40px; right: 40px; bottom: 28px; height: 410px; }
-.modwin--dock { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); width: min(1360px, calc(100vw - 40px)); height: 380px; z-index: 890; }
+.modwin--dock { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); width: min(1360px, calc(var(--app-w) - 40px)); height: 380px; z-index: 890; }
 .modwin-left { width: 280px; flex: none; display: flex; flex-direction: column; gap: 14px; }
 .modwin-title { font: 800 28px var(--hts-font-display); }
 .modwin-sub { font-size: 13px; color: #b9b2a3; }

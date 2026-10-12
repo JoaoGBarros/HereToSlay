@@ -4,7 +4,7 @@
     bottom: 24px;
     transform: translateX(-50%);
     z-index: 950;
-    width: min(1100px, calc(100vw - 48px));
+    width: min(1100px, calc(var(--app-w) - 48px));
     box-sizing: border-box;
     display: flex;
     gap: 24px;

@@ -1,4 +1,4 @@
-.login-screen { height: 100vh; }
+.login-screen { height: var(--app-h); }
 .login-bg { object-position: center 30%; }
 .login-scrim {
     position: absolute;
@@ -9,7 +9,7 @@
 .login-main {
     position: relative;
     z-index: 1;
-    width: min(520px, calc(100vw - 48px));
+    width: min(520px, calc(var(--app-w) - 48px));
     margin-left: clamp(24px, 7vw, 110px);
     padding-top: clamp(40px, 10vh, 110px);
     display: flex;

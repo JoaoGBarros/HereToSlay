@@ -12,9 +12,11 @@ import './styles/tokens.css'
 import App from './App.tsx'
 import { WebSocketProvider } from '@/utils/WebSocketProvider.tsx'
 import { applyMotionPref } from '@/utils/motion'
+import { installUiScale } from '@/utils/uiScale'
 import { I18nProvider } from '@/i18n'
 
 applyMotionPref()
+installUiScale()
 
 
 createRoot(document.getElementById('root')!).render(

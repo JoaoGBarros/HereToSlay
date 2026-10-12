@@ -1,4 +1,4 @@
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import WebSocketContext from '@/utils/WebSocketContext';
 import { PLAYER_COLORS } from '@/utils/ClassInfo';
@@ -12,6 +12,8 @@ import './Lobby.css';
 
 const COUNTDOWN_SECONDS = 5;
 const DEFAULT_SEATS = 6;
+const JOIN_RETRY_MS = 1200;
+const JOIN_RETRIES = 5;
 
 interface Seat {
     id: string;
@@ -46,6 +48,7 @@ function Lobby() {
     const [minPlayers, setMinPlayers] = useState<number | null>(null);
     const [countdown, setCountdown] = useState<number | null>(null);
     const [chat, setChat] = useState<ChatMessage[]>([]);
+    const seatedRef = useRef(false);
 
     useEffect(() => {
         if (!me) navigate('/');
@@ -64,6 +67,7 @@ function Lobby() {
                         ? p.players.map((s: Seat) => ({ id: String(s.id), username: s.username, ready: !!s.ready }))
                         : (p.username || []).map((name: string) => ({ id: name, username: name, ready: false }));
                     setSeats(list);
+                    if (list.some((s) => s.id === me?.id)) seatedRef.current = true;
                     setLobbyName(p.name || '');
                     if (p.maxPlayers) setMaxPlayers(p.maxPlayers);
                     if (p.minPlayers) setMinPlayers(p.minPlayers);
@@ -95,8 +99,19 @@ function Lobby() {
         };
         // Listen first so the join reply is never missed.
         ws.addEventListener('message', handleMessage);
-        sendMessage(socket, { type: 'lobby', subtype: 'join', payload: { lobbyId: Number(id) } });
-        return () => ws.removeEventListener('message', handleMessage);
+        const join = () => sendMessage(socket, { type: 'lobby', subtype: 'join', payload: { lobbyId: Number(id) } });
+        seatedRef.current = false;
+        join();
+        // A brand-new table may not have reached every lobby replica yet; ask again until it answers.
+        let retries = 0;
+        const retry = window.setInterval(() => {
+            if (seatedRef.current || ++retries > JOIN_RETRIES) window.clearInterval(retry);
+            else join();
+        }, JOIN_RETRY_MS);
+        return () => {
+            window.clearInterval(retry);
+            ws.removeEventListener('message', handleMessage);
+        };
     }, [id, socket, navigate]);
 
     const lobbyId = Number(id);

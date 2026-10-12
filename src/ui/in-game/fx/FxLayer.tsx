@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef } from 'react';
 import { getCardArt } from '@/utils/CardArt';
 import { isReducedMotion } from '@/utils/motion';
+import { uiZoom } from '@/utils/uiScale';
 import deckBack from '../../assets/deck.png';
 import type { FxEvent } from './fxDiff';
 import './fx.css';
@@ -11,12 +12,15 @@ const PARTICLES = 12;
 
 type Point = { x: number; y: number };
 
+/** Screen rects are in window pixels; the fx layer lives inside the zoomed page (uiScale). */
 function center(rect: DOMRect | null | undefined): Point | null {
-    return rect ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 } : null;
+    const zoom = uiZoom();
+    return rect ? { x: (rect.left + rect.width / 2) / zoom, y: (rect.top + rect.height / 2) / zoom } : null;
 }
 
 function screenCenter(): Point {
-    return { x: window.innerWidth / 2, y: window.innerHeight * 0.42 };
+    const zoom = uiZoom();
+    return { x: window.innerWidth / zoom / 2, y: (window.innerHeight / zoom) * 0.42 };
 }
 
 /** Where a player's cards live on screen: your hand/party, or an opponent's plaque. */
@@ -30,7 +34,7 @@ function anchor(playerId: string | undefined, me: string, zone: 'hand' | 'party'
 }
 
 function deckPoint(): Point {
-    return center(document.querySelector('[data-fx="deck"]')?.getBoundingClientRect()) || { x: 100, y: window.innerHeight / 2 };
+    return center(document.querySelector('[data-fx="deck"]')?.getBoundingClientRect()) || { x: 100, y: window.innerHeight / uiZoom() / 2 };
 }
 
 function at(p: Point, scale = 1, rotate = 0, opacity = 1): Keyframe {

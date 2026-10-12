@@ -23,7 +23,7 @@ function SurrenderButton({ onSurrender, floating }: { onSurrender: () => void; f
             </button>
             {asking && ReactDOM.createPortal(
                 <div className="hts-overlay" style={{ zIndex: 980 }} role="dialog" aria-modal="true" aria-labelledby="surrender-h" onClick={() => setAsking(false)}>
-                    <div className="sheet hts-panel hts-rise" style={{ width: 'min(480px, calc(100vw - 48px))', display: 'flex', flexDirection: 'column', gap: 14 }} onClick={(e) => e.stopPropagation()}>
+                    <div className="sheet hts-panel hts-rise" style={{ width: 'min(480px, calc(var(--app-w) - 48px))', display: 'flex', flexDirection: 'column', gap: 14 }} onClick={(e) => e.stopPropagation()}>
                         <h2 id="surrender-h" className="hts-display" style={{ fontSize: 36 }}>{t.engine.surrender.title}</h2>
                         <p style={{ margin: 0, lineHeight: 1.5, color: 'var(--hts-text-2)' }}>{t.engine.surrender.body}</p>
                         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>

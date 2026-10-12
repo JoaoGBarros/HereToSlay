@@ -4,7 +4,7 @@
     right: 0;
     bottom: 0;
     z-index: 800;
-    width: min(380px, 100vw);
+    width: min(380px, var(--app-w));
     box-sizing: border-box;
     padding: 18px;
     display: flex;

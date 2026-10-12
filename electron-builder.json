@@ -1,11 +1,28 @@
 {
     "appId": "com.jgbarros.heretoslay",
-    "productName": "HereToSlay",
-    "extraResources": ["dist-electron/preload.cjs", "src/assets/**"],
-    "mac": {
-        "target": ["dmg"]
+    "productName": "Here to Slay",
+    "directories": {
+        "output": "release-app"
     },
+    "files": [
+        "dist/**",
+        "dist-electron/**",
+        "package.json"
+    ],
     "win": {
-        "target": ["portable", "msi"]
+        "target": ["nsis", "portable"],
+        "icon": "public/icon.png"
+    },
+    "nsis": {
+        "oneClick": false,
+        "allowToChangeInstallationDirectory": true,
+        "artifactName": "HereToSlay-Setup-${version}.${ext}"
+    },
+    "portable": {
+        "artifactName": "HereToSlay-${version}-portable.${ext}"
+    },
+    "mac": {
+        "target": ["dmg"],
+        "icon": "public/icon.png"
     }
 }

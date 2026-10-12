@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import ReactDOM from 'react-dom';
+import { uiZoom } from '@/utils/uiScale';
 
 export const STAGE_W = 1440;
 export const STAGE_H = 900;
@@ -13,7 +14,9 @@ export interface StageSideValue {
 export const StageSide = createContext<StageSideValue | null>(null);
 
 function fit(sideWidth: number): number {
-    return Math.min((window.innerWidth - sideWidth) / STAGE_W, window.innerHeight / STAGE_H);
+    // The page is already zoomed to fit small windows (uiScale), so measure in zoomed pixels.
+    const zoom = uiZoom();
+    return Math.min((window.innerWidth / zoom - sideWidth) / STAGE_W, window.innerHeight / zoom / STAGE_H);
 }
 
 /**

@@ -2,6 +2,11 @@
    Direction: "taverna à noite", dark table, parchment cards, gold only for actions. */
 
 :root {
+    /* Set by utils/uiScale.ts: the page zoom, and the window size in zoomed CSS pixels. */
+    --ui-zoom: 1;
+    --app-w: calc(100vw / var(--ui-zoom));
+    --app-h: calc(100vh / var(--ui-zoom));
+
     --hts-night: #0d1315;
     --hts-surface: #151e21;
     --hts-surface-2: #1c282c;
@@ -45,8 +50,8 @@
 
 .hts-screen {
     position: relative;
-    width: 100vw;
-    min-height: 100vh;
+    width: var(--app-w);
+    min-height: var(--app-h);
     overflow: clip;
     background: var(--hts-night);
     color: var(--hts-text);

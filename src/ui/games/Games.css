@@ -1,4 +1,4 @@
-.tavern-screen { height: 100vh; display: flex; flex-direction: column; }
+.tavern-screen { height: var(--app-h); display: flex; flex-direction: column; }
 .tavern-header {
     position: relative;
     height: 72px;
