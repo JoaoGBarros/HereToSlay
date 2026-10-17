@@ -24,5 +24,8 @@ dist-electron
 *.sln
 *.sw?
 
+# Electron packages
+release*/
+
 # Claude Code local config
 .claude/

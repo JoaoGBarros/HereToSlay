@@ -1,0 +1,6 @@
+# One runtime image for every backend service on the server: they all share the same jar
+# (built locally, see deploy.sh) and only differ in the main class each container runs.
+FROM eclipse-temurin:21-jre-jammy
+WORKDIR /app
+COPY app.jar app.jar
+ENTRYPOINT ["java", "-cp", "app.jar"]

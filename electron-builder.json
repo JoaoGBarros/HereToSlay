@@ -7,22 +7,22 @@
     "files": [
         "dist/**",
         "dist-electron/**",
-        "package.json"
+        "package.json",
+        "!node_modules/**"
     ],
     "win": {
-        "target": ["nsis", "portable"],
+        "target": [
+            "portable"
+        ],
         "icon": "public/icon.png"
-    },
-    "nsis": {
-        "oneClick": false,
-        "allowToChangeInstallationDirectory": true,
-        "artifactName": "HereToSlay-Setup-${version}.${ext}"
     },
     "portable": {
         "artifactName": "HereToSlay-${version}-portable.${ext}"
     },
     "mac": {
-        "target": ["dmg"],
+        "target": [
+            "dmg"
+        ],
         "icon": "public/icon.png"
     }
 }

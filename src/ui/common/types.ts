@@ -183,6 +183,8 @@ export interface MatchView {
     disconnected?: string[];
     /** Time left on the current setup timer (loading, initiative, Party Leader). */
     setupRemainingMs?: number;
+    /** Setup is only showing how the step ended (all dice rolled, all Leaders picked). */
+    setupRevealing?: boolean;
     pending?: Pending;
     recent?: RecentResult;
     winner?: { playerId: string | null; reason: 'monsters' | 'classes' | 'last_standing' | 'not_enough_players' };
