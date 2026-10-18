@@ -6,14 +6,17 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.header.Header;
 import org.br.heretoslay.entity.Lobby;
 import org.br.heretoslay.entity.LobbyStatus;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class LobbyService {
     private static final LobbyService instance = new LobbyService();
@@ -21,6 +24,14 @@ public class LobbyService {
     private KafkaProducer<String, String> kafkaProducer;
     private final Map<String, String> playerUsernames = new ConcurrentHashMap<>();
     private final ObjectMapper mapper = new ObjectMapper();
+    /**
+     * Tags the lobby snapshots this process writes. The replica sync skips them: they are already in
+     * memory, and replaying one late would overwrite a newer change (a join or a ready made meanwhile).
+     */
+    private static final String ORIGIN_HEADER = "origin";
+    private final String instanceId = UUID.randomUUID().toString();
+    /** Last table id handed out; ids follow the clock but never repeat, even for tables created in the same millisecond. */
+    private final AtomicLong lastLobbyId = new AtomicLong();
     /** Players still playing each running match, from the engine's rosters on match-state-store. */
     private final Map<String, java.util.Set<String>> activeMatchPlayers = new ConcurrentHashMap<>();
     private final Map<String, Long> activeMatchSeen = new ConcurrentHashMap<>();
@@ -148,7 +159,9 @@ public class LobbyService {
     }
 
     public Long createLobby(int maxPlayers, int minPlayers, String name) {
-        Long uniqueId = System.currentTimeMillis();
+        long now = System.currentTimeMillis();
+        long uniqueId = lastLobbyId.updateAndGet(prev -> Math.max(prev + 1, now));
+        while (lobbies.containsKey(uniqueId)) uniqueId = lastLobbyId.incrementAndGet();
         Lobby lobby = new Lobby(uniqueId, name, maxPlayers, minPlayers);
         lobbies.put(lobby.getId(), lobby);
         System.out.println("Lobby criado");
@@ -449,6 +462,7 @@ public class LobbyService {
         try {
             String lobbyJson = mapper.writeValueAsString(lobby);
             ProducerRecord<String, String> record = new ProducerRecord<>("lobby-state-store", lobby.getId().toString(), lobbyJson);
+            record.headers().add(ORIGIN_HEADER, instanceId.getBytes(StandardCharsets.UTF_8));
             this.kafkaProducer.send(record);
         } catch (Exception e) {
             e.printStackTrace();
@@ -457,6 +471,7 @@ public class LobbyService {
 
     private void deleteStateFromKafka(Long lobbyId) {
         ProducerRecord<String, String> record = new ProducerRecord<>("lobby-state-store", lobbyId.toString(), null);
+        record.headers().add(ORIGIN_HEADER, instanceId.getBytes(StandardCharsets.UTF_8));
         this.kafkaProducer.send(record);
     }
 
@@ -497,6 +512,11 @@ public class LobbyService {
         System.out.println("Restauração concluída! " + lobbies.size() + " lobbies ativos na memória.");
     }
 
+    private boolean isOwnSnapshot(ConsumerRecord<String, String> record) {
+        Header origin = record.headers().lastHeader(ORIGIN_HEADER);
+        return origin != null && instanceId.equals(new String(origin.value(), StandardCharsets.UTF_8));
+    }
+
     private void startStateStoreConsumer() {
         System.out.println("Iniciando sincronização contínua de Lobbies (Replica Sync)...");
         Properties props = new Properties();
@@ -515,6 +535,7 @@ public class LobbyService {
         while (true) {
             ConsumerRecords<String, String> records = restorer.poll(Duration.ofMillis(200));
             for (ConsumerRecord<String, String> record : records) {
+                if (isOwnSnapshot(record)) continue;
                 try {
                     Long lobbyId = Long.parseLong(record.key());
                     if (record.value() == null) {
