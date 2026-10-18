@@ -11,10 +11,12 @@ interface LeaderDraftScreenProps {
     turn: string;
     order: string[];
     available: string[];
+    /** Who plays the first turn (the last to pick). */
+    firstPlayer?: string;
     onChoose: (leader: string) => void;
 }
 
-function LeaderDraftScreen({ players, me, turn, order, available, onChoose }: LeaderDraftScreenProps) {
+function LeaderDraftScreen({ players, me, turn, order, available, firstPlayer, onChoose }: LeaderDraftScreenProps) {
     const { t } = useI18n();
     const isMyPick = turn === me && !players[me]?.leader;
     const [picked, setPicked] = useState<HeroClassId>(() => (available[0] as HeroClassId) || 'WIZARD');
@@ -30,6 +32,8 @@ function LeaderDraftScreen({ players, me, turn, order, available, onChoose }: Le
     const text = t.classes[picked];
     const canConfirm = isMyPick && available.includes(picked);
     const picker = players[turn]?.username;
+    const allPicked = order.length > 0 && order.every((pid) => players[pid]?.leader);
+    const firstName = firstPlayer ? (firstPlayer === me ? t.common.you : players[firstPlayer]?.username) : undefined;
 
     function preview(id: HeroClassId) {
         setPicked(id);
@@ -43,13 +47,13 @@ function LeaderDraftScreen({ players, me, turn, order, available, onChoose }: Le
                     <span className="hts-label">{t.draft.kicker}</span>
                     <h1 id="draft-h" className="hts-display" style={{ fontSize: 50 }}>{t.draft.title}</h1>
                 </div>
-                <span className={`hts-chip ${isMyPick ? 'hts-chip--gold' : 'hts-chip--muted'}`} role="status">
-                    {isMyPick ? t.draft.myTurn : picker ? t.draft.picking(picker) : t.draft.waiting}
+                <span className={`hts-chip ${isMyPick || allPicked ? 'hts-chip--gold' : 'hts-chip--muted'}`} role="status">
+                    {allPicked && firstName ? t.draft.startsFirst(firstName) : isMyPick ? t.draft.myTurn : picker ? t.draft.picking(picker) : t.draft.waiting}
                 </span>
             </header>
 
             <div className="draft-order hts-panel" aria-label={t.draft.orderAria}>
-                <span className="hts-label" style={{ marginRight: 6 }}>{t.draft.order}</span>
+                <span className="hts-label" style={{ marginRight: 6 }} title={t.draft.rule}>{t.draft.order}</span>
                 {order.map((pid, i) => {
                     const p = players[pid];
                     if (!p) return null;
@@ -68,6 +72,8 @@ function LeaderDraftScreen({ players, me, turn, order, available, onChoose }: Le
                     );
                 })}
             </div>
+
+            <p className="draft-rule" role="note">{t.draft.rule}</p>
 
             <div className="draft-main">
                 <div role="radiogroup" aria-label={t.draft.leadersAria} className="draft-grid">

@@ -129,3 +129,4 @@
 .loading-dot { width: 26px; height: 26px; border-radius: 50%; background: #e9b949; box-shadow: 0 0 0 6px rgba(233, 185, 73, 0.18); animation: hts-glow 1.6s ease-in-out infinite; }
 .loading-dot--ready { background: #5cc28a; box-shadow: 0 0 0 6px rgba(92, 194, 138, 0.2); animation: none; }
 .hts-reduced-motion .loading-dot { animation: none; }
+.draft-rule { margin: -6px 0 0; font-size: 14px; color: var(--hts-muted); }

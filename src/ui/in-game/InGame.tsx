@@ -127,9 +127,9 @@ function InGame() {
                     <InitiativeScreen key={s.tieRound} players={seated} me={me} tieRolls={s.tieRolls} onRoll={actions.rollOrder} />
                 )}
                 {matchState === 'PARTY_LEADER_SELECTION' && (
-                    <LeaderDraftScreen players={seated} me={me} turn={turn} order={view.pickOrder.filter((pid) => seated[pid])} available={view.availablePartyLeaders} onChoose={actions.chooseLeader} />
+                    <LeaderDraftScreen players={seated} me={me} turn={turn} order={view.pickOrder.filter((pid) => seated[pid])} available={view.availablePartyLeaders} firstPlayer={view.turnOrder[0]} onChoose={actions.chooseLeader} />
                 )}
-                {(matchState === 'ORDER_SELECTION' || matchState === 'PARTY_LEADER_SELECTION') && (
+                {(matchState === 'ORDER_SELECTION' || matchState === 'PARTY_LEADER_SELECTION') && !view.setupRevealing && (
                     <SetupClock key={`${matchState}-${turn}-${s.tieRound}`} remainingMs={view.setupRemainingMs ?? 0} kind={matchState === 'ORDER_SELECTION' ? 'initiative' : 'leader'} />
                 )}
                 {matchState !== '' && <SurrenderButton floating onSurrender={surrender} />}

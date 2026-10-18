@@ -56,6 +56,10 @@ public class Match implements Table {
     private static final long ORDER_ROLL_MS = 10_000;
     /** A Party Leader is drawn at random for whoever has not picked. */
     private static final long LEADER_PICK_MS = 20_000;
+    /** How long a roll's or duel's final result stays on screen before the game moves on. */
+    private static final long RESULT_HOLD_MS = 3_000;
+    /** How long the last initiative dice and the last Leader pick stay on screen before the next step. */
+    private static final long SETUP_REVEAL_MS = 3_500;
     /** How long a dropped player has to come back before leaving the match. */
     private static final long DISCONNECT_GRACE_MS = 60_000;
 
@@ -69,6 +73,8 @@ public class Match implements Table {
     private final Map<String, Long> disconnectedUntil = new LinkedHashMap<>();
     private long setupToken;
     private long setupDeadline;
+    /** Setup is only showing its outcome (all dice rolled, all Leaders picked) before moving on. */
+    private boolean setupRevealing;
     private int leaderPickIndex;
     private int turnIndex;
     private int round;
@@ -374,7 +380,7 @@ public class Match implements Table {
     }
 
     private void rollForEveryoneMissing() {
-        if (phase != Phase.ORDER_SELECTION) return;
+        if (phase != Phase.ORDER_SELECTION || setupRevealing) return;
         for (PlayerState p : new ArrayList<>(active())) {
             if (phase == Phase.ORDER_SELECTION && p.getOrderRoll() == null) rollInitiative(p.getId());
         }
@@ -385,7 +391,16 @@ public class Match implements Table {
         if (phase != Phase.ORDER_SELECTION || p == null || p.isGone() || p.getOrderRoll() != null) return;
         int[] dice = Roll.throwDice();
         p.setOrderRoll(dice[0] + dice[1], dice);
-        if (active().stream().allMatch(x -> x.getOrderRoll() != null)) finishOrderSelection();
+        if (active().stream().allMatch(x -> x.getOrderRoll() != null)) revealSetupThen(this::finishOrderSelection);
+    }
+
+    /** Everyone sees how a setup step ended before the next one starts. */
+    private void revealSetupThen(Runnable next) {
+        setupRevealing = true;
+        scheduleSetup(SETUP_REVEAL_MS, () -> {
+            setupRevealing = false;
+            next.run();
+        });
     }
 
     private boolean pickLeader(String playerId, String leader) {
@@ -403,7 +418,7 @@ public class Match implements Table {
     private void nextLeaderPick() {
         while (leaderPickIndex < pickOrder.size() && players.get(pickOrder.get(leaderPickIndex)).isGone()) leaderPickIndex++;
         if (leaderPickIndex >= pickOrder.size()) {
-            startGame();
+            revealSetupThen(this::startGame);
             return;
         }
         scheduleSetup(LEADER_PICK_MS, () -> {
@@ -414,6 +429,7 @@ public class Match implements Table {
     }
 
     private void finishOrderSelection() {
+        if (phase != Phase.ORDER_SELECTION) return;
         List<PlayerState> rolled = active();
         Set<Integer> rolls = new HashSet<>();
         rolled.forEach(p -> rolls.add(p.getOrderRoll()));
@@ -429,10 +445,9 @@ public class Match implements Table {
         rolled.stream()
                 .sorted((a, b) -> Integer.compare(b.getOrderRoll(), a.getOrderRoll()))
                 .forEach(p -> pickOrder.add(p.getId()));
-        // Whoever picks their Party Leader last goes first; play continues in pick order.
+        // The highest roll picks a Party Leader first and plays the first turn; play follows the roll order.
         turnOrder.clear();
-        turnOrder.add(pickOrder.get(pickOrder.size() - 1));
-        for (int i = 0; i < pickOrder.size() - 1; i++) turnOrder.add(pickOrder.get(i));
+        turnOrder.addAll(pickOrder);
         phase = Phase.PARTY_LEADER_SELECTION;
         leaderPickIndex = 0;
         broadcast(event("order_finalized", new JSONObject().put("turnOrder", new JSONArray(turnOrder))));
@@ -440,6 +455,7 @@ public class Match implements Table {
     }
 
     private void startGame() {
+        if (phase != Phase.PARTY_LEADER_SELECTION) return;
         setupToken++;
         turnOrder.removeIf(id -> players.get(id).isGone());
         for (String id : turnOrder) {
@@ -1478,7 +1494,10 @@ public class Match implements Table {
                 .put("idle", idle())
                 .put("loaded", new JSONArray(loaded))
                 .put("disconnected", new JSONArray(disconnectedUntil.keySet()));
-        if (phase != Phase.GAMEPLAY && phase != Phase.FINISHED) state.put("setupRemainingMs", Math.max(0, setupDeadline - now));
+        if (phase != Phase.GAMEPLAY && phase != Phase.FINISHED) {
+            state.put("setupRemainingMs", Math.max(0, setupDeadline - now));
+            state.put("setupRevealing", setupRevealing);
+        }
         JSONObject pending = pendingFor(viewer, now);
         if (pending != null) state.put("pending", pending);
         if (recent != null) state.put("recent", recent);
