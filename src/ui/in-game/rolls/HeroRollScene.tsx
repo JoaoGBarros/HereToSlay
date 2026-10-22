@@ -8,7 +8,7 @@ import { DicePair } from '../../common/PipDie';
 import { Stage } from '../../common/Stage';
 import type { CardData, ModifierWindowData, PlayersMap, RollData } from '../../common/types';
 import ModifierPicker, { type ModifierPreview } from '../components/ModifierPicker';
-import { bonusSum, rawOf, signed } from './RollParts';
+import { bonusSum, rawOf, signed, useRollSound } from './RollParts';
 import './stage.css';
 
 interface HeroRollSceneProps {
@@ -20,6 +20,7 @@ interface HeroRollSceneProps {
     onRoll: () => void;
     onPlayModifier: (cardId: number, value: number, targetId: string, guardianBonus: number) => void;
     onPass: () => void;
+    onUnpass: () => void;
 }
 
 const RAYS = 16;
@@ -28,10 +29,11 @@ const RAYS = 16;
  * A Hero effect roll as its own scene, in the same family as the challenge: the Hero big on the left,
  * what happens on success in the middle, the dice and the 2..12 track on the right, Modifiers below.
  */
-function HeroRollScene({ roll, modifierWindow, players, me, hand, onRoll, onPlayModifier, onPass }: HeroRollSceneProps) {
+function HeroRollScene({ roll, modifierWindow, players, me, hand, onRoll, onPlayModifier, onPass, onUnpass }: HeroRollSceneProps) {
     const { t, lang } = useI18n();
     const [clicked, setClicked] = useState(false);
     const [preview, setPreview] = useState<ModifierPreview | null>(null);
+    const playRollSound = useRollSound(roll.dice);
     const card = roll.card;
     const target = card?.diceValue ?? 0;
     const roller = players[roll.rollerId];
@@ -111,7 +113,7 @@ function HeroRollScene({ roll, modifierWindow, players, me, hand, onRoll, onPlay
                 <section className="hero3-roll" aria-live="polite">
                     <div className="hero3-dice">
                         {!roll.dice && isRoller && !clicked ? (
-                            <button type="button" className="hero3-roll-btn" onClick={() => { setClicked(true); onRoll(); }}>{t.engine.roll.rollNow}</button>
+                            <button type="button" className="hero3-roll-btn" onClick={() => { setClicked(true); playRollSound(); onRoll(); }}>{t.engine.roll.rollNow}</button>
                         ) : (
                             <DicePair dice={roll.dice ?? null} rolling={!roll.dice} size={88} />
                         )}
@@ -149,6 +151,7 @@ function HeroRollScene({ roll, modifierWindow, players, me, hand, onRoll, onPlay
                     placement="embedded"
                     onPlay={onPlayModifier}
                     onPass={onPass}
+                    onUnpass={onUnpass}
                     onPreview={setPreview}
                 />
             )}

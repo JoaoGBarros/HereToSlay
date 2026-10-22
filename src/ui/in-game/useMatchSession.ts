@@ -6,7 +6,7 @@ import type { PlayerTag } from './board/boardTypes';
 import { diffMatchStates, type FxEvent } from './fx/fxDiff';
 import type { Dict } from '@/i18n/pt';
 
-const LINGER_MS = 2800;
+const LINGER_MS = 3600;
 const TAG_MS = 30000;
 const TOAST_MS = 5000;
 const TOAST_LIMIT = 2;
@@ -232,11 +232,6 @@ export function useMatchSession(socket: SocketRef, matchId: string | undefined, 
                 }
             }
 
-            if (type === 'dice_roll') {
-                playSound('diceRoll');
-                return;
-            }
-
             if (type === 'sound') {
                 if (subtype === 'play_class_sound' && data.payload) playClassSound(data.payload as ClassSoundType);
                 if (subtype === 'play_draw_card_sound') playSound('cardDraw');
@@ -286,6 +281,7 @@ export function useMatchSession(socket: SocketRef, matchId: string | undefined, 
         endTurn: () => sendAction('end_turn'),
         roll: () => sendAction('roll'),
         pass: () => sendAction('pass'),
+        unpass: () => sendAction('unpass'),
         challenge: () => sendAction('challenge'),
         surrender: () => send({ type: 'match', subtype: 'surrender' }),
         previewChoice: (choiceId: string, selection: string[]) => sendAction('preview_choice', { choice_id: choiceId, selection }),

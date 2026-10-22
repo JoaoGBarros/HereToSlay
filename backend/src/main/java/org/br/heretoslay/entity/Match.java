@@ -306,6 +306,7 @@ public class Match implements Table {
                 case "preview_choice" -> previewChoice(playerId, payload);
                 case "roll" -> rollDice(playerId);
                 case "pass" -> pass(playerId);
+                case "unpass" -> unpass(playerId);
                 case "challenge" -> challenge(playerId);
                 default -> turnAction(playerId, action, payload);
             }
@@ -767,10 +768,9 @@ public class Match implements Table {
 
     private void openChallengeWindow(Play play) {
         if (!isChallengeable(play)) return;
+        // Everyone else gets the full window, card or not, so nobody learns who holds a Challenge.
         Set<String> eligible = new HashSet<>();
-        for (PlayerState other : others(play.ownerId)) {
-            if (other.count(GameCard.Kind.CHALLENGE) > 0) eligible.add(other.getId());
-        }
+        for (PlayerState other : others(play.ownerId)) eligible.add(other.getId());
         if (eligible.isEmpty()) return;
         challengeWindow = new ChallengeWindow(play, eligible);
         challengeWindow.deadline = System.currentTimeMillis() + CHALLENGE_WINDOW_MS;
@@ -835,7 +835,7 @@ public class Match implements Table {
         broadcast(new JSONObject().put("type", "match").put("subtype", "duel_result").put("winner", d.winnerId).toString());
         setRecent(new JSONObject().put("type", "duel").put("duel", duelJson(d)));
         duel = null;
-        resume();
+        holdThenResume();
     }
 
     private void resolvePlay(Play play) {
@@ -919,7 +919,7 @@ public class Match implements Table {
             steps.add(() -> draw(playerId, 1));
         }
         push(steps);
-        resume();
+        holdThenResume();
     }
 
     // =====================================================================
@@ -973,7 +973,13 @@ public class Match implements Table {
             return;
         }
         push(steps);
-        resume();
+        holdThenResume();
+    }
+
+    /** The final result stays on screen for everyone before its effects (or the next step) begin. */
+    private void holdThenResume() {
+        waiting = true;
+        schedule(RESULT_HOLD_MS, () -> waiting = false);
     }
 
     // =====================================================================
@@ -1034,10 +1040,9 @@ public class Match implements Table {
     }
 
     private Set<String> modifierHolders() {
+        // Everyone still playing gets the window, card or not, so nobody learns who holds a Modifier.
         Set<String> holders = new HashSet<>();
-        players.values().forEach(p -> {
-            if (p.count(GameCard.Kind.MODIFIER) > 0) holders.add(p.getId());
-        });
+        active().forEach(p -> holders.add(p.getId()));
         return holders;
     }
 
@@ -1106,6 +1111,11 @@ public class Match implements Table {
             modifierWindow.passed.add(playerId);
             closeModifierWindowIfAllPassed();
         }
+    }
+
+    /** A player who passed on the Modifier window changes their mind while it is still open. */
+    private void unpass(String playerId) {
+        if (modifierWindow != null) modifierWindow.passed.remove(playerId);
     }
 
     private void closeModifierWindowIfAllPassed() {

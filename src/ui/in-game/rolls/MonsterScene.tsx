@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { getMonsterArt } from '@/utils/CardArt';
-import { chanceAtLeast, chanceAtMost } from '@/utils/ClassInfo';
+import { chanceAtLeast, chanceAtMost, classInfo } from '@/utils/ClassInfo';
 import { monsterRequirement, useI18n } from '@/i18n';
-import type { ModifierWindowData, PlayersMap, RollData } from '../../common/types';
+import tableBackground from '../../assets/ingame.png';
+import { DicePair } from '../../common/PipDie';
+import { Stage } from '../../common/Stage';
+import type { CardData, ModifierWindowData, PlayersMap, RollData } from '../../common/types';
 import { RollRangeBar } from '../../common/Widgets';
-import { bonusSum, ModifierStatus, rawOf, RollChips, RollNumbers } from './RollParts';
-import '../fx/fx.css';
+import ModifierPicker, { type ModifierPreview } from '../components/ModifierPicker';
+import { bonusSum, rawOf, signed, useRollSound } from './RollParts';
+import './stage.css';
 
 export type MonsterOutcome = 'monster_slain' | 'monster_fight_back' | 'monster_survives';
 
@@ -14,98 +18,130 @@ interface MonsterSceneProps {
     modifierWindow?: ModifierWindowData;
     players: PlayersMap;
     me: string;
+    hand: CardData[];
     onRoll: () => void;
+    onPlayModifier: (cardId: number, value: number, targetId: string, guardianBonus: number) => void;
+    onPass: () => void;
+    onUnpass: () => void;
 }
 
 const OUTCOME_KIND: Record<string, MonsterOutcome> = { slain: 'monster_slain', fight_back: 'monster_fight_back', survives: 'monster_survives' };
+const OUTCOME_TONE: Record<MonsterOutcome, 'win' | 'fail' | 'mid'> = { monster_slain: 'win', monster_fight_back: 'fail', monster_survives: 'mid' };
+const SLASHES = [0, 1, 2];
 
-const OUTCOME_TONE: Record<MonsterOutcome, string> = { monster_slain: 'win', monster_fight_back: 'fail', monster_survives: 'mid' };
-
-const OUTCOME_FX: Record<MonsterOutcome, string> = { monster_slain: 'slain', monster_fight_back: 'fight', monster_survives: 'survive' };
-const SLASHES = [
-    { left: '12%', top: '30%', angle: 24 },
-    { left: '10%', top: '44%', angle: 24 },
-    { left: '8%', top: '58%', angle: 24 },
-];
-
-/** Monster attack: shows the three roll ranges, the roll, and every modifier before it resolves. */
-function MonsterScene({ roll, modifierWindow, players, me, onRoll }: MonsterSceneProps) {
+/**
+ * Monster attack as its own scene, in the same family as the Hero roll: the Monster big on the left,
+ * its requirement and roll ranges in the middle, the dice on the right, Modifiers below with room of their own.
+ */
+function MonsterScene({ roll, modifierWindow, players, me, hand, onRoll, onPlayModifier, onPass, onUnpass }: MonsterSceneProps) {
     const { t } = useI18n();
     const [clicked, setClicked] = useState(false);
+    const [preview, setPreview] = useState<ModifierPreview | null>(null);
+    const playRollSound = useRollSound(roll.dice);
     const monster = roll.monster!;
-    const attackerId = roll.rollerId;
-    const isAttacker = attackerId === me;
-    const attacker = players[attackerId];
-    const bonus = bonusSum(roll) + roll.modifiers.reduce((sum, m) => sum + m.value, 0);
-    const raw = rawOf(roll);
-    const total = roll.total ?? null;
-    const outcome = roll.outcome ? { kind: OUTCOME_KIND[roll.outcome], roll: total ?? 0 } : null;
-    const zoneOf = (n: number) => (n <= monster.fightBackThreshold ? 'fail' : n >= monster.slayThreshold ? 'win' : 'mid');
-    const pWin = chanceAtLeast(monster.slayThreshold, bonus);
-    const pFail = chanceAtMost(monster.fightBackThreshold, bonus);
+    const attacker = players[roll.rollerId];
+    const isAttacker = roll.rollerId === me;
+    const leader = classInfo(attacker?.leader);
     const art = getMonsterArt(monster.name);
+    const raw = rawOf(roll);
+    // A Modifier preview only counts while the window is still open.
+    const previewValue = modifierWindow && preview?.targetId === roll.rollerId ? preview.value : 0;
+    const total = roll.total != null ? roll.total + previewValue : null;
+    const passiveBonus = bonusSum(roll);
+    const extras = [...roll.bonuses.map((b) => b.value), ...roll.modifiers.map((m) => m.value), ...(previewValue ? [previewValue] : [])];
+    const zoneOf = (n: number) => (n <= monster.fightBackThreshold ? 'fail' : n >= monster.slayThreshold ? 'win' : 'mid');
+    const pWin = chanceAtLeast(monster.slayThreshold, passiveBonus);
+    const pFail = chanceAtMost(monster.fightBackThreshold, passiveBonus);
+    const outcome = roll.outcome ? OUTCOME_KIND[roll.outcome] : null;
+    const tone = outcome ? OUTCOME_TONE[outcome] : total != null ? zoneOf(total) : 'idle';
+    const attackerName = attacker?.username ?? t.common.someone;
 
-    const fxClass = outcome ? OUTCOME_FX[outcome.kind] : '';
+    let status = t.monster.intro;
+    if (outcome) status = `${monster.name} ${t.monster.outcomes[outcome]}`;
+    else if (modifierWindow && raw != null) status = t.engine.roll.waitingMods;
+    else if (!roll.dice && !isAttacker) status = t.monster.rolling(attackerName);
 
     return (
-        <div className={`scene monster-scene hts-fade ${fxClass ? `monster-scene--${fxClass}` : ''}`} role="dialog" aria-modal="true" aria-label={t.monster.aria(monster.name)}>
-            {art && <img src={art} alt="" aria-hidden="true" className="monster-scene-blur" />}
-            {art && <img src={art} alt={monster.name} className="monster-scene-card" />}
-            {outcome && (
-                <div className={`monster-fx monster-fx--${fxClass}`} aria-hidden="true">
-                    {outcome.kind === 'monster_slain' && SLASHES.map((s, i) => (
-                        <span key={i} className="monster-fx-slash" style={{ left: s.left, top: s.top, transform: `rotate(${s.angle}deg)`, animationDelay: `${i * 0.12}s` }} />
-                    ))}
-                    <span className="monster-fx-stamp">{t.monster.stamps[outcome.kind]}</span>
-                </div>
-            )}
-            <section className="monster-scene-body">
-                <div>
-                    <span className="hts-label" style={{ color: 'var(--hts-ember-text)' }}>{isAttacker ? t.monster.youAttack : t.monster.attacks(attacker?.username ?? t.common.someone)}{t.monster.cost}</span>
-                    <h1 className="hts-display" style={{ fontSize: 64 }}>{monster.name}</h1>
-                </div>
-                <div className="monster-scene-req">
-                    <span className="hts-label">{t.monster.requirement}</span>
-                    <span style={{ fontWeight: 800, fontSize: 16 }}>{monsterRequirement(t, monster.partyRequirement)}</span>
-                </div>
+        <Stage label={t.monster.aria(monster.name)} className={`mon3 mon3--${tone}`}>
+            {art && <img src={art} alt="" aria-hidden="true" className="mon3-blur" />}
+            <img src={tableBackground} alt="" aria-hidden="true" className="duel3-bg" />
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    <span className="hts-label">{t.monster.ranges(bonus)}</span>
-                    <RollRangeBar zoneOf={zoneOf} mark={total} height={58} />
-                    <div className="monster-scene-legend">
-                        <span style={{ color: 'var(--hts-ember-text)' }}>{t.monster.failRange(monster.fightBackThreshold, pFail)}</span>
-                        <span style={{ color: '#b9c4c8' }}>{t.monster.midRange(Math.max(0, 100 - pFail - pWin))}</span>
-                        <span style={{ color: 'var(--hts-jade-text)' }}>{t.monster.winRange(monster.slayThreshold, pWin)}</span>
+            <div className="duel3-banner-wrap">
+                <div className="hero3-banner mon3-banner">
+                    {leader && <img src={leader.leaderArt} alt="" />}
+                    {isAttacker ? t.monster.youAttack : t.monster.attacks(attackerName)} {monster.name}{t.monster.cost}
+                </div>
+            </div>
+
+            <div className={`hero3-body ${modifierWindow ? '' : 'hero3-body--solo'}`}>
+                <section className="mon3-card-slot" aria-label={monster.name}>
+                    <div className={`mon3-card ${outcome ? `mon3-card--${OUTCOME_TONE[outcome]}` : ''}`}>
+                        {art ? <img src={art} alt={monster.name} /> : <span>{monster.name}</span>}
+                        {outcome === 'monster_slain' && SLASHES.map((i) => <i key={i} className="mon3-slash" style={{ top: `${30 + i * 16}%`, animationDelay: `${i * 0.12}s` }} />)}
                     </div>
-                </div>
-
-                <div className="monster-scene-roll hts-panel">
-                    {!roll.dice && isAttacker && !clicked ? (
-                        <>
-                            <p style={{ margin: 0, flex: 1, fontSize: 16, lineHeight: 1.5, color: '#cfc6b3' }}>{t.monster.intro}</p>
-                            <button type="button" className="hts-btn" style={{ height: 64, fontSize: 28 }} onClick={() => { setClicked(true); onRoll(); }}>{t.roll.roll}</button>
-                        </>
-                    ) : (
-                        <>
-                            <RollNumbers roll={roll} rolling={!roll.dice} size={60} totalSize={80} />
-                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                                <RollChips roll={roll} players={players} />
-                                <span className="hts-muted" style={{ fontSize: 14 }}>
-                                    {raw == null ? t.monster.rolling(attacker?.username ?? t.common.someone) : outcome ? t.monster.result(raw, total ?? raw) : t.monster.modsOpen(raw)}
-                                </span>
-                                {modifierWindow && <ModifierStatus window={modifierWindow} players={players} me={me} />}
-                            </div>
-                        </>
+                    {outcome && (
+                        <div className={`hero3-stamp hero3-stamp--${OUTCOME_TONE[outcome]}`} aria-hidden="true">
+                            <b>{t.monster.stamps[outcome]}</b>
+                        </div>
                     )}
-                </div>
+                </section>
 
-                {outcome && (
-                    <div className={`monster-scene-outcome monster-scene-outcome--${OUTCOME_TONE[outcome.kind]} hts-pop`} role="status">
-                        {monster.name} {t.monster.outcomes[outcome.kind]}
+                <section className="mon3-mid">
+                    <h1 className="mon3-name">{monster.name}</h1>
+                    <div className="mon3-req">
+                        <span className="hero3-effect-label">{t.monster.requirement}</span>
+                        <b>{monsterRequirement(t, monster.partyRequirement)}</b>
                     </div>
-                )}
-            </section>
-        </div>
+                    <ul className="mon3-legend">
+                        <li className="mon3-legend--fail">{t.monster.failRange(monster.fightBackThreshold, pFail)}</li>
+                        <li className="mon3-legend--mid">{t.monster.midRange(Math.max(0, 100 - pFail - pWin))}</li>
+                        <li className="mon3-legend--win">{t.monster.winRange(monster.slayThreshold, pWin)}</li>
+                    </ul>
+                </section>
+
+                <section className="hero3-roll" aria-live="polite">
+                    <div className="hero3-dice">
+                        {!roll.dice && isAttacker && !clicked ? (
+                            <button type="button" className="hero3-roll-btn" onClick={() => { setClicked(true); playRollSound(); onRoll(); }}>{t.engine.roll.rollNow}</button>
+                        ) : (
+                            <DicePair dice={roll.dice ?? null} rolling={!roll.dice} size={88} />
+                        )}
+                        {total != null && raw != null && (
+                            <div className="hero3-total">
+                                <span key={total} className={`hero3-number hero3-number--${tone === 'mid' ? 'idle' : tone} hts-pop`}>{total}</span>
+                                <span className="duel3-break">{t.engine.duel.breakdown(raw, extras.map(signed).join(' '))}</span>
+                            </div>
+                        )}
+                    </div>
+                    <span className="hts-label">{t.monster.ranges(passiveBonus)}</span>
+                    <RollRangeBar zoneOf={zoneOf} mark={total} height={48} />
+                    <div className="duel3-mods">
+                        {roll.modifiers.map((m, i) => (
+                            <span key={i} className={`duel3-chip hts-pop ${m.value > 0 ? 'duel3-chip--plus' : 'duel3-chip--minus'}`}>
+                                {t.engine.duel.modChip(signed(m.value), m.playerId === me ? t.common.you : players[m.playerId]?.username ?? '')}
+                            </span>
+                        ))}
+                        {previewValue ? <span className="duel3-chip duel3-chip--preview">{t.engine.duel.previewChip(signed(previewValue))}</span> : null}
+                    </div>
+                    <span className={`hero3-status hero3-status--${tone === 'mid' ? 'idle' : tone}`}>{status}</span>
+                </section>
+            </div>
+
+            {modifierWindow && (
+                <ModifierPicker
+                    window={modifierWindow}
+                    rolls={[roll]}
+                    hand={hand}
+                    players={players}
+                    me={me}
+                    placement="embedded"
+                    onPlay={onPlayModifier}
+                    onPass={onPass}
+                    onUnpass={onUnpass}
+                    onPreview={setPreview}
+                />
+            )}
+        </Stage>
     );
 }
 

@@ -386,3 +386,45 @@
 
 /* A match that ended without a winner. */
 .vic3-cancel { position: absolute; left: 120px; top: 260px; width: 900px; display: flex; flex-direction: column; gap: 20px; }
+
+/* ---------- Duel: how it lands (slam on open, crown for the winner, the loser burns) ---------- */
+.duel3-card-slot { position: relative; flex: none; }
+.duel3--intro { animation: duel-shake 0.45s ease-out 0.3s; }
+.duel3--intro .stage::after { content: ''; position: absolute; inset: 0; z-index: 4; background: #fff4d6; pointer-events: none; animation: duel-flash 0.5s ease-out 0.3s both; }
+.duel3--resolved { animation: duel-shake 0.5s ease-out; }
+.duel3-card--win { animation: duel-win 0.9s ease-out both; box-shadow: 0 0 0 4px var(--hts-gold), 0 0 70px rgba(233, 185, 73, 0.7) !important; }
+.duel3-card--lose { animation: duel-burn 1.6s ease-in 0.2s forwards; }
+.duel3 .duel2-stamp { z-index: 5; font-size: 170px; }
+.hts-reduced-motion .duel3,
+.hts-reduced-motion .duel3-card--win,
+.hts-reduced-motion .duel-crown,
+.hts-reduced-motion .duel-discard-stamp,
+.hts-reduced-motion .duel3 .duel2-stamp { animation: none !important; }
+.hts-reduced-motion .duel3-card--lose { animation: none; filter: grayscale(1) brightness(0.55); }
+.hts-reduced-motion .duel3 .duel2-stamp,
+.hts-reduced-motion .duel3--intro .stage::after { display: none; }
+
+/* ---------- Monster attack scene (same canvas as the Hero roll; Modifiers get the bottom of the stage) ---------- */
+.mon3 { background: #120c0c; }
+.mon3-blur { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.18; filter: blur(30px) saturate(1.4); pointer-events: none; }
+.mon3-banner { border-color: rgba(232, 105, 63, 0.7); }
+.mon3-card-slot { position: absolute; left: 70px; top: 82px; width: 260px; height: 360px; }
+.mon3-card { position: relative; width: 260px; height: 360px; border-radius: 16px; overflow: hidden; background: #1a1206; box-shadow: 0 0 0 4px #e8693f, 0 0 60px rgba(232, 105, 63, 0.35), 0 30px 60px rgba(0, 0, 0, 0.6); transition: filter 0.5s, transform 0.5s cubic-bezier(.2, .8, .2, 1); }
+.mon3-card img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.mon3-card--win { filter: grayscale(0.6) brightness(0.7); transform: rotate(2deg) scale(0.97); }
+.mon3-card--fail { transform: scale(1.06); box-shadow: 0 0 0 4px #e8693f, 0 0 90px rgba(232, 105, 63, 0.8), 0 30px 60px rgba(0, 0, 0, 0.6); }
+.mon3-slash { position: absolute; left: -10%; width: 120%; height: 8px; border-radius: 4px; background: linear-gradient(90deg, transparent, #fff4d6 30%, #fff 50%, #fff4d6 70%, transparent); box-shadow: 0 0 18px #f3d48a; transform: rotate(-24deg) scaleX(0); transform-origin: 0 50%; animation: mon3-slash 0.35s ease-out both; }
+@keyframes mon3-slash { to { transform: rotate(-24deg) scaleX(1); } }
+.hero3-stamp--mid b { background: #3a4448; color: #f3ead6; border-color: #b9c4c8; }
+.mon3-mid { position: absolute; left: 370px; top: 92px; width: 420px; display: flex; flex-direction: column; gap: 16px; }
+.mon3-name { margin: 0; font: 800 58px/1 var(--hts-font-display); color: #f3ead6; }
+.mon3-req { display: flex; flex-direction: column; gap: 4px; padding: 14px 18px; border-radius: 16px; background: #f3ead6; color: #2b2118; box-shadow: 0 16px 36px rgba(0, 0, 0, 0.45); }
+.mon3-req b { font-size: 19px; }
+.mon3-legend { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-weight: 800; font-size: 16px; }
+.mon3-legend li { padding: 8px 12px; border-radius: 10px; background: rgba(13, 19, 21, 0.75); }
+.mon3-legend--fail { color: #f0a88c; border-left: 5px solid #e8693f; }
+.mon3-legend--mid { color: #b9c4c8; border-left: 5px solid #6d777a; }
+.mon3-legend--win { color: #9ee6bd; border-left: 5px solid #5cc28a; }
+.mon3 .hero3-roll { gap: 16px; }
+.hts-reduced-motion .mon3-slash { animation: none; transform: rotate(-24deg); }
+.hts-reduced-motion .mon3-card { transition: none; }

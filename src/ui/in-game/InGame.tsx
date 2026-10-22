@@ -8,7 +8,6 @@ import tableBackground from '../assets/ingame.png';
 import { CardInspector, type InspectorAction } from '../common/CardInspector';
 import { ChatPanel } from '../common/ChatPanel';
 import type { CardData, DuelData, MonsterData, RollData } from '../common/types';
-import ModifierPicker from './components/ModifierPicker';
 import ActionPanel from './board/ActionPanel';
 import Arena from './board/Arena';
 import ChoiceSheet, { ChoiceWaiting } from './board/ChoiceSheet';
@@ -157,8 +156,6 @@ function InGame() {
         }
     }
     const modifierWindow = pending?.type === 'roll' || pending?.type === 'duel' ? pending.modifierWindow : undefined;
-    const windowRolls = pending?.type === 'roll' ? [pending.roll] : pending?.type === 'duel' ? [pending.ownerRoll, pending.challengerRoll] : [];
-    const canModify = !!modifierWindow && modifierWindow.holders.includes(me) && !modifierWindow.passed.includes(me);
     const choice = pending?.type === 'choice' ? pending : null;
 
     function inspectorProps(target: Inspecting): { card?: CardData; monster?: MonsterData; image?: string; title?: string; kicker?: string; hint?: string; actions: InspectorAction[] } {
@@ -282,7 +279,7 @@ function InGame() {
                 <FxLayer events={s.fx} me={me} onDone={s.finishFx} />
 
                 {pending?.type === 'challenge_window' && (
-                    <ChallengeDock pending={pending} players={players} me={me} onChallenge={actions.challenge} onPass={actions.pass} />
+                    <ChallengeDock pending={pending} players={players} me={me} hand={mine?.hand || []} onChallenge={actions.challenge} onPass={actions.pass} />
                 )}
                 {heroRoll && (
                     <HeroRollScene
@@ -295,9 +292,23 @@ function InGame() {
                         onRoll={actions.roll}
                         onPlayModifier={actions.playModifier}
                         onPass={actions.pass}
+                        onUnpass={actions.unpass}
                     />
                 )}
-                {attackRoll && <MonsterScene key={attackRoll.rollId} roll={attackRoll} modifierWindow={modifierWindow} players={players} me={me} onRoll={actions.roll} />}
+                {attackRoll && (
+                    <MonsterScene
+                        key={attackRoll.rollId}
+                        roll={attackRoll}
+                        modifierWindow={modifierWindow}
+                        players={players}
+                        me={me}
+                        hand={mine?.hand || []}
+                        onRoll={actions.roll}
+                        onPlayModifier={actions.playModifier}
+                        onPass={actions.pass}
+                        onUnpass={actions.unpass}
+                    />
+                )}
                 {duel && (
                     <DuelScene
                         key={duel.ownerRoll.rollId}
@@ -308,18 +319,7 @@ function InGame() {
                         onRoll={actions.roll}
                         onPlayModifier={actions.playModifier}
                         onPass={actions.pass}
-                    />
-                )}
-                {canModify && modifierWindow && attackRoll && (
-                    <ModifierPicker
-                        window={modifierWindow}
-                        rolls={windowRolls}
-                        hand={mine?.hand || []}
-                        players={players}
-                        me={me}
-                        placement="dock"
-                        onPlay={actions.playModifier}
-                        onPass={actions.pass}
+                        onUnpass={actions.unpass}
                     />
                 )}
 

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { playSound } from '@/utils/SoundManager/SoundManager';
 import { useI18n } from '@/i18n';
 import { DicePair } from '../../common/PipDie';
 import type { ModifierWindowData, PlayersMap, RollData } from '../../common/types';
@@ -16,6 +17,24 @@ export function bonusSum(roll: RollData): number {
 
 export function rawOf(roll: RollData): number | null {
     return roll.dice ? roll.dice[0] + roll.dice[1] : null;
+}
+
+/**
+ * The dice sound for one roll, played once: right on the roller's click (the returned function),
+ * or when the dice arrive for everyone else. A scene that opens on dice already thrown stays quiet.
+ */
+export function useRollSound(dice: RollData['dice']) {
+    const played = useRef(dice != null);
+    useEffect(() => {
+        if (!dice || played.current) return;
+        played.current = true;
+        playSound('diceRoll');
+    }, [dice]);
+    return useCallback(() => {
+        if (played.current) return;
+        played.current = true;
+        playSound('diceRoll');
+    }, []);
 }
 
 /** Remaining time of a server window, ticking down locally between state updates. */

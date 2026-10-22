@@ -20,13 +20,15 @@ interface ModifierPickerProps {
     placement: 'embedded' | 'dock';
     onPlay: (cardId: number, value: number, targetId: string, guardianBonus: number) => void;
     onPass: () => void;
+    /** Take back a pass while the window is still open. */
+    onUnpass?: () => void;
     onPreview?: (preview: ModifierPreview | null) => void;
 }
 
 const RING = 2 * Math.PI * 27;
 
 /** The Modifier window from the design: who is still reacting, your Modifier cards, value and target. */
-function ModifierPicker({ window: w, rolls, hand, players, me, placement, onPlay, onPass, onPreview }: ModifierPickerProps) {
+function ModifierPicker({ window: w, rolls, hand, players, me, placement, onPlay, onPass, onUnpass, onPreview }: ModifierPickerProps) {
     const { t } = useI18n();
     const { left, fraction, seconds } = useWindowClock(w?.remainingMs ?? 0, w?.durationMs ?? 1);
     const modifiers = hand.filter((c) => c.type === 'MODIFIER');
@@ -39,6 +41,7 @@ function ModifierPicker({ window: w, rolls, hand, players, me, placement, onPlay
     const options = useMemo(() => selected?.possibleValues ?? [], [selected]);
     const open = !!w && left > 0;
     const canReact = open && w.holders.includes(me) && !w.passed.includes(me);
+    const canUnpass = open && !!onUnpass && w.holders.includes(me) && w.passed.includes(me);
 
     useEffect(() => {
         if (!selected) return;
@@ -140,7 +143,11 @@ function ModifierPicker({ window: w, rolls, hand, players, me, placement, onPlay
                     <p className="modwin-hint">{canReact ? t.engine.modifier.pickHint : open ? t.engine.modifier.passedHint : t.engine.modifier.waitingHint}</p>
                 )}
                 <div className="modwin-actions">
-                    <button type="button" className="modwin-pass" disabled={!canReact} onClick={() => { setCardId(null); onPass(); }}>{t.engine.modifier.pass}</button>
+                    {canUnpass ? (
+                        <button type="button" className="modwin-pass" onClick={onUnpass}>{t.engine.modifier.unpass}</button>
+                    ) : (
+                        <button type="button" className="modwin-pass" disabled={!canReact} onClick={() => { setCardId(null); onPass(); }}>{t.engine.modifier.pass}</button>
+                    )}
                     <button type="button" className="modwin-play" disabled={!canReact || !selected || value === null || !target} onClick={play}>{t.engine.modifier.play}</button>
                 </div>
             </div>
