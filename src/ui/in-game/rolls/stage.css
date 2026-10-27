@@ -404,6 +404,62 @@
 .hts-reduced-motion .duel3 .duel2-stamp,
 .hts-reduced-motion .duel3--intro .stage::after { display: none; }
 
+/* ---------- Choice targets: open a card at full size before picking it ---------- */
+.tg3-target { position: relative; }
+.tg3-zoom {
+    position: absolute;
+    top: -12px;
+    right: -12px;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    border: 2px solid #f3d48a;
+    background: #1a1206;
+    color: #f3d48a;
+    cursor: zoom-in;
+    box-shadow: 0 6px 14px rgba(0, 0, 0, 0.55);
+    transition: transform 0.15s;
+}
+.tg3-zoom:hover { transform: scale(1.12); }
+.tg3-zoom:focus-visible { outline: 3px solid #f3d48a; outline-offset: 2px; }
+
+/* ---------- Victory screen: the results land with weight ---------- */
+.vic3--impact .vic3-leader { animation: vic3-slam 0.7s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+@keyframes vic3-slam { 0% { transform: scale(1.7) rotate(-6deg); opacity: 0; filter: brightness(2); } 60% { transform: scale(0.96); opacity: 1; filter: none; } 100% { transform: none; } }
+.vic3--impact .vic3-crown { animation: duel-crown 0.7s cubic-bezier(0.2, 1.6, 0.4, 1) 0.45s both; }
+.vic3--impact .vic3-glow { animation: vic3-glow 2.4s ease-in-out 0.3s infinite alternate both; }
+@keyframes vic3-glow { from { transform: scale(0.85); opacity: 0.6; } to { transform: scale(1.12); opacity: 1; } }
+.vic3--impact { animation: duel-shake 0.5s ease-out 0.35s; }
+.vic3--impact .vic3-row { animation: vic3-row 0.45s cubic-bezier(0.2, 1, 0.4, 1) both; }
+@keyframes vic3-row { from { transform: translateX(60px); opacity: 0; } to { transform: none; opacity: 1; } }
+.vic3-sparks { position: absolute; left: 50%; top: 45%; width: 0; height: 0; z-index: 2; pointer-events: none; }
+.vic3-sparks span {
+    position: absolute;
+    left: -6px;
+    top: -6px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #f3d48a;
+    box-shadow: 0 0 14px #e9b949;
+    opacity: 0;
+    animation: vic3-spark 0.9s cubic-bezier(0.1, 0.7, 0.3, 1) both;
+}
+@keyframes vic3-spark {
+    0% { transform: rotate(var(--a)) translateX(0) scale(1.4); opacity: 1; }
+    100% { transform: rotate(var(--a)) translateX(var(--d)) scale(0.2); opacity: 0; }
+}
+.hts-reduced-motion .vic3--impact .vic3-leader,
+.hts-reduced-motion .vic3--impact .vic3-crown,
+.hts-reduced-motion .vic3--impact .vic3-glow,
+.hts-reduced-motion .vic3--impact,
+.hts-reduced-motion .vic3--impact .vic3-row { animation: none !important; }
+.hts-reduced-motion .vic3-sparks { display: none; }
+
 /* ---------- Monster attack scene (same canvas as the Hero roll; Modifiers get the bottom of the stage) ---------- */
 .mon3 { background: #120c0c; }
 .mon3-blur { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0.18; filter: blur(30px) saturate(1.4); pointer-events: none; }

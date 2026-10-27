@@ -5,7 +5,8 @@ import type { Dict } from '@/i18n/pt';
 import tableBackground from '../../assets/ingame.png';
 import { cardTypeLabel, GameCard } from '../../common/GameCard';
 import { Stage } from '../../common/Stage';
-import type { ChoiceOption, ChoicePending, PlayersMap } from '../../common/types';
+import { CardInspector } from '../../common/CardInspector';
+import type { CardData, ChoiceOption, ChoicePending, PlayersMap } from '../../common/types';
 import '../rolls/stage.css';
 
 const TICK_MS = 250;
@@ -16,6 +17,17 @@ function Reticle() {
             <circle cx="48" cy="48" r="40" fill="none" stroke="#e8693f" strokeWidth="4" strokeDasharray="20 11" />
             <path d="M48 0v18M48 78v18M0 48h18M78 48h18" stroke="#e8693f" strokeWidth="4" />
         </svg>
+    );
+}
+
+/** Opens a card at full size, with its effect text, without picking it. */
+function ZoomButton({ card, onZoom }: { card?: CardData; onZoom: (card: CardData) => void }) {
+    const { t } = useI18n();
+    if (!card) return null;
+    return (
+        <button type="button" className="tg3-zoom" aria-label={t.engine.choice.seeCard(card.cardName ?? '')} title={t.engine.choice.seeCard(card.cardName ?? '')} onClick={() => onZoom(card)}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m20 20-4.6-4.6M10.5 7.5v6M7.5 10.5h6" /></svg>
+        </button>
     );
 }
 
@@ -67,6 +79,7 @@ function ChoiceSheet({ choice, players, me, onAnswer, onPreview }: ChoiceSheetPr
     const { t } = useI18n();
     const options = useMemo(() => choice.options ?? [], [choice.options]);
     const [picked, setPicked] = useState<string[]>([]);
+    const [zoom, setZoom] = useState<CardData | null>(null);
     const left = useCountdown(choice.remainingMs, choice.choiceId);
     const mode = modeOf(choice, options);
     const copy = promptText(t, choice, players);
@@ -168,7 +181,7 @@ function ChoiceSheet({ choice, players, me, onAnswer, onPreview }: ChoiceSheetPr
                                     <span style={{ fontSize: 13, color: '#b9b2a3' }}>{t.engine.choice.heroesOf(owner?.party?.length ?? 0)}</span>
                                 </div>
                                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-                                    {mine.map((o) => <HeroTarget key={o.id} option={o} on={selected.includes(o.id)} readOnly={spectator} onToggle={toggle} />)}
+                                    {mine.map((o) => <HeroTarget key={o.id} option={o} on={selected.includes(o.id)} readOnly={spectator} onToggle={toggle} onZoom={setZoom} />)}
                                 </div>
                             </div>
                         );
@@ -201,10 +214,13 @@ function ChoiceSheet({ choice, players, me, onAnswer, onPreview }: ChoiceSheetPr
                     {options.map((o) => {
                         const on = selected.includes(o.id);
                         return (
-                            <button key={o.id} type="button" className={`tg3-hero ${on ? 'tg3-hero--on' : ''}`} aria-pressed={on} disabled={mode === 'view' || spectator} onClick={() => toggle(o.id)}>
-                                <GameCard card={o.card} width={150} />
-                                {on && <Reticle />}
-                            </button>
+                            <div key={o.id} className="tg3-target">
+                                <button type="button" className={`tg3-hero ${on ? 'tg3-hero--on' : ''}`} aria-pressed={on} disabled={mode === 'view' || spectator} onClick={() => toggle(o.id)}>
+                                    <GameCard card={o.card} width={150} />
+                                    {on && <Reticle />}
+                                </button>
+                                <ZoomButton card={o.card} onZoom={setZoom} />
+                            </div>
                         );
                     })}
                 </section>
@@ -221,20 +237,24 @@ function ChoiceSheet({ choice, players, me, onAnswer, onPreview }: ChoiceSheetPr
                     <button type="button" className="tg3-confirm" disabled={!canConfirm} onClick={() => submit(mode === 'view' ? [] : picked)}>{confirmLabel}</button>
                 )}
             </footer>
+            {zoom && <CardInspector card={zoom} onClose={() => setZoom(null)} />}
         </Stage>
     );
 }
 
 /** A Hero target with what goes along with it (equipped Item, curse). */
-function HeroTarget({ option, on, readOnly, onToggle }: { option: ChoiceOption; on: boolean; readOnly: boolean; onToggle: (id: string) => void }) {
+function HeroTarget({ option, on, readOnly, onToggle, onZoom }: { option: ChoiceOption; on: boolean; readOnly: boolean; onToggle: (id: string) => void; onZoom: (card: CardData) => void }) {
     const { t } = useI18n();
     const item = option.card?.item;
     return (
-        <button type="button" className={`tg3-hero ${on ? 'tg3-hero--on' : ''}`} aria-pressed={on} aria-label={option.card?.cardName} disabled={readOnly} onClick={() => onToggle(option.id)}>
-            <GameCard card={option.card ? { ...option.card, item: undefined } : option.card} width={120} />
-            {on && <Reticle />}
-            {item && <span className={`tg3-note ${item.cursed ? 'tg3-note--curse' : ''}`}>{t.engine.choice.itemGoes(item.cardName ?? '')}</span>}
-        </button>
+        <div className="tg3-target">
+            <button type="button" className={`tg3-hero ${on ? 'tg3-hero--on' : ''}`} aria-pressed={on} aria-label={option.card?.cardName} disabled={readOnly} onClick={() => onToggle(option.id)}>
+                <GameCard card={option.card ? { ...option.card, item: undefined } : option.card} width={120} />
+                {on && <Reticle />}
+                {item && <span className={`tg3-note ${item.cursed ? 'tg3-note--curse' : ''}`}>{t.engine.choice.itemGoes(item.cardName ?? '')}</span>}
+            </button>
+            <ZoomButton card={option.card} onZoom={onZoom} />
+        </div>
     );
 }
 

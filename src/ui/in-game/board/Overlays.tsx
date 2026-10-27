@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import ReactDOM from 'react-dom';
 import { getMonsterArt } from '@/utils/CardArt';
 import { classInfo, partyClasses, type HeroClassId } from '@/utils/ClassInfo';
@@ -106,6 +106,25 @@ export function HandReveal({ username, reason, cards, onClose }: { username: str
     );
 }
 
+/** The moment the match ends, on the table itself, before the results screen. */
+export function MatchFinale({ outcome, name }: { outcome: 'win' | 'lose' | 'over'; name?: string }) {
+    const { t } = useI18n();
+    const text = outcome === 'win' ? t.engine.end.finaleWin : outcome === 'lose' ? t.engine.end.finaleLose : t.engine.end.finaleOver;
+    return (
+        <div className={`finale finale--${outcome}`} role="status" aria-live="assertive">
+            <div className="finale-flash" aria-hidden="true" />
+            <div className="finale-rays" aria-hidden="true" />
+            <div className="finale-text">
+                <span className="finale-stamp hts-display">{text}</span>
+                {name && outcome !== 'win' && <span className="finale-sub">{t.engine.end.finaleBy(name)}</span>}
+            </div>
+        </div>
+    );
+}
+
+/** Sparks that burst out of the champion's portrait when the results land. */
+const SPARKS = Array.from({ length: 14 }, (_, i) => ({ angle: (360 / 14) * i, delay: (i % 4) * 0.05, dist: 170 + (i % 3) * 50 }));
+
 export function TurnBanner({ name, leader, isMe }: { name: string; leader?: string; isMe: boolean }) {
     const { t } = useI18n();
     const info = classInfo(leader);
@@ -144,19 +163,6 @@ export function SettingsSheet({ onClose }: { onClose: () => void }) {
                         <button key={l.id} type="button" className={seg(lang === l.id)} aria-pressed={lang === l.id} onClick={() => setLang(l.id)}>{l.name}</button>
                     ))}
                 </div>
-            </div>
-        </Sheet>
-    );
-}
-
-export function DiscardViewer({ cards, onClose, onInspect }: { cards: CardData[]; onClose: () => void; onInspect: (card: CardData) => void }) {
-    const { t } = useI18n();
-    return (
-        <Sheet label={t.engine.board.discardTitle} onClose={onClose}>
-            <h2 className="hts-display" style={{ fontSize: 40, marginBottom: 18 }}>{t.engine.board.discardTitle} · {cards.length}</h2>
-            <div className="viewer-heroes hts-scroll" style={{ maxHeight: '64vh' }}>
-                {cards.length === 0 && <span className="hts-muted">{t.engine.board.discardEmpty}</span>}
-                {cards.map((card) => <GameCard key={card.cardId} card={card} width={140} onClick={() => onInspect(card)} />)}
             </div>
         </Sheet>
     );
@@ -231,12 +237,15 @@ export function MatchEnd({ players, winner, round, startedAt, log, highlights, o
     }
 
     return (
-        <Stage label={t.overlays.endAria} className="vic3">
+        <Stage label={t.overlays.endAria} className="vic3 vic3--impact">
             <img src={victoryBackground} alt="" aria-hidden="true" className="vic3-bg" />
             <div className="vic3-glow" aria-hidden="true" />
 
             <section className="vic3-hero hts-rise" aria-label={t.engine.end.victory}>
                 <div style={{ position: 'relative', flex: 'none' }}>
+                    <div className="vic3-sparks" aria-hidden="true">
+                        {SPARKS.map((sp, i) => <span key={i} style={{ '--a': `${sp.angle}deg`, '--d': `${sp.dist}px`, animationDelay: `${0.35 + sp.delay}s` } as CSSProperties} />)}
+                    </div>
                     {info && <img src={info.leaderArt} alt={info.leaderName} className="vic3-leader" />}
                     <svg width="96" height="72" viewBox="0 0 96 72" aria-hidden="true" className="vic3-crown"><path d="M8 62 4 18l24 20L48 6l20 32 24-20-4 44z" fill="#e9b949" stroke="#7a5410" strokeWidth="4" strokeLinejoin="round" /></svg>
                 </div>
@@ -259,7 +268,7 @@ export function MatchEnd({ players, winner, round, startedAt, log, highlights, o
                 {standings.map((s, i) => {
                     const pinfo = classInfo(s.p.leader);
                     return (
-                        <div key={s.pid} className={`vic3-row ${i === 0 ? 'vic3-row--first' : ''}`}>
+                        <div key={s.pid} className={`vic3-row ${i === 0 ? 'vic3-row--first' : ''}`} style={{ animationDelay: `${0.7 + i * 0.12}s` }}>
                             <span className="vic3-pos">{i + 1}º</span>
                             {pinfo && <img src={pinfo.leaderArt} alt="" />}
                             <span className="vic3-row-name">{s.p.username}</span>

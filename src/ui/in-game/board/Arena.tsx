@@ -15,12 +15,13 @@ interface ArenaProps {
     onDraw: () => void;
     onAttack: (monsterId: number) => void;
     onInspectMonster: (monster: MonsterData) => void;
-    onOpenDiscard: () => void;
     /** The chat sits where the old events feed was. */
     side: ReactNode;
+    /** The chat is tucked away: only its tab shows. */
+    sideCollapsed?: boolean;
 }
 
-function Arena({ monsters, drawPileCount, discardPile, monsterDeckCount, canDraw, canAttack, onDraw, onAttack, onInspectMonster, onOpenDiscard, side }: ArenaProps) {
+function Arena({ monsters, drawPileCount, discardPile, monsterDeckCount, canDraw, canAttack, onDraw, onAttack, onInspectMonster, side, sideCollapsed }: ArenaProps) {
     const { t } = useI18n();
     const top = discardPile[0];
     const under = discardPile[1];
@@ -44,10 +45,10 @@ function Arena({ monsters, drawPileCount, discardPile, monsterDeckCount, canDraw
                     <span className="arena-caption">{t.engine.board.deckCount(drawPileCount)}</span>
                 </div>
                 <div className="arena-deck">
-                    <button type="button" className="arena-discard" onClick={onOpenDiscard} aria-label={t.engine.board.discardTitle} data-fx="discard">
+                    <div className="arena-discard" aria-label={t.engine.board.discardTitle} data-fx="discard">
                         {under && <GameCard card={under} width={112} className="arena-discard-under" />}
                         {top ? <GameCard key={top.cardId} card={top} width={112} className="arena-discard-top hts-pop" /> : <span className="arena-discard-empty" />}
-                    </button>
+                    </div>
                     <span className="arena-caption">{t.engine.board.discardCount(discardPile.length)}</span>
                 </div>
             </div>
@@ -75,7 +76,7 @@ function Arena({ monsters, drawPileCount, discardPile, monsterDeckCount, canDraw
                 </div>
             </div>
 
-            <div className="arena-side">{side}</div>
+            <div className={`arena-side ${sideCollapsed ? 'arena-side--collapsed' : ''}`}>{side}</div>
         </section>
     );
 }

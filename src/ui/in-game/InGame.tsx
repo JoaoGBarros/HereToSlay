@@ -12,7 +12,7 @@ import ActionPanel from './board/ActionPanel';
 import Arena from './board/Arena';
 import ChoiceSheet, { ChoiceWaiting } from './board/ChoiceSheet';
 import OpponentRail from './board/OpponentRail';
-import { DiscardViewer, HandReveal, HistoryPanel, MatchEnd, PartyViewer, RulesSheet, SettingsSheet, TurnBanner } from './board/Overlays';
+import { HandReveal, HistoryPanel, MatchEnd, MatchFinale, PartyViewer, RulesSheet, SettingsSheet, TurnBanner } from './board/Overlays';
 import PlayerZone, { isPlayableFromHand } from './board/PlayerZone';
 import TopBar from './board/TopBar';
 import { renderAnnouncement, renderNotice } from './board/announce';
@@ -32,10 +32,15 @@ import { readLoggedUserId, useMatchSession } from './useMatchSession';
 import './board/board.css';
 import './board/table.css';
 
-const BANNER_MS = 1600;
+const BANNER_MS = 2200;
+/** How long the end-of-match impact plays on the table before the results screen. */
+const FINALE_MS = 2600;
 const ATTACK_COST = 2;
 /** Width of the chat column kept beside full-screen scenes. */
 const CHAT_SIDE_W = 340;
+/** Width of the chat when it is tucked away to the side. */
+const CHAT_TAB_W = 64;
+const CHAT_OPEN_KEY = 'hts-chat-open';
 const SYSTEM_ID = 'system';
 const SETUP_STATES = ['', 'LOADING', 'ORDER_SELECTION', 'PARTY_LEADER_SELECTION'];
 
@@ -44,6 +49,14 @@ type Inspecting =
     | { kind: 'other'; card: CardData }
     | { kind: 'leader'; leader: string }
     | { kind: 'monster'; monster: MonsterData };
+
+function readChatOpen(): boolean {
+    try {
+        return localStorage.getItem(CHAT_OPEN_KEY) !== '0';
+    } catch {
+        return true;
+    }
+}
 
 function InGame() {
     const socket = useContext(WebSocketContext);
@@ -58,23 +71,62 @@ function InGame() {
     const [historyOpen, setHistoryOpen] = useState(false);
     const [rulesOpen, setRulesOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
-    const [discardOpen, setDiscardOpen] = useState(false);
     const [viewing, setViewing] = useState<string | null>(null);
     const [inspecting, setInspecting] = useState<Inspecting | null>(null);
     const [banner, setBanner] = useState<string | null>(null);
+    const [chatOpen, setChatOpen] = useState(readChatOpen);
+    const [seenChat, setSeenChat] = useState(0);
     const lastTurn = useRef('');
+    // The results screen comes after a short impact on the table, unless the match was already over on arrival.
+    const [finale, setFinale] = useState<'pending' | 'playing' | 'done'>('pending');
+    const sawGameplay = useRef(false);
 
     useEffect(() => {
         if (!me) navigate('/');
     }, [me, navigate]);
 
+    // A roll, duel or choice on screen would hide the banner: it waits until the table is clear.
+    const sceneOpen = !!pending || !!s.linger;
+
+    // While the chat is open everything in it counts as read; tucked away, it counts what others say.
     useEffect(() => {
-        if (!turn || turn === lastTurn.current || SETUP_STATES.includes(matchState)) return;
+        if (chatOpen) setSeenChat(s.chat.length);
+    }, [chatOpen, s.chat.length]);
+    const unread = chatOpen ? 0 : s.chat.slice(seenChat).filter((m) => m.playerId !== me).length;
+    const toggleChat = (open: boolean) => {
+        setChatOpen(open);
+        try {
+            localStorage.setItem(CHAT_OPEN_KEY, open ? '1' : '0');
+        } catch {
+            // Not remembered; still applies for this match.
+        }
+    };
+    useEffect(() => {
+        if (!turn || turn === lastTurn.current || SETUP_STATES.includes(matchState) || matchState === 'FINISHED' || sceneOpen) return;
         lastTurn.current = turn;
         setBanner(turn);
+    }, [turn, matchState, sceneOpen]);
+    useEffect(() => {
+        if (!banner) return;
         const timer = setTimeout(() => setBanner(null), BANNER_MS);
         return () => clearTimeout(timer);
-    }, [turn, matchState]);
+    }, [banner]);
+
+    useEffect(() => {
+        if (matchState === 'GAMEPLAY') sawGameplay.current = true;
+        // The result of the last roll (a slain Monster, say) plays out before the match ends on screen.
+        if (matchState !== 'FINISHED' || finale !== 'pending' || sceneOpen) return;
+        if (!sawGameplay.current) {
+            setFinale('done');
+            return;
+        }
+        setFinale('playing');
+    }, [matchState, finale, sceneOpen]);
+    useEffect(() => {
+        if (finale !== 'playing') return;
+        const timer = setTimeout(() => setFinale('done'), FINALE_MS);
+        return () => clearTimeout(timer);
+    }, [finale]);
 
     const order = view.turnOrder.length > 0 ? view.turnOrder : Object.keys(players);
     const opponents = useMemo(() => {
@@ -203,18 +255,25 @@ function InGame() {
         ...s.announcements.map((a) => ({ playerId: SYSTEM_ID, username: t.engine.announce.table, text: renderAnnouncement(t, a, players), timestamp: a.ts })),
         ...s.notices.map((n) => ({ playerId: SYSTEM_ID, username: t.engine.announce.table, text: renderNotice(t, n, players), timestamp: n.ts })),
     ].sort((a, b) => a.timestamp - b.timestamp);
-    const chatPanel = (
+    const chatPanel = chatOpen ? (
         <ChatPanel
             messages={chatMessages}
             me={me}
             colorFor={(pid) => (pid === SYSTEM_ID ? 'var(--hts-sky-text)' : classInfo(players[pid]?.leader)?.tint ?? 'var(--hts-gold)')}
             onSend={actions.sendChat}
             phrases={t.chat.gamePhrases}
+            onClose={() => toggleChat(false)}
         />
+    ) : (
+        <button type="button" className="chat-tab" onClick={() => toggleChat(true)} aria-label={unread > 0 ? t.chat.unread(unread) : t.chat.open}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" /></svg>
+            <span className="chat-tab-label">{t.chat.title}</span>
+            {unread > 0 && <b className="chat-tab-badge">{unread}</b>}
+        </button>
     );
 
     return (
-        <StageSide.Provider value={{ width: CHAT_SIDE_W, node: chatPanel }}>
+        <StageSide.Provider value={{ width: chatOpen ? CHAT_SIDE_W : CHAT_TAB_W, node: chatPanel }}>
             <div className="board">
                 <img src={tableBackground} alt="" className="hts-screen-bg board-bg" />
                 <div className="board-vignette" aria-hidden="true" />
@@ -248,8 +307,8 @@ function InGame() {
                     onDraw={actions.draw}
                     onAttack={actions.attack}
                     onInspectMonster={(monster) => setInspecting({ kind: 'monster', monster })}
-                    onOpenDiscard={() => setDiscardOpen(true)}
                     side={chatPanel}
+                    sideCollapsed={!chatOpen}
                 />
 
                 <div className="bottom">
@@ -333,7 +392,6 @@ function InGame() {
                 {historyOpen && <HistoryPanel log={view.log} players={players} onClose={() => setHistoryOpen(false)} />}
                 {rulesOpen && <RulesSheet onClose={() => setRulesOpen(false)} />}
                 {settingsOpen && <SettingsSheet onClose={() => setSettingsOpen(false)} />}
-                {discardOpen && <DiscardViewer cards={view.discardPile} onClose={() => setDiscardOpen(false)} onInspect={(card) => setInspecting({ kind: 'other', card })} />}
                 {viewing && players[viewing] && (
                     <PartyViewer
                         player={players[viewing]}
@@ -345,7 +403,13 @@ function InGame() {
                 {s.revealed && <HandReveal username={s.revealed.username} reason={s.revealed.reason} cards={s.revealed.cards} onClose={actions.closeReveal} />}
                 {inspecting && <CardInspector {...inspectorProps(inspecting)} onClose={() => setInspecting(null)} />}
                 {banner && players[banner] && matchState === 'GAMEPLAY' && <TurnBanner name={players[banner].username} leader={players[banner].leader} isMe={banner === me} />}
-                {matchState === 'FINISHED' && view.winner && !historyOpen && (
+                {matchState === 'FINISHED' && view.winner && finale === 'playing' && (
+                    <MatchFinale
+                        outcome={!view.winner.playerId ? 'over' : view.winner.playerId === me ? 'win' : 'lose'}
+                        name={view.winner.playerId ? players[view.winner.playerId]?.username : undefined}
+                    />
+                )}
+                {matchState === 'FINISHED' && view.winner && finale === 'done' && !historyOpen && (
                     <MatchEnd
                         players={players}
                         winner={view.winner}

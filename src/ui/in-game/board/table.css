@@ -16,7 +16,7 @@
 /* ---------- Center: decks, monsters, chat ---------- */
 .arena { align-items: stretch; }
 .arena-decks { flex: none; display: flex; gap: 18px; align-items: center; }
-.arena-discard { position: relative; width: 118px; height: 165px; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.arena-discard { position: relative; width: 118px; height: 165px; padding: 0; border: 0; background: none; }
 .arena-discard .hts-card { position: absolute; left: 0; top: 4px; }
 .arena-discard-under { transform: rotate(6deg); opacity: 0.65; }
 .arena-discard-top { transform: rotate(-3deg); }
@@ -374,3 +374,28 @@
 .presence-badge--left { background: #2a3438; color: #b9b2a3; animation: none; }
 .topbar-pill--left { opacity: 0.4; text-decoration: line-through; }
 .left-banner { display: flex; align-items: center; gap: 14px; z-index: 970; }
+
+
+/* The chat can be tucked away to a slim tab on the right, with a count of new messages. */
+.arena-side--collapsed { width: 52px; }
+.chat-tab {
+    position: relative;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 18px 0;
+    border-radius: 18px;
+    border: 1px solid rgba(243, 234, 214, 0.12);
+    background: rgba(21, 30, 33, 0.92);
+    color: #f3d48a;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.chat-tab:hover { background: rgba(33, 45, 49, 0.96); border-color: rgba(233, 185, 73, 0.6); }
+.chat-tab:focus-visible { outline: 3px solid #f3d48a; outline-offset: 2px; }
+.chat-tab-label { writing-mode: vertical-rl; transform: rotate(180deg); font: 800 18px var(--hts-font-display); letter-spacing: 1px; color: #f3ead6; }
+.chat-tab-badge { position: absolute; top: -8px; left: -8px; min-width: 26px; height: 26px; padding: 0 7px; border-radius: 999px; display: grid; place-items: center; background: #e8693f; color: #1a0c06; font: 800 14px var(--hts-font-ui); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5); animation: hts-pop 0.3s ease-out both; }
+.stage-side .chat-tab { margin-top: 0; }
+.hts-reduced-motion .chat-tab-badge { animation: none; }
