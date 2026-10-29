@@ -66,7 +66,9 @@ export const WebSocketProvider = ({ children }: { children: ReactNode }) => {
                 const data = JSON.parse(event.data)
                 if (data?.type === "auth" && data.subtype === "resume_fail") {
                     localStorage.removeItem("currentPlayer")
-                    if (window.location.pathname !== "/") {
+                    if (window.location.protocol === "file:") {
+                        if (window.location.hash !== "#/") window.location.hash = "#/"
+                    } else if (window.location.pathname !== "/") {
                         window.location.assign("/")
                     }
                 }

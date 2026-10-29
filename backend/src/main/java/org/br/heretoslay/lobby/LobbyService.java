@@ -452,6 +452,24 @@ public class LobbyService {
 
                 sendToPlayer(playerId, listResponse);
                 break;
+            case "whereabouts": {
+                // Asked when a client comes back (reopened app, reload): where should it take the player?
+                JSONObject where = new JSONObject();
+                String runningMatch = runningMatchOf(playerId);
+                if (runningMatch != null) {
+                    where.put("matchId", Long.parseLong(runningMatch));
+                } else {
+                    lobbies.values().stream()
+                            .filter(l -> l.getPlayers().contains(playerId) && l.getStatus() != LobbyStatus.IN_PROGRESS && l.getStatus() != LobbyStatus.COMPLETED)
+                            .findFirst()
+                            .ifPresent(l -> where.put("lobbyId", l.getId()));
+                }
+                sendToPlayer(playerId, new JSONObject()
+                        .put("type", "lobby")
+                        .put("subtype", "whereabouts")
+                        .put("payload", where));
+                break;
+            }
             default:
                 System.out.println("Unknown lobby subtype: " + type);
                 break;

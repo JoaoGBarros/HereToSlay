@@ -8,26 +8,52 @@ import { SettingsButton } from '../common/SettingsButton';
 import loginBackground from '../assets/login-background.png';
 import './Login.css';
 
+const WHEREABOUTS_TIMEOUT_MS = 3000;
+const RESUME_TIMEOUT_MS = 6000;
+
 function Login() {
     const socket = useContext(WebSocketContext);
     const [username, setUsername] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    // A saved identity is reclaimed by the socket provider on connect; wait for it instead of asking again.
+    const [isResuming, setIsResuming] = useState(() => localStorage.getItem('currentPlayer') !== null);
     const navigate = useNavigate();
     const { t } = useI18n();
 
     useEffect(() => {
         const ws = socket;
         if (!ws) return;
+        let fallback: number | undefined;
         const handleMessage = (event: MessageEvent) => {
             const data = parseMessage(event);
-            if (data?.type === 'auth' && data.subtype === 'login_success') {
+            if (data?.type === 'auth' && (data.subtype === 'login_success' || data.subtype === 'resume_success')) {
                 localStorage.setItem('currentPlayer', JSON.stringify(data.payload));
-                navigate('/games');
+                // Back to wherever this player still is (running match, seated table), else the tavern.
+                sendMessage(ws, { type: 'lobby', subtype: 'whereabouts' });
+                fallback = window.setTimeout(() => navigate('/games'), WHEREABOUTS_TIMEOUT_MS);
+            } else if (data?.type === 'auth' && data.subtype === 'resume_fail') {
+                setIsResuming(false);
+            } else if (data?.type === 'lobby' && data.subtype === 'whereabouts') {
+                window.clearTimeout(fallback);
+                const where = data.payload as { matchId?: number; lobbyId?: number } | undefined;
+                if (where?.matchId != null) navigate(`/match/${where.matchId}`);
+                else if (where?.lobbyId != null) navigate(`/lobby/${where.lobbyId}`);
+                else navigate('/games');
             }
         };
         ws.addEventListener('message', handleMessage);
-        return () => ws.removeEventListener('message', handleMessage);
+        return () => {
+            window.clearTimeout(fallback);
+            ws.removeEventListener('message', handleMessage);
+        };
     }, [socket, navigate]);
+
+    // If the server never answers the resume, show the form instead of waiting forever.
+    useEffect(() => {
+        if (!isResuming) return;
+        const giveUp = window.setTimeout(() => setIsResuming(false), RESUME_TIMEOUT_MS);
+        return () => window.clearTimeout(giveUp);
+    }, [isResuming]);
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
@@ -65,8 +91,8 @@ function Login() {
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
                     />
-                    <button type="submit" className="hts-btn login-cta" disabled={!username.trim() || isSubmitting}>
-                        {isSubmitting ? t.login.entering : t.login.enter}
+                    <button type="submit" className="hts-btn login-cta" disabled={!username.trim() || isSubmitting || isResuming}>
+                        {isResuming ? t.login.reconnecting : isSubmitting ? t.login.entering : t.login.enter}
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
                     </button>
                 </form>
