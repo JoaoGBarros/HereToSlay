@@ -15,6 +15,10 @@ export function bonusSum(roll: RollData): number {
     return roll.bonuses.reduce((sum, b) => sum + b.value, 0);
 }
 
+export function modifierSum(roll: RollData): number {
+    return roll.modifiers.reduce((sum, m) => sum + m.value, 0);
+}
+
 export function rawOf(roll: RollData): number | null {
     return roll.dice ? roll.dice[0] + roll.dice[1] : null;
 }

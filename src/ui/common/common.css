@@ -86,6 +86,7 @@
     border-radius: 7px;
     font-family: var(--hts-font-display);
     font-weight: 800;
+    transition: background-color 0.35s, color 0.35s, transform 0.25s;
 }
 .hts-range-cell--fail { background: var(--hts-ember); color: #1a0c06; }
 .hts-range-cell--mid { background: #3a474c; color: #d7dee0; }

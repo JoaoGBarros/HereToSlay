@@ -8,7 +8,7 @@ import { Stage } from '../../common/Stage';
 import type { CardData, ModifierWindowData, PlayersMap, RollData } from '../../common/types';
 import { RollRangeBar } from '../../common/Widgets';
 import ModifierPicker, { type ModifierPreview } from '../components/ModifierPicker';
-import { bonusSum, rawOf, signed, useRollSound } from './RollParts';
+import { bonusSum, modifierSum, rawOf, signed, useRollSound } from './RollParts';
 import './stage.css';
 
 export type MonsterOutcome = 'monster_slain' | 'monster_fight_back' | 'monster_survives';
@@ -47,11 +47,12 @@ function MonsterScene({ roll, modifierWindow, players, me, hand, onRoll, onPlayM
     // A Modifier preview only counts while the window is still open.
     const previewValue = modifierWindow && preview?.targetId === roll.rollerId ? preview.value : 0;
     const total = roll.total != null ? roll.total + previewValue : null;
-    const passiveBonus = bonusSum(roll);
+    // Everything added to the dice so far (bonuses, Modifiers played, the one being previewed).
+    const shift = bonusSum(roll) + modifierSum(roll) + previewValue;
     const extras = [...roll.bonuses.map((b) => b.value), ...roll.modifiers.map((m) => m.value), ...(previewValue ? [previewValue] : [])];
     const zoneOf = (n: number) => (n <= monster.fightBackThreshold ? 'fail' : n >= monster.slayThreshold ? 'win' : 'mid');
-    const pWin = chanceAtLeast(monster.slayThreshold, passiveBonus);
-    const pFail = chanceAtMost(monster.fightBackThreshold, passiveBonus);
+    const pWin = chanceAtLeast(monster.slayThreshold, shift);
+    const pFail = chanceAtMost(monster.fightBackThreshold, shift);
     const outcome = roll.outcome ? OUTCOME_KIND[roll.outcome] : null;
     const tone = outcome ? OUTCOME_TONE[outcome] : total != null ? zoneOf(total) : 'idle';
     const attackerName = attacker?.username ?? t.common.someone;
@@ -113,7 +114,7 @@ function MonsterScene({ roll, modifierWindow, players, me, hand, onRoll, onPlayM
                             </div>
                         )}
                     </div>
-                    <span className="hts-label">{t.monster.ranges(passiveBonus)}</span>
+                    <span className="hts-label">{t.monster.ranges(shift)}</span>
                     <RollRangeBar zoneOf={zoneOf} mark={total} height={48} />
                     <div className="duel3-mods">
                         {roll.modifiers.map((m, i) => (

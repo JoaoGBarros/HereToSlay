@@ -61,7 +61,7 @@ export function RollRangeBar({ zoneOf, mark, height = 44 }: RollRangeBarProps) {
                 className={`hts-range-cell hts-range-cell--${zoneOf(n)} ${marked ? 'hts-range-cell--mark' : ''}`}
                 style={{ height, fontSize: height * 0.5 }}
             >
-                {n}
+                {marked ? mark : n}
             </span>,
         );
     }

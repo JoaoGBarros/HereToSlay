@@ -8,7 +8,7 @@ import { DicePair } from '../../common/PipDie';
 import { Stage } from '../../common/Stage';
 import type { CardData, ModifierWindowData, PlayersMap, RollData } from '../../common/types';
 import ModifierPicker, { type ModifierPreview } from '../components/ModifierPicker';
-import { bonusSum, rawOf, signed, useRollSound } from './RollParts';
+import { rawOf, signed, useRollSound } from './RollParts';
 import './stage.css';
 
 interface HeroRollSceneProps {
@@ -50,7 +50,6 @@ function HeroRollScene({ roll, modifierWindow, players, me, hand, onRoll, onPlay
     const willSucceed = total != null && total >= target;
     const effect = card ? cardText(card) : null;
     const extras = [...roll.bonuses.map((b) => b.value), ...roll.modifiers.map((m) => m.value), ...(previewValue ? [previewValue] : [])];
-    const passiveBonus = bonusSum(roll);
     const tone = resolved ? (success ? 'win' : 'fail') : total != null ? (willSucceed ? 'win' : 'fail') : 'idle';
 
     let status = t.engine.heroScene.rollToSee;
@@ -127,12 +126,13 @@ function HeroRollScene({ roll, modifierWindow, players, me, hand, onRoll, onPlay
                     <div className="hero3-track" role="img" aria-label={t.engine.dock.needs(target)}>
                         {Array.from({ length: 11 }).map((_, i) => {
                             const n = i + 2;
-                            const win = n + passiveBonus >= target;
-                            const marked = raw === n;
+                            // The track counts totals, so it marks the same number as above, Modifiers included.
+                            const win = n >= target;
+                            const marked = total != null && (total === n || (n === 2 && total < 2) || (n === 12 && total > 12));
                             return (
                                 <span key={n} className={`hero3-cell ${win ? 'hero3-cell--win' : ''} ${marked ? 'hero3-cell--mark' : ''}`}>
-                                    {n}
-                                    {n + passiveBonus === target && <em className="hero3-goal">{target}+</em>}
+                                    {marked ? total : n}
+                                    {n === target && <em className="hero3-goal">{target}+</em>}
                                 </span>
                             );
                         })}
