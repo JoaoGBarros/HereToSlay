@@ -31,7 +31,7 @@ const en: Dict = {
     },
     classes: {
         BARD: { label: 'Bard', skill: "Each time you roll to use a Hero card's effect, +1 to your roll." },
-        FIGHTER: { label: 'Fighter', skill: 'Each time you roll to CHALLENGE, +2 to your roll.' },
+        FIGHTER: { label: 'Fighter', skill: '+2 to all your CHALLENGE rolls, whether you challenge or are challenged.' },
         GUARDIAN: { label: 'Guardian', skill: 'Each time you play a Modifier card on a roll, +1 or -1 to that roll.' },
         RANGER: { label: 'Ranger', skill: 'Each time you roll to ATTACK a Monster card, +1 to your roll.' },
         THIEF: { label: 'Thief', skill: "Once per turn on your turn, you may spend an action point to pull a card from another player's hand." },

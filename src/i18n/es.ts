@@ -31,7 +31,7 @@ const es: Dict = {
     },
     classes: {
         BARD: { label: 'Bardo', skill: 'Cada vez que tires para usar el efecto de un Héroe, +1 a tu tirada.' },
-        FIGHTER: { label: 'Guerrero', skill: 'Cada vez que tires para DESAFIAR, +2 a tu tirada.' },
+        FIGHTER: { label: 'Guerrero', skill: '+2 a todas tus tiradas de DESAFÍO, desafíes o te desafíen.' },
         GUARDIAN: { label: 'Guardián', skill: 'Cada vez que juegues un Modificador en una tirada, +1 o −1 a esa tirada.' },
         RANGER: { label: 'Explorador', skill: 'Cada vez que tires para ATACAR a un Monstruo, +1 a tu tirada.' },
         THIEF: { label: 'Ladrón', skill: 'Una vez por turno, en tu turno, gasta 1 punto de acción para TOMAR una carta de la mano de otro jugador.' },

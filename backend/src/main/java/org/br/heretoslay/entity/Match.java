@@ -810,8 +810,8 @@ public class Match implements Table {
     private void startDuel(Play play, String challengerId) {
         Roll ownerRoll = new Roll(newId(), Roll.Kind.CHALLENGE, play.ownerId, play.card, null);
         Roll challengerRoll = new Roll(newId(), Roll.Kind.CHALLENGE, challengerId, play.card, null);
-        addRollBonuses(ownerRoll, false);
-        addRollBonuses(challengerRoll, true);
+        addRollBonuses(ownerRoll);
+        addRollBonuses(challengerRoll);
         duel = new Duel(play, challengerId, ownerRoll, challengerRoll);
         suspend();
         schedule(ROLL_WAIT_MS, this::autoRollPending);
@@ -888,7 +888,7 @@ public class Match implements Table {
             if (!p.getParty().contains(hero) || hero.hasItemEffect(GameCard.ItemEffect.SEALING_KEY)) return;
             p.getUsedHeroes().add(hero.getId());
             Roll r = new Roll(newId(), Roll.Kind.HERO, playerId, hero, null);
-            addRollBonuses(r, false);
+            addRollBonuses(r);
             roll = r;
             suspend();
             schedule(ROLL_WAIT_MS, this::autoRollPending);
@@ -929,7 +929,7 @@ public class Match implements Table {
     private List<Runnable> attackSteps(String playerId, Monster monster) {
         return List.of(() -> {
             Roll r = new Roll(newId(), Roll.Kind.ATTACK, playerId, null, monster);
-            addRollBonuses(r, false);
+            addRollBonuses(r);
             roll = r;
             log("attacked", new JSONObject().put("actor", playerId).put("cardName", monster.getName()));
             broadcast(new JSONObject().put("type", "animation").put("subtype", "monster_attack_start")
@@ -986,7 +986,7 @@ public class Match implements Table {
     // Dice, bonuses and the Modifier window
     // =====================================================================
 
-    private void addRollBonuses(Roll r, boolean asChallenger) {
+    private void addRollBonuses(Roll r) {
         PlayerState p = players.get(r.getRollerId());
         switch (r.getKind()) {
             case HERO -> {
@@ -999,7 +999,8 @@ public class Match implements Table {
                 if (p.getLeader() == HeroClass.RANGER) r.addBonus("The Divine Arrow", 1);
             }
             case CHALLENGE -> {
-                if (asChallenger && p.getLeader() == HeroClass.FIGHTER) r.addBonus("The Fist of Reason", 2);
+                // Every Challenge roll, whether challenging or being challenged.
+                if (p.getLeader() == HeroClass.FIGHTER) r.addBonus("The Fist of Reason", 2);
                 if (p.has(Monster.Reward.TITAN_WYVERN)) r.addBonus("Titan Wyvern", 1);
             }
         }

@@ -59,7 +59,7 @@ const pt = {
     } as Record<string, string>,
     classes: {
         BARD: { label: 'Bardo', skill: 'Cada vez que você rolar para usar o efeito de um Herói, +1 na sua rolagem.' },
-        FIGHTER: { label: 'Lutador', skill: 'Cada vez que você rolar para DESAFIAR, +2 na sua rolagem.' },
+        FIGHTER: { label: 'Lutador', skill: '+2 em todas as suas rolagens de DESAFIO, desafiando ou sendo desafiado.' },
         GUARDIAN: { label: 'Guardião', skill: 'Cada vez que você jogar um Modificador numa rolagem, +1 ou −1 nessa rolagem.' },
         RANGER: { label: 'Patrulheiro', skill: 'Cada vez que você rolar para ATACAR um Monstro, +1 na sua rolagem.' },
         THIEF: { label: 'Ladino', skill: 'Uma vez por turno, no seu turno, gaste 1 ponto de ação para PUXAR uma carta da mão de outro jogador.' },
