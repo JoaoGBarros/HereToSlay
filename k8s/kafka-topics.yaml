@@ -1,0 +1,31 @@
+# Creates the topics once Kafka answers. Safe to run again: every topic is created only if missing.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topics
+spec:
+  backoffLimit: 20
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: topics
+          image: apache/kafka:3.7.0
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              B=kafka-broker-1:29092
+              T=/opt/kafka/bin/kafka-topics.sh
+              until $T --bootstrap-server $B --list >/dev/null 2>&1; do echo 'Waiting for Kafka...'; sleep 2; done
+              for t in lobby-actions-in lobby-state-out game-actions-in game-state-out game-monitoring-alerts; do
+                $T --bootstrap-server $B --create --if-not-exists --topic $t --partitions 3 --replication-factor 1
+              done
+              for t in lobby-state-store match-state-store; do
+                $T --bootstrap-server $B --create --if-not-exists --topic $t --partitions 3 --replication-factor 1 --config cleanup.policy=compact
+              done
+              echo 'Topics ready.'
+          resources:
+            requests:
+              memory: 128Mi
+            limits:
+              memory: 384Mi

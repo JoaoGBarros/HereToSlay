@@ -1,0 +1,167 @@
+# The four backend services. They share one image (the same jar) and only differ in the main class.
+# Recreate instead of a rolling update: on a 2 GB server two copies of a JVM must not run side by side.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backend-config
+data:
+  KAFKA_BOOTSTRAP_SERVERS: kafka-broker-1:29092
+  JAVA_TOOL_OPTIONS: -Xmx160m -Xss512k -XX:+UseSerialGC
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: gateway
+  template:
+    metadata:
+      labels:
+        app: gateway
+    spec:
+      containers:
+        - name: gateway
+          image: heretoslay-backend
+          imagePullPolicy: Never
+          args: ["org.br.heretoslay.HereToSlay"]
+          ports:
+            - name: ws
+              containerPort: 8887
+          envFrom:
+            - configMapRef:
+                name: backend-config
+          env:
+            # Oldest client allowed in; older ones are asked to download the latest. Raise it with a release.
+            - name: MIN_CLIENT_VERSION
+              value: "0.0.0"
+            - name: CLIENT_DOWNLOAD_URL
+              value: https://hts.joaogbarros.com
+          resources:
+            requests:
+              cpu: 50m
+              memory: 160Mi
+            limits:
+              memory: 256Mi
+          readinessProbe:
+            tcpSocket:
+              port: ws
+            periodSeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: ws
+            initialDelaySeconds: 60
+            periodSeconds: 20
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lobby
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: lobby
+  template:
+    metadata:
+      labels:
+        app: lobby
+    spec:
+      containers:
+        - name: lobby
+          image: heretoslay-backend
+          imagePullPolicy: Never
+          args: ["org.br.heretoslay.lobby.LobbyApplication"]
+          envFrom:
+            - configMapRef:
+                name: backend-config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 160Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: game-engine
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: game-engine
+  template:
+    metadata:
+      labels:
+        app: game-engine
+    spec:
+      containers:
+        - name: game-engine
+          image: heretoslay-backend
+          imagePullPolicy: Never
+          args: ["org.br.heretoslay.match.EngineApplication"]
+          envFrom:
+            - configMapRef:
+                name: backend-config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 160Mi
+            limits:
+              memory: 256Mi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monitoring
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: monitoring
+  template:
+    metadata:
+      labels:
+        app: monitoring
+    spec:
+      containers:
+        - name: monitoring
+          image: heretoslay-backend
+          imagePullPolicy: Never
+          args: ["org.br.heretoslay.streams.monitoring.GameMonitoringStreamsProcessor"]
+          envFrom:
+            - configMapRef:
+                name: backend-config
+          resources:
+            requests:
+              cpu: 50m
+              memory: 160Mi
+            limits:
+              memory: 256Mi
+---
+# The game WebSocket. A fixed cluster IP so the server's own nginx can proxy /ws to it;
+# a ClusterIP is not reachable from the internet (unlike a NodePort, which bypasses the firewall).
+apiVersion: v1
+kind: Service
+metadata:
+  name: gateway
+spec:
+  type: ClusterIP
+  clusterIP: 10.43.88.87
+  selector:
+    app: gateway
+  ports:
+    - name: ws
+      port: 8887
+      targetPort: ws

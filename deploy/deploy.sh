@@ -4,13 +4,14 @@
 # Run from Git Bash: deploy/deploy.sh   (needs the SSH key loaded in the Windows ssh-agent)
 set -euo pipefail
 
-HOST="${HOST:-root@167.71.23.107}"
+cd "$(dirname "$0")/.."
+[ -f deploy/.env.deploy ] && . deploy/.env.deploy
+: "${HOST:?Set HOST (user@server) in deploy/.env.deploy}"
 DIR="${DIR:-/opt/heretoslay}"
 WEB="${WEB:-/var/www/heretoslay}"
 # Windows' own ssh talks to the Windows ssh-agent; Git Bash's ssh does not.
 SSH="${SSH:-/c/Windows/System32/OpenSSH/ssh.exe}"
 
-cd "$(dirname "$0")/.."
 OUT="$(mktemp -d)"
 trap 'rm -rf "$OUT"' EXIT
 

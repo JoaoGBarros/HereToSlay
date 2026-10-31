@@ -29,3 +29,9 @@ release*/
 
 # Claude Code local config
 .claude/
+
+# Deploy target (server address), kept out of the public repo
+deploy/.env.deploy
+
+# Launch-video outputs from /brag
+brag-output*/

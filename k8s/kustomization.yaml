@@ -1,0 +1,13 @@
+# Production stack on k3s. Applied by deploy/deploy-k3s.sh, which sets the image tag it just imported:
+#   kubectl apply -k k8s
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: heretoslay
+resources:
+  - namespace.yaml
+  - kafka.yaml
+  - kafka-topics.yaml
+  - backend.yaml
+images:
+  - name: heretoslay-backend
+    newTag: dev
