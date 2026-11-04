@@ -1,0 +1,6 @@
+target/
+*.iml
+.idea/
+# Firebase service account keys never go in the repository.
+*service-account*.json
+firebase-adminsdk*.json

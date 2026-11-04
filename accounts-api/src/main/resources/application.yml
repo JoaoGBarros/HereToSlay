@@ -1,0 +1,52 @@
+# Everything that differs between machines comes from environment variables; nothing secret lives here.
+spring:
+  application:
+    name: accounts-api
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/heretoslay}
+    username: ${DB_USERNAME:heretoslay}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 5
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: accounts-api
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+  error:
+    include-message: never
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+app:
+  firebase:
+    project-id: ${FIREBASE_PROJECT_ID}
+  cors:
+    # Comma-separated. The desktop app loads the client from disk, so its requests come from "null".
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  kafka:
+    match-results-topic: match-results
