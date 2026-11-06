@@ -122,7 +122,7 @@ public class MatchService {
             for (int i = 0; i < playersArray.length(); i++) {
                 JSONObject pJson = playersArray.getJSONObject(i);
                 Player p = new Player();
-                p.setId(UUID.fromString(pJson.getString("id")));
+                p.setId(pJson.getString("id"));
                 p.setUsername(pJson.getString("username"));
                 startingPlayers.add(p);
             }

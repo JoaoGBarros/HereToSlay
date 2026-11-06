@@ -36,6 +36,7 @@ public class HereToSlay extends WebSocketServer {
 
     public static void main(String[] args) {
         int port = 8887;
+        AuthService.getInstance().init(System.getenv("FIREBASE_PROJECT_ID"));
         HereToSlay server = new HereToSlay(port);
         server.start();
     }
@@ -58,7 +59,7 @@ public class HereToSlay extends WebSocketServer {
         // Forget the connection so a reloaded page can re-bind the same player
         // instead of state broadcasts resolving to this dead socket.
         authService.handleDisconnect(conn);
-        if (player != null) reportDisconnect(player.getId().toString());
+        if (player != null) reportDisconnect(player.getId());
     }
 
     /** Tells the engine the player dropped, for every match they are in; it gives them time to come back. */
@@ -76,12 +77,14 @@ public class HereToSlay extends WebSocketServer {
 
     @Override
     public void onMessage(WebSocket conn, String message) {
-
-        // TODO: para debugar retirar depois
-        System.out.println(" VVV [WebSocket] Recebi do navegador: " + message);
-
-        JSONObject obj = new JSONObject(message);
-        String type = obj.getString("type");
+        // Messages are not logged: login messages carry the player's ID token.
+        JSONObject obj;
+        try {
+            obj = new JSONObject(message);
+        } catch (RuntimeException e) {
+            return;
+        }
+        String type = obj.optString("type");
         switch (type) {
             case "auth":
                 authService.handleMessage(conn, obj);
@@ -90,11 +93,11 @@ public class HereToSlay extends WebSocketServer {
                 try {
                     Player pLobby = authService.getPlayerByConnection(conn);
                     if (pLobby == null) return;
-                    obj.put("playerId", pLobby.getId().toString());
+                    obj.put("playerId", pLobby.getId());
                     obj.put("username", pLobby.getUsername());
                     String routingKey = obj.has("payload") && obj.getJSONObject("payload").has("lobbyId")
                             ? String.valueOf(obj.getJSONObject("payload").getLong("lobbyId"))
-                            : pLobby.getId().toString();
+                            : pLobby.getId();
                     ProducerRecord<String, String> lobbyRecord = new ProducerRecord<>("lobby-actions-in", routingKey, obj.toString());
                     producer.send(lobbyRecord);
                 } catch (Exception e) {
@@ -106,7 +109,7 @@ public class HereToSlay extends WebSocketServer {
                 try {
                     Player p = authService.getPlayerByConnection(conn);
                     if (p == null) return;
-                    obj.put("playerId", p.getId().toString());
+                    obj.put("playerId", p.getId());
                     ProducerRecord<String, String> record = new ProducerRecord<>("game-actions-in", obj.get("id").toString(), obj.toString());
                     producer.send(record);
                 } catch (Exception e) {

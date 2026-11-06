@@ -1,25 +1,26 @@
 package org.br.heretoslay.entity;
 
-import java.util.UUID;
-
+/**
+ * A signed-in player. The id is the player's Firebase uid and the username comes from the
+ * "username" claim the accounts API puts on their Firebase account, so both are trusted.
+ */
 public class Player {
 
-    private UUID id;
+    private String id;
     private String username;
     private GameStatus status;
 
-
-    public Player(String username) {
+    public Player(String id, String username) {
+        this.id = id;
         this.username = username;
-        this.id = UUID.nameUUIDFromBytes(username.getBytes());
         this.status = GameStatus.ONLINE;
     }
 
-    public Player(){
+    public Player() {
         this.status = GameStatus.ONLINE;
     }
 
-    public UUID getId() {
+    public String getId() {
         return id;
     }
 
@@ -35,11 +36,11 @@ public class Player {
         this.status = status;
     }
 
-    public void setId(UUID id) {
+    public void setId(String id) {
         this.id = id;
     }
 
-    public void setUsername(String username){
+    public void setUsername(String username) {
         this.username = username;
     }
 }

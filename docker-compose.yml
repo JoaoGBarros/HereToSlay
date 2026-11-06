@@ -139,6 +139,7 @@ services:
       dockerfile: Dockerfile.gateway
     environment:
       - KAFKA_BOOTSTRAP_SERVERS=kafka-broker-1:29092,kafka-broker-2:29092,kafka-broker-3:29092
+      - FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID}
     depends_on:
       - kafka-init
     deploy:

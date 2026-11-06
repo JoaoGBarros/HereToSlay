@@ -41,6 +41,12 @@ spec:
               value: "0.0.0"
             - name: CLIENT_DOWNLOAD_URL
               value: https://hts.joaogbarros.com
+            # Login checks Firebase ID tokens for this project (public id, kept with the accounts secrets).
+            - name: FIREBASE_PROJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: accounts-secrets
+                  key: FIREBASE_PROJECT_ID
           resources:
             requests:
               cpu: 50m
