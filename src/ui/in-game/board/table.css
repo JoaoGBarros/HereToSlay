@@ -190,6 +190,9 @@
     box-shadow: 0 30px 70px rgba(0, 0, 0, 0.7);
 }
 .chal-dock-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.chal-dock-card { flex: none; will-change: transform; }
+.chal-dock-effect { display: flex; flex-direction: column; gap: 4px; padding: 10px 14px; border-radius: 10px; background: rgba(243, 234, 214, 0.08); border: 1px solid rgba(243, 234, 214, 0.16); }
+.chal-dock-effect p { margin: 0; font-size: 16px; line-height: 1.4; font-weight: 600; color: var(--hts-parchment, #f3ead6); }
 .chal-dock-who { display: flex; gap: 6px; flex-wrap: wrap; }
 .chal-dock-actions { flex: none; display: flex; flex-direction: column; align-items: center; gap: 10px; }
 .chal-dock-btn { display: flex; align-items: center; gap: 10px; height: 60px; font-size: 22px; }
