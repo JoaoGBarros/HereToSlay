@@ -6,6 +6,7 @@ import org.br.heretoslay.engine.Choice;
 import org.br.heretoslay.engine.Ctx;
 import org.br.heretoslay.engine.GameCard;
 import org.br.heretoslay.engine.HeroClass;
+import org.br.heretoslay.engine.MatchResult;
 import org.br.heretoslay.engine.Monster;
 import org.br.heretoslay.engine.MonsterCatalog;
 import org.br.heretoslay.engine.PlayerState;
@@ -26,6 +27,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
@@ -64,6 +66,8 @@ public class Match implements Table {
     private static final long DISCONNECT_GRACE_MS = 60_000;
 
     private final Long matchId;
+    /** Unique across server restarts, unlike the table number; identifies the match in player stats. */
+    private final UUID resultId = UUID.randomUUID();
     private final Map<String, PlayerState> players = new LinkedHashMap<>();
     private final List<String> pickOrder = new ArrayList<>();
     private final List<String> turnOrder = new ArrayList<>();
@@ -115,6 +119,9 @@ public class Match implements Table {
 
         /** Who is still playing changed (someone left, or the match ended). */
         default void rosterChanged(Match match) { }
+
+        /** A match that reached gameplay ended with a winner; the result feeds player stats. */
+        default void matchFinished(Match match, JSONObject result) { }
     }
 
     /** A Hero, Item or Magic card on its way to the table. */
@@ -185,6 +192,11 @@ public class Match implements Table {
             @Override
             public void rosterChanged(Match match) {
                 MatchService.getInstance().publishRoster(match);
+            }
+
+            @Override
+            public void matchFinished(Match match, JSONObject result) {
+                MatchService.getInstance().publishResult(match, result);
             }
         });
     }
@@ -693,6 +705,7 @@ public class Match implements Table {
     }
 
     private void finish(String playerId, String reason) {
+        boolean wasPlaying = phase == Phase.GAMEPLAY;
         phase = Phase.FINISHED;
         winnerId = playerId;
         winReason = reason;
@@ -708,6 +721,10 @@ public class Match implements Table {
         if (playerId != null) log("won", new JSONObject().put("actor", playerId).put("reason", reason));
         broadcast(event("match_finished", new JSONObject().put("winner", playerId == null ? JSONObject.NULL : playerId).put("reason", reason)));
         output.rosterChanged(this);
+        if (wasPlaying && playerId != null) {
+            output.matchFinished(this, MatchResult.build(resultId, matchId, startedAt, System.currentTimeMillis(),
+                    playerId, reason, players.values()));
+        }
     }
 
     // =====================================================================
@@ -951,6 +968,7 @@ public class Match implements Table {
             r.setOutcome("slain");
             monsterBoard.remove(monster);
             p.getSlain().add(monster);
+            p.recordSlay();
             if (!monsterDeck.isEmpty()) monsterBoard.add(monsterDeck.remove(0));
         } else if (total <= monster.getFightBack()) {
             subtype = "monster_fight_back";

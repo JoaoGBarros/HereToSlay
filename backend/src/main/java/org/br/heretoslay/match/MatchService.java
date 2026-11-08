@@ -40,6 +40,7 @@ public class MatchService {
 
     /** How often running matches say they are still alive, so the lobby can tell them from lost ones. */
     private static final long ROSTER_HEARTBEAT_MS = 5 * 60_000;
+    private static final String MATCH_RESULTS_TOPIC = "match-results";
 
     /**
      * Who is in each match. The gateways use it to deliver match-wide alerts; the lobby uses
@@ -55,6 +56,16 @@ public class MatchService {
                 .put("finished", match.isFinished())
                 .put("ts", System.currentTimeMillis());
         this.kafkaProducer.send(new ProducerRecord<>("match-state-store", match.getMatchId().toString(), roster.toString()));
+    }
+
+    /** A finished match for the accounts API, which turns it into player stats and history. */
+    public void publishResult(Match match, JSONObject result) {
+        String key = result.getString("matchId");
+        this.kafkaProducer.send(new ProducerRecord<>(MATCH_RESULTS_TOPIC, key, result.toString()), (metadata, error) -> {
+            if (error != null) {
+                System.err.println("Could not publish the result of match " + match.getMatchId() + ": " + error.getMessage());
+            }
+        });
     }
 
     private void startRosterHeartbeat() {

@@ -27,6 +27,12 @@ public class PlayerState {
     private boolean leaderSkillUsed;
     /** Why the player is out of the match (no_show, disconnected, surrender), or null while playing. */
     private String leftReason;
+    /** When the player left, and what their party looked like right before their cards left the table. */
+    private Long leftAt;
+    private int classesAtExit;
+    private int heroesAtExit;
+    /** Every monster this player slew in the match, even ones later lost or discarded. */
+    private int monstersSlain;
 
     // "Until the end of your turn"
     private int turnRollBonus;
@@ -126,7 +132,19 @@ public class PlayerState {
     /** @param full true for the owner (sees the hand), false for everyone else (card backs only). */
     public boolean isGone() { return leftReason != null; }
     public String getLeftReason() { return leftReason; }
-    public void leave(String reason) { this.leftReason = reason; }
+    public void leave(String reason) {
+        this.leftReason = reason;
+        this.leftAt = System.currentTimeMillis();
+        this.classesAtExit = classes().size();
+        this.heroesAtExit = heroes().size();
+    }
+    public Long getLeftAt() { return leftAt; }
+    /** Classes in the party now, or when the player left. */
+    public int finalClassCount() { return isGone() ? classesAtExit : classes().size(); }
+    /** Heroes in the party now, or when the player left. */
+    public int finalHeroCount() { return isGone() ? heroesAtExit : heroes().size(); }
+    public void recordSlay() { monstersSlain++; }
+    public int getMonstersSlain() { return monstersSlain; }
 
     public JSONObject toJson(boolean full) {
         JSONArray handJson = new JSONArray();
