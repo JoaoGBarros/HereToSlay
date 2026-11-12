@@ -39,6 +39,33 @@
     box-shadow: 0 30px 60px rgba(0, 0, 0, 0.45);
 }
 .login-cta { height: 58px; font-size: 26px; }
+.login-form-title { margin: 0; font-family: var(--hts-font-display); font-size: 30px; color: var(--hts-gold-text); }
+.login-hint { margin: 0; font-size: 15px; line-height: 1.5; color: var(--hts-muted); }
+.login-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.login-remember { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; color: var(--hts-text-2); cursor: pointer; }
+.login-remember input { width: 18px; height: 18px; accent-color: var(--hts-gold); }
+.login-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--hts-gold-text);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    cursor: pointer;
+}
+.login-link:hover:not(:disabled) { color: var(--hts-gold-hover); }
+.login-link:disabled { color: var(--hts-dim); cursor: default; text-decoration: none; }
+.login-link:focus-visible { outline: 2px solid var(--hts-gold); outline-offset: 3px; border-radius: 4px; }
+.login-signout { align-self: center; }
+.login-error { margin: 0; font-size: 14px; color: var(--hts-ember-text); }
+.login-notice { margin: 0; font-size: 14px; color: var(--hts-jade-text); }
+.login-switch { margin: 0; text-align: center; font-size: 14px; color: var(--hts-muted); }
+.login-divider { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--hts-dim); text-transform: uppercase; letter-spacing: 2px; }
+.login-divider::before,
+.login-divider::after { content: ""; flex: 1; height: 1px; background: var(--hts-line); }
 .login-fan {
     position: absolute;
     right: 40px;

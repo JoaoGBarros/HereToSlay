@@ -14,6 +14,7 @@ import { WebSocketProvider } from '@/utils/WebSocketProvider.tsx'
 import { applyMotionPref } from '@/utils/motion'
 import { installUiScale } from '@/utils/uiScale'
 import { I18nProvider } from '@/i18n'
+import { AuthProvider } from '@/auth/AuthProvider'
 
 applyMotionPref()
 installUiScale()
@@ -22,9 +23,11 @@ installUiScale()
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <I18nProvider>
-      <WebSocketProvider>
-        <App />
-      </WebSocketProvider>
+      <AuthProvider>
+        <WebSocketProvider>
+          <App />
+        </WebSocketProvider>
+      </AuthProvider>
     </I18nProvider>
   </StrictMode>,
 )

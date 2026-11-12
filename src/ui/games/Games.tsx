@@ -1,6 +1,7 @@
 import { useContext, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import WebSocketContext from '@/utils/WebSocketContext';
+import { useAuth } from '@/auth/AuthContext';
 import type { LobbyStatus } from './enum/StatusEnum';
 import { parseMessage, sendMessage } from '../common/types';
 import { useI18n } from '@/i18n';
@@ -73,6 +74,7 @@ function Stepper({ label, value, onChange, min, max }: { label: string; value: n
 
 function Games() {
     const socket = useContext(WebSocketContext);
+    const { signOut } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const { t } = useI18n();
@@ -134,8 +136,7 @@ function Games() {
     }
 
     function handleLogout() {
-        localStorage.removeItem('currentPlayer');
-        navigate('/');
+        void signOut().then(() => navigate('/'));
     }
 
     return (
