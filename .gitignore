@@ -35,3 +35,8 @@ deploy/.env.deploy
 
 # Launch-video outputs from /brag
 brag-output*/
+
+# Local configuration and credentials (Firebase service account, database password)
+.env
+secrets/
+*service-account*.json

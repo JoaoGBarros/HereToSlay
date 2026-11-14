@@ -1,0 +1,108 @@
+# Player accounts API (Spring Boot). The host nginx proxies https://<site>/api/v1/ to the fixed
+# ClusterIP below; nothing else of it (health checks) is reachable from outside.
+#
+# Its secrets never go in the repository. Create them once on the server:
+#   kubectl -n heretoslay create secret generic accounts-secrets \
+#     --from-literal=DB_PASSWORD='<random password>' \
+#     --from-literal=FIREBASE_PROJECT_ID='<firebase project id>' \
+#     --from-file=firebase-service-account.json=/root/firebase-service-account.json
+# then delete the key file from the server's disk.
+apiVersion: v1
+kind: Service
+metadata:
+  name: accounts-api
+spec:
+  clusterIP: 10.43.88.80
+  selector:
+    app: accounts-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: accounts-api
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: accounts-api
+  template:
+    metadata:
+      labels:
+        app: accounts-api
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: accounts-api
+          image: heretoslay-accounts-api
+          imagePullPolicy: Never
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: -Xmx180m -Xss512k -XX:+UseSerialGC -XX:TieredStopAtLevel=1
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: kafka-broker-1:29092
+            - name: DB_URL
+              value: jdbc:postgresql://postgres:5432/heretoslay
+            - name: DB_USERNAME
+              value: heretoslay
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: accounts-secrets
+                  key: DB_PASSWORD
+            - name: FIREBASE_PROJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: accounts-secrets
+                  key: FIREBASE_PROJECT_ID
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: /var/run/secrets/firebase/firebase-service-account.json
+            # The desktop app loads the client from disk, so its requests come from origin "null".
+            - name: CORS_ALLOWED_ORIGINS
+              value: https://hts.joaogbarros.com,null
+          resources:
+            requests:
+              cpu: 50m
+              memory: 220Mi
+            limits:
+              memory: 360Mi
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 90
+            periodSeconds: 20
+          volumeMounts:
+            - name: firebase-key
+              mountPath: /var/run/secrets/firebase
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+      volumes:
+        - name: firebase-key
+          secret:
+            secretName: accounts-secrets
+            items:
+              - key: firebase-service-account.json
+                path: firebase-service-account.json
+        - name: tmp
+          emptyDir: {}

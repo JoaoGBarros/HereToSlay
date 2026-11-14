@@ -8,6 +8,10 @@ resources:
   - kafka.yaml
   - kafka-topics.yaml
   - backend.yaml
+  - postgres.yaml
+  - accounts-api.yaml
 images:
   - name: heretoslay-backend
+    newTag: dev
+  - name: heretoslay-accounts-api
     newTag: dev
