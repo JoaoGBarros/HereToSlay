@@ -150,10 +150,10 @@ function Games() {
                 </div>
                 <div className="tavern-user">
                     <SettingsButton />
-                    <div className="tavern-user-chip">
+                    <button type="button" className="tavern-user-chip tavern-user-chip--link" aria-label={t.profile.openAria} title={t.profile.openAria} onClick={() => navigate('/profile')}>
                         <span className="tavern-user-initial" aria-hidden="true">{(user?.username || '?').charAt(0).toUpperCase()}</span>
                         <span style={{ fontWeight: 800 }}>{user?.username || t.tavern.guest}</span>
-                    </div>
+                    </button>
                     <button type="button" className="hts-btn hts-btn--ghost hts-btn--sm" onClick={handleLogout}>{t.tavern.logout}</button>
                 </div>
             </header>

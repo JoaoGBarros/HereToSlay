@@ -20,6 +20,11 @@
     background: var(--hts-surface);
     border: 1px solid var(--hts-line);
 }
+/* The tavern's name chip doubles as the way into the profile page. */
+.tavern-user-chip--link { cursor: pointer; color: inherit; font: inherit; transition: border-color 0.15s, background 0.15s; }
+.tavern-user-chip--link:hover { border-color: var(--hts-gold); background: var(--hts-surface-2); }
+.tavern-user-chip--link:focus-visible { outline: 2px solid var(--hts-gold); outline-offset: 3px; }
+
 .tavern-user-initial {
     width: 34px;
     height: 34px;

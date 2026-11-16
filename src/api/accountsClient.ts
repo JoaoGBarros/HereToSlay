@@ -75,6 +75,37 @@ export function createProfile(getToken: TokenSource, username: string, platform:
     return request(getToken, '/players', { method: 'POST', body: JSON.stringify({ username, platform }) });
 }
 
+export type WinCondition = 'CLASSES' | 'MONSTERS' | 'LAST_STANDING';
+
+/** One line of a player's history: the match, and how that player did in it. */
+export interface MatchSummary {
+    matchId: string;
+    startedAt: string;
+    finishedAt: string;
+    durationSeconds: number;
+    winCondition: WinCondition;
+    winnerUsername: string;
+    playerCount: number;
+    position: number;
+    won: boolean;
+    partyLeader: string | null;
+    monstersSlain: number;
+    classesInParty: number;
+}
+
+export interface Page<T> {
+    items: T[];
+    page: number;
+    size: number;
+    total: number;
+    totalPages: number;
+}
+
+export function getMatchHistory(getToken: TokenSource, username: string, page: number, size: number): Promise<Page<MatchSummary>> {
+    const query = new URLSearchParams({ page: String(page), size: String(size) });
+    return request(getToken, `/players/${encodeURIComponent(username)}/matches?${query}`);
+}
+
 export function recordLogin(getToken: TokenSource, platform: Platform): Promise<PlayerProfile> {
     return request(getToken, '/players/me/logins', { method: 'POST', body: JSON.stringify({ platform }) });
 }
