@@ -13,7 +13,7 @@ Build a party of heroes, challenge your friends' plays, flip a roll with a modif
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![Nginx](https://img.shields.io/badge/Nginx-reverse%20proxy-009639?logo=nginx&logoColor=white)
 
-**[Read the full write-up on my website →](https://joaogbarros.pages.dev/en/projects/here-to-slay/)**
+**[Read the full write-up on my website →](https://joaogbarros.com/en/projects/here-to-slay/)**
 
 </div>
 
@@ -28,7 +28,7 @@ Build a party of heroes, challenge your friends' plays, flip a roll with a modif
 
 I built HtS Online to study distributed systems in practice, and to keep playing a game I love with friends who can't sit at the same table. It started as a single server and grew into an event-driven backend where every service talks only through Apache Kafka.
 
-The story of how it was built, part by part, from the first playable match to the rules engine, the interface and the bots, is on my website: **[Here to Slay, project page and articles](https://joaogbarros.pages.dev/en/projects/here-to-slay/)**.
+The story of how it was built, part by part, from the first playable match to the rules engine, the interface and the bots, is on my website: **[Here to Slay, project page and articles](https://joaogbarros.com/en/projects/here-to-slay/)**.
 
 ## Highlights
 
@@ -114,6 +114,6 @@ To build the Windows desktop app, run `npm run dist:win`; the executable is writ
 
 <div align="center">
 
-Made by **[João Gabriel de Barros Rocha](https://github.com/JoaoGBarros)** · [Website](https://joaogbarros.pages.dev/en/projects/here-to-slay/)
+Made by **[João Gabriel de Barros Rocha](https://github.com/JoaoGBarros)** · [Website](https://joaogbarros.com/en/projects/here-to-slay/)
 
 </div>
