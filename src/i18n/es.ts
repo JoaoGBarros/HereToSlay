@@ -50,7 +50,6 @@ const es: Dict = {
         enter: 'Entrar a la taberna',
         entering: 'Entrando…',
         reconnecting: 'Reconectando…',
-        footer: 'Juego base · 6 líderes · 15 monstruos',
         email: 'Correo',
         password: 'Contraseña',
         rememberMe: 'Recordarme',

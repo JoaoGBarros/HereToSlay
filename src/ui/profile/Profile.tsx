@@ -4,6 +4,7 @@ import { getMatchHistory, getMyProfile, type MatchSummary, type PlayerProfile } 
 import { useAuth } from '@/auth/AuthContext';
 import { useI18n } from '@/i18n';
 import { SettingsButton } from '../common/SettingsButton';
+import { SiteFooter } from '../common/SiteFooter';
 import { StatsPanel } from './StatsPanel';
 import { MatchHistory } from './MatchHistory';
 import { formatDate, formatDateTime, platformLabel } from './format';
@@ -116,6 +117,8 @@ function Profile() {
                     </div>
                 )}
             </main>
+
+            <SiteFooter />
         </div>
     );
 }

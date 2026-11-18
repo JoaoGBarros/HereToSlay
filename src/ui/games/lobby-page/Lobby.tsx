@@ -7,6 +7,7 @@ import { parseMessage, sendMessage } from '../../common/types';
 import { useI18n } from '@/i18n';
 import { Avatar, TimerRing } from '../../common/Widgets';
 import { SettingsButton } from '../../common/SettingsButton';
+import { SiteFooter } from '../../common/SiteFooter';
 import tableBackground from '../../assets/ingame.png';
 import './Lobby.css';
 
@@ -237,6 +238,8 @@ function Lobby() {
                     />
                 </aside>
             </main>
+
+            <SiteFooter />
         </div>
     );
 }

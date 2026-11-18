@@ -6,6 +6,7 @@ import { CLASS_IDS, CLASS_INFO } from '@/utils/ClassInfo';
 import { parseMessage, sendMessage } from '../common/types';
 import { useI18n } from '@/i18n';
 import { SettingsButton } from '../common/SettingsButton';
+import { SiteFooter } from '../common/SiteFooter';
 import { SignInForm } from './SignInForm';
 import { ProfileForm } from './ProfileForm';
 import loginBackground from '../assets/login-background.png';
@@ -90,7 +91,7 @@ function Login() {
                 ))}
             </div>
 
-            <footer className="login-footer">{t.login.footer}</footer>
+            <SiteFooter className="login-footer" />
         </div>
     );
 }

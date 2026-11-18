@@ -1,0 +1,54 @@
+/* Legal and attribution footer shared by the screens outside a match. */
+.hts-footer {
+    position: relative;
+    z-index: 2;
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 4px 24px;
+    padding: 9px 32px;
+    border-top: 1px solid var(--hts-line);
+    background: rgba(13, 19, 21, 0.86);
+    color: var(--hts-dim);
+    font-size: 12px;
+    line-height: 1.5;
+}
+.hts-footer-legal { flex: 1 1 620px; min-width: 0; margin: 0; }
+.hts-footer-meta { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 14px; margin-left: auto; }
+.hts-footer-credit { color: var(--hts-dim); }
+.hts-footer-buy {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid rgba(233, 185, 73, 0.5);
+    background: rgba(233, 185, 73, 0.12);
+    color: var(--hts-gold-text);
+    font-weight: 800;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.15s, color 0.15s;
+}
+.hts-footer-buy:hover { background: rgba(233, 185, 73, 0.2); color: var(--hts-gold-hover); }
+.hts-footer-buy:focus-visible { outline: 2px solid var(--hts-gold); outline-offset: 3px; }
+.hts-footer-buy svg { flex: none; opacity: 0.85; }
+.hts-footer-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--hts-gold-text);
+    font-weight: 700;
+    text-decoration: none;
+    transition: color 0.15s;
+}
+.hts-footer-link:hover { color: var(--hts-gold-hover); text-decoration: underline; text-underline-offset: 3px; }
+.hts-footer-link:focus-visible { outline: 2px solid var(--hts-gold); outline-offset: 3px; border-radius: 4px; }
+.hts-footer-link svg { flex: none; opacity: 0.85; }
+
+@media (max-width: 760px) {
+    .hts-footer { padding: 9px 16px; }
+    .hts-footer-meta { margin-left: 0; }
+}

@@ -50,7 +50,6 @@ const en: Dict = {
         enter: 'Enter the tavern',
         entering: 'Entering…',
         reconnecting: 'Reconnecting…',
-        footer: 'Base game · 6 leaders · 15 monsters',
         email: 'Email',
         password: 'Password',
         rememberMe: 'Remember me',

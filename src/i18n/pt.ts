@@ -78,7 +78,6 @@ const pt = {
         enter: 'Entrar na taverna',
         entering: 'Entrando…',
         reconnecting: 'Reconectando…',
-        footer: 'Jogo base · 6 líderes · 15 monstros',
         email: 'E-mail',
         password: 'Senha',
         rememberMe: 'Lembrar de mim',
