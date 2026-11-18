@@ -108,6 +108,7 @@ const pt = {
             nameTaken: 'Esse nome já está em uso.',
             invalidName: 'Use de 3 a 20 letras, números ou _.',
             popupClosed: 'A janela de login foi fechada.',
+            popupBlocked: 'O navegador bloqueou a janela do Google. Permita pop-ups para este site e tente de novo.',
             notConfigured: 'O login não está configurado neste build.',
             generic: 'Algo deu errado. Tente de novo.',
         },

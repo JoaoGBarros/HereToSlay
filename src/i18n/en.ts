@@ -80,6 +80,7 @@ const en: Dict = {
             nameTaken: 'That name is already taken.',
             invalidName: 'Use 3 to 20 letters, digits or _.',
             popupClosed: 'The sign-in window was closed.',
+            popupBlocked: 'Your browser blocked the Google window. Allow pop-ups for this site and try again.',
             notConfigured: 'Sign-in is not configured in this build.',
             generic: 'Something went wrong. Try again.',
         },

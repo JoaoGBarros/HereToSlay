@@ -80,6 +80,7 @@ const es: Dict = {
             nameTaken: 'Ese nombre ya está en uso.',
             invalidName: 'Usa de 3 a 20 letras, números o _.',
             popupClosed: 'Se cerró la ventana de inicio de sesión.',
+            popupBlocked: 'El navegador bloqueó la ventana de Google. Permite ventanas emergentes para este sitio e inténtalo de nuevo.',
             notConfigured: 'El inicio de sesión no está configurado en esta versión.',
             generic: 'Algo salió mal. Inténtalo de nuevo.',
         },

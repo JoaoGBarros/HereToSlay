@@ -16,6 +16,9 @@ const FIREBASE_CODES: Record<string, keyof AuthErrors> = {
     'auth/network-request-failed': 'network',
     'auth/popup-closed-by-user': 'popupClosed',
     'auth/cancelled-popup-request': 'popupClosed',
+    'auth/popup-blocked': 'popupBlocked',
+    'auth/unauthorized-domain': 'notConfigured',
+    'auth/operation-not-allowed': 'notConfigured',
     'auth/invalid-api-key': 'notConfigured',
     'auth/configuration-not-found': 'notConfigured',
 };
