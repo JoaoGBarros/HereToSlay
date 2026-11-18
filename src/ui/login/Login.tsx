@@ -2,7 +2,6 @@ import { useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import WebSocketContext from '@/utils/WebSocketContext';
 import { useAuth } from '@/auth/AuthContext';
-import { CLASS_IDS, CLASS_INFO } from '@/utils/ClassInfo';
 import { parseMessage, sendMessage } from '../common/types';
 import { useI18n } from '@/i18n';
 import { SettingsButton } from '../common/SettingsButton';
@@ -78,18 +77,6 @@ function Login() {
                     </div>
                 )}
             </main>
-
-            <div className="login-fan" aria-hidden="true">
-                {CLASS_IDS.map((id, i) => (
-                    <img
-                        key={id}
-                        src={CLASS_INFO[id].leaderArt}
-                        alt=""
-                        className="login-fan-card"
-                        style={{ left: i * 114, bottom: [40, 70, 88, 88, 70, 40][i], transform: `rotate(${(i - 2.5) * 6.4}deg)` }}
-                    />
-                ))}
-            </div>
 
             <SiteFooter className="login-footer" />
         </div>
